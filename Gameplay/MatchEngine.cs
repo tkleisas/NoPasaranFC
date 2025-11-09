@@ -292,8 +292,16 @@ namespace NoPasaranFC.Gameplay
             Vector2 targetPosition;
             float urgency;
             
+            // At match start (first 5 seconds), all players rush to ball
+            bool matchJustStarted = CurrentState == MatchState.Playing && MatchTime < 5f;
+            
+            if (matchJustStarted)
+            {
+                targetPosition = BallPosition;
+                urgency = 1.0f;
+            }
             // Determine target based on position and ball proximity
-            switch (player.Position)
+            else switch (player.Position)
             {
                 case PlayerPosition.Goalkeeper:
                     if (distanceToBall < 150f)

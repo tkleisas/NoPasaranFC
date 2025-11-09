@@ -324,6 +324,12 @@ namespace NoPasaranFC.Screens
             
             // Draw HUD
             DrawHUD(spriteBatch, font);
+            
+            // Draw countdown if in countdown or camera init state
+            if (_matchEngine.CurrentState == MatchEngine.MatchState.Countdown)
+            {
+                DrawCountdown(spriteBatch, font);
+            }
         }
         
         private void DrawStadium(SpriteBatch spriteBatch)
