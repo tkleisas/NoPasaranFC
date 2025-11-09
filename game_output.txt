@@ -1,0 +1,12 @@
+Loaded championship: 0 teams, 0 matches
+Creating new championship...
+Created: 8 teams, 56 matches
+  Team: NO PASARAN!, ID: 1
+  Team: BARTSELIOMA, ID: 2
+  Team: KTEL, ID: 3
+  Team: NONAME, ID: 4
+  Team: MIHANIKOI, ID: 5
+  Team: ASALAGITOS, ID: 6
+  Team: ASTERAS EXARXION, ID: 7
+  Team: TIGANITIS, ID: 8
+Championship saved to database
