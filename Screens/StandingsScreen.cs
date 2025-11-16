@@ -39,19 +39,46 @@ namespace NoPasaranFC.Screens
             Vector2 titleSize = font.MeasureString(title);
             spriteBatch.DrawString(font, title, new Vector2((screenWidth - titleSize.X) / 2, 50), Color.Yellow);
             
-            // Draw header
-            string header = "Team                 W  D  L  GF GA Pts";
-            Vector2 headerSize = font.MeasureString(header);
-            float tableX = (screenWidth - headerSize.X) / 2;
-            spriteBatch.DrawString(font, header, new Vector2(tableX, 100), Color.Gray);
+            // Define column positions
+            float tableStartX = screenWidth * 0.2f;
+            float posCol = tableStartX;
+            float teamCol = tableStartX + 40;
+            float wCol = tableStartX + 280;
+            float dCol = tableStartX + 320;
+            float lCol = tableStartX + 360;
+            float gfCol = tableStartX + 400;
+            float gaCol = tableStartX + 450;
+            float ptsCol = tableStartX + 500;
             
+            float headerY = 100;
+            
+            // Draw header
+            spriteBatch.DrawString(font, "Pos", new Vector2(posCol, headerY), Color.Gray);
+            spriteBatch.DrawString(font, "Team", new Vector2(teamCol, headerY), Color.Gray);
+            spriteBatch.DrawString(font, "W", new Vector2(wCol, headerY), Color.Gray);
+            spriteBatch.DrawString(font, "D", new Vector2(dCol, headerY), Color.Gray);
+            spriteBatch.DrawString(font, "L", new Vector2(lCol, headerY), Color.Gray);
+            spriteBatch.DrawString(font, "GF", new Vector2(gfCol, headerY), Color.Gray);
+            spriteBatch.DrawString(font, "GA", new Vector2(gaCol, headerY), Color.Gray);
+            spriteBatch.DrawString(font, "Pts", new Vector2(ptsCol, headerY), Color.Gray);
+            
+            // Draw standings rows
             var standings = _championship.GetStandings();
             for (int i = 0; i < standings.Count; i++)
             {
                 var team = standings[i];
-                string line = $"{i + 1}. {team.Name,-18} {team.Wins,2} {team.Draws,2} {team.Losses,2} {team.GoalsFor,3} {team.GoalsAgainst,2} {team.Points,3}";
+                float rowY = 130 + i * 30;
                 var color = team.IsPlayerControlled ? Color.Yellow : Color.White;
-                spriteBatch.DrawString(font, line, new Vector2(tableX, 130 + i * 30), color);
+                
+                // Draw each column
+                spriteBatch.DrawString(font, $"{i + 1}.", new Vector2(posCol, rowY), color);
+                spriteBatch.DrawString(font, team.Name, new Vector2(teamCol, rowY), color);
+                spriteBatch.DrawString(font, team.Wins.ToString(), new Vector2(wCol, rowY), color);
+                spriteBatch.DrawString(font, team.Draws.ToString(), new Vector2(dCol, rowY), color);
+                spriteBatch.DrawString(font, team.Losses.ToString(), new Vector2(lCol, rowY), color);
+                spriteBatch.DrawString(font, team.GoalsFor.ToString(), new Vector2(gfCol, rowY), color);
+                spriteBatch.DrawString(font, team.GoalsAgainst.ToString(), new Vector2(gaCol, rowY), color);
+                spriteBatch.DrawString(font, team.Points.ToString(), new Vector2(ptsCol, rowY), color);
             }
             
             string instructions = "Press ESC to return";

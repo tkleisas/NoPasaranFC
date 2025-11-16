@@ -65,6 +65,11 @@ Create the appropriate c# classes for the players and teams. Also track score an
    - "Season Complete" indicator when all matches are played
    - Grayed out "Play Next Match" option when season is complete
 
+11. ✅ **Fixed standings table alignment**:
+   - Changed from fixed-width string formatting to column-based positioning
+   - Properly aligned columns work with proportional fonts
+   - Clean, readable table layout
+
 ## Current Features:
 - Championship mode with 8 teams
 - Player-controlled team: "NO PASARAN!"
