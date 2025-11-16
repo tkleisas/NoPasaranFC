@@ -399,6 +399,11 @@ namespace NoPasaranFC.Gameplay
                     }
                 }
             }
+            else
+            {
+                // Player reached target, stop moving
+                player.Velocity = Vector2.Zero;
+            }
         }
         
         private void UpdateBall(float deltaTime)

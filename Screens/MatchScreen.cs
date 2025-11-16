@@ -1,11 +1,13 @@
-using System;
-using System.Linq;
 using Microsoft.Xna.Framework;
+using Microsoft.Xna.Framework.Content;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
-using NoPasaranFC.Models;
-using NoPasaranFC.Gameplay;
 using NoPasaranFC.Database;
+using NoPasaranFC.Gameplay;
+using NoPasaranFC.Models;
+using System;
+using System.Linq;
+using System.Reflection.Metadata;
 
 namespace NoPasaranFC.Screens
 {
@@ -24,16 +26,26 @@ namespace NoPasaranFC.Screens
         private Minimap _minimap;
         
         // Sprite support
-        private Texture2D _playerSprite; // Default player sprite
+        private Texture2D _playerSpriteRed;  // Away team sprite sheet
+        private Texture2D _playerSpriteBlue; // Home team sprite sheet
         private Texture2D _ballSprite;
         private Texture2D _grassTexture;
         private SpriteFont _playerNameFont;
+        private ContentManager _content;
         
-        // Per-player sprite cache
-        private System.Collections.Generic.Dictionary<string, Texture2D> _playerSpriteCache;
+        // Sprite sheet configuration
+        private const int SpriteFrameSize = 64; // Each frame is 64x64 in the sprite sheet
+        private const int SpritesheetColumns = 4; // 4 animation frames per direction
+        private const int SpritesheetRows = 4;    // 4 directions
+        
+        // Ball sprite sheet configuration
+        private const int BallFrameSize = 32;     // Each ball frame is 32x32
+        private const int BallSpritesheetColumns = 8; // 8 frames per row
+        private const int BallSpritesheetRows = 8;    // 8 rows = 64 total frames
+        private float _ballAnimationFrame = 0f;
         
         public MatchScreen(Team homeTeam, Team awayTeam, Match match, Championship championship, 
-            DatabaseManager database, ScreenManager screenManager)
+            DatabaseManager database, ScreenManager screenManager,ContentManager content)
         {
             _homeTeam = homeTeam;
             _awayTeam = awayTeam;
@@ -44,125 +56,39 @@ namespace NoPasaranFC.Screens
             _matchEngine = new MatchEngine(homeTeam, awayTeam, Game1.ScreenWidth, Game1.ScreenHeight);
             _graphicsInitialized = false;
             _minimap = new Minimap(Game1.ScreenWidth, Game1.ScreenHeight, 150, 100); // Minimap 150x100 pixels
-            _playerSpriteCache = new System.Collections.Generic.Dictionary<string, Texture2D>();
+            _content = content;
         }
         
         public void SetGraphicsDevice(GraphicsDevice graphicsDevice)
         {
             if (!_graphicsInitialized && graphicsDevice != null)
             {
-                _pixel = new Texture2D(graphicsDevice, 1, 1);
-                _pixel.SetData(new[] { Color.White });
-                
-                // Create grass texture (simple pattern)
-                _grassTexture = CreateGrassTexture(graphicsDevice, 64, 64);
-                
-                // Create default placeholder sprite (64x64 for players, 32x32 for ball)
-                _playerSprite = new Texture2D(graphicsDevice, 64, 64);
-                Color[] playerData = new Color[64 * 64];
-                for (int i = 0; i < playerData.Length; i++)
-                    playerData[i] = Color.White;
-                _playerSprite.SetData(playerData);
-                
-                _ballSprite = new Texture2D(graphicsDevice, 32, 32);
-                Color[] ballData = new Color[32 * 32];
-                for (int i = 0; i < ballData.Length; i++)
-                    ballData[i] = Color.White;
-                _ballSprite.SetData(ballData);
-                
-                // Load custom player sprites
-                LoadPlayerSprites(graphicsDevice);
-                
-                _graphicsInitialized = true;
-            }
-        }
-        
-        private void LoadPlayerSprites(GraphicsDevice graphicsDevice)
-        {
-            // Try to load custom sprites for each player from Content/Sprites/Players/
-            // If not found, will use default sprite
-            
-            var allPlayers = _homeTeam.Players.Concat(_awayTeam.Players);
-            foreach (var player in allPlayers)
-            {
-                if (!string.IsNullOrEmpty(player.SpriteFileName) && 
-                    !_playerSpriteCache.ContainsKey(player.SpriteFileName))
+                try
                 {
-                    try
-                    {
-                        // Try to load the sprite from Content folder
-                        string spritePath = $"Content/Sprites/Players/{System.IO.Path.GetFileNameWithoutExtension(player.SpriteFileName)}";
-                        
-                        // For now, we'll create different colored sprites as placeholders
-                        // In a real implementation, you would load from file:
-                        // var texture = Texture2D.FromFile(graphicsDevice, spritePath);
-                        
-                        // Create a unique sprite for this player
-                        var sprite = CreatePlayerSprite(graphicsDevice, player);
-                        _playerSpriteCache[player.SpriteFileName] = sprite;
-                    }
-                    catch
-                    {
-                        // If loading fails, the player will use the default sprite
-                        // Silently fail to avoid crashes
-                    }
-                }
-            }
-        }
-        
-        private Texture2D CreatePlayerSprite(GraphicsDevice device, Player player)
-        {
-            // Create a 64x64 sprite with unique characteristics based on player
-            var texture = new Texture2D(device, 64, 64);
-            Color[] data = new Color[64 * 64];
-            
-            // Different base colors for different positions
-            Color baseColor = player.Position switch
-            {
-                PlayerPosition.Goalkeeper => new Color(255, 200, 0), // Gold/Yellow
-                PlayerPosition.Defender => new Color(70, 130, 180), // Steel Blue
-                PlayerPosition.Midfielder => new Color(60, 179, 113), // Medium Sea Green
-                PlayerPosition.Forward => new Color(220, 20, 60), // Crimson
-                _ => Color.White
-            };
-            
-            // Draw a simple player shape (circle body + smaller head)
-            int centerX = 32, centerY = 32;
-            
-            for (int y = 0; y < 64; y++)
-            {
-                for (int x = 0; x < 64; x++)
-                {
-                    int idx = y * 64 + x;
-                    float dx = x - centerX;
-                    float dy = y - centerY;
-                    float distance = (float)Math.Sqrt(dx * dx + dy * dy);
+                    _pixel = new Texture2D(graphicsDevice, 1, 1);
+                    _pixel.SetData(new[] { Color.White });
                     
-                    // Head (upper circle)
-                    if (dy < -8 && distance < 12)
-                    {
-                        data[idx] = new Color(255, 220, 180); // Skin tone
-                    }
-                    // Body (larger circle)
-                    else if (dy >= -8 && distance < 22)
-                    {
-                        data[idx] = baseColor;
-                    }
-                    // Border/outline
-                    else if (distance < 24 && distance > 20)
-                    {
-                        data[idx] = Color.Black;
-                    }
-                    else
-                    {
-                        data[idx] = Color.Transparent;
-                    }
+                    // Create grass texture (simple pattern)
+                    _grassTexture = CreateGrassTexture(graphicsDevice, 64, 64);
+
+                    // Load sprite sheets
+                    _playerSpriteBlue = _content.Load<Texture2D>("Sprites/player_blue");
+                    _playerSpriteRed = _content.Load<Texture2D>("Sprites/player_red");
+                    _ballSprite = _content.Load<Texture2D>("Sprites/ball");
+                    
+                    _graphicsInitialized = true;
+                }
+                catch (Exception ex)
+                {
+                    // Log error - for debugging
+                    System.IO.File.WriteAllText("sprite_load_error.txt", 
+                        $"Error loading sprites: {ex.Message}\n{ex.StackTrace}");
+                    throw; // Re-throw to see the actual error
                 }
             }
-            
-            texture.SetData(data);
-            return texture;
         }
+        
+
         
         private Texture2D CreateGrassTexture(GraphicsDevice device, int width, int height)
         {
@@ -219,7 +145,75 @@ namespace NoPasaranFC.Screens
             }
             
             _matchEngine.Update(gameTime, moveDirection);
+            
+            // Update player animations
+            UpdatePlayerAnimations(gameTime);
+            
+            // Update ball animation
+            UpdateBallAnimation(gameTime);
+            
             _previousKeyState = keyState;
+        }
+        
+        private void UpdatePlayerAnimations(GameTime gameTime)
+        {
+            float deltaTime = (float)gameTime.ElapsedGameTime.TotalSeconds;
+            
+            foreach (var player in _matchEngine.GetAllPlayers())
+            {
+                // Update animation based on movement
+                if (player.Velocity.LengthSquared() > 0.1f)
+                {
+                    // Moving - animate (advance frames based on time)
+                    // AnimationSpeed is frames per second (e.g., 8 fps = 8 frames per second)
+                    player.AnimationFrame += 8f * deltaTime; // 8 frames per second animation
+                    if (player.AnimationFrame >= SpritesheetColumns)
+                        player.AnimationFrame -= SpritesheetColumns; // Loop back
+                    
+                    // Update direction based on velocity
+                    Vector2 vel = player.Velocity;
+                    if (Math.Abs(vel.X) > Math.Abs(vel.Y))
+                    {
+                        // Horizontal movement dominant
+                        player.SpriteDirection = vel.X > 0 ? 3 : 2; // Right : Left
+                    }
+                    else
+                    {
+                        // Vertical movement dominant
+                        player.SpriteDirection = vel.Y > 0 ? 0 : 1; // Down : Up
+                    }
+                }
+                else
+                {
+                    // Idle - show first frame
+                    player.AnimationFrame = 0;
+                }
+            }
+        }
+        
+        private void UpdateBallAnimation(GameTime gameTime)
+        {
+            float deltaTime = (float)gameTime.ElapsedGameTime.TotalSeconds;
+            
+            // Animate ball based on velocity (rolling effect)
+            float ballSpeed = _matchEngine.BallVelocity.Length();
+            
+            if (ballSpeed > 1f)
+            {
+                // Ball is moving - animate faster based on speed
+                // Faster movement = faster animation
+                float animationSpeed = 20f * (ballSpeed / 100f); // Adjust speed multiplier
+                _ballAnimationFrame += animationSpeed * deltaTime;
+                
+                // Loop through 64 frames
+                if (_ballAnimationFrame >= 64f)
+                    _ballAnimationFrame -= 64f;
+            }
+            else
+            {
+                // Ball is stationary - show first frame or slow rotation
+                _ballAnimationFrame = 0f;
+            }
         }
         
         private void EndMatch()
@@ -484,65 +478,108 @@ namespace NoPasaranFC.Screens
         
         private void DrawPlayer(SpriteBatch spriteBatch, Player player, SpriteFont font)
         {
-            // Get the appropriate sprite for this player
-            Texture2D sprite = _playerSprite; // Default
-            if (!string.IsNullOrEmpty(player.SpriteFileName) && 
-                _playerSpriteCache.ContainsKey(player.SpriteFileName))
-            {
-                sprite = _playerSpriteCache[player.SpriteFileName];
-            }
+            // Get the appropriate sprite sheet for this player's team
+            Texture2D spriteSheet = player.TeamId == _homeTeam.Id ? _playerSpriteBlue : _playerSpriteRed;
             
             Color tintColor;
             
             if (player.IsKnockedDown)
             {
                 // Knocked down players are semi-transparent gray
-                tintColor = new Color(128, 128, 128, 180);
+                tintColor = new Color(180, 180, 180, 180);
             }
             else if (player.IsControlled)
             {
-                // Controlled player has bright yellow highlight
-                tintColor = Color.Yellow;
+                // Controlled player has bright yellow tint
+                tintColor = new Color(255, 255, 150); // Light yellow tint
             }
             else
             {
-                // Use team color (Blue for home, Red for away) mixed with sprite color
-                Color teamColor = player.TeamId == _homeTeam.Id ? Color.Blue : Color.Red;
-                // Blend team color with player's custom sprite color
-                tintColor = new Color(
-                    (teamColor.R + player.SpriteColor.R) / 2,
-                    (teamColor.G + player.SpriteColor.G) / 2,
-                    (teamColor.B + player.SpriteColor.B) / 2
-                );
+                // Normal white tint (shows sprite colors as-is)
+                tintColor = Color.White;
             }
             
             var pos = player.FieldPosition;
             
-            // 64x64 sprites for more detail
-            int size = player.IsControlled ? 68 : 64; // Controlled player slightly larger
+            // Render size (double the sprite frame size: 64x64 -> 128x128)
+            int renderSize = player.IsControlled ? 136 : 128; // Controlled player slightly larger
             
-            // Draw shadow underneath
-            Rectangle shadowRect = new Rectangle((int)pos.X - size / 2, (int)pos.Y + size / 2 - 4, size, 6);
+            // Draw shadow underneath (larger for bigger sprites)
+            Rectangle shadowRect = new Rectangle((int)pos.X - renderSize / 2, (int)pos.Y + renderSize / 2 - 6, renderSize, 12);
             spriteBatch.Draw(_pixel, shadowRect, new Color(0, 0, 0, 100));
+            
+            // Calculate source rectangle from sprite sheet
+            int frameIndex = (int)player.AnimationFrame % SpritesheetColumns;
+            int directionRow = player.SpriteDirection % SpritesheetRows;
+            
+            Rectangle sourceRect = new Rectangle(
+                frameIndex * SpriteFrameSize,
+                directionRow * SpriteFrameSize,
+                SpriteFrameSize,
+                SpriteFrameSize
+            );
+            
+            // Calculate rotation for diagonal movement
+            float rotation = 0f;
+            Vector2 origin = new Vector2(SpriteFrameSize / 2, SpriteFrameSize / 2); // Center of sprite
+            
+            if (player.Velocity.LengthSquared() > 0.1f)
+            {
+                Vector2 vel = player.Velocity;
+                
+                // Determine if moving diagonally
+                bool isMovingDiagonally = Math.Abs(vel.X) > 10f && Math.Abs(vel.Y) > 10f;
+                
+                if (isMovingDiagonally)
+                {
+                    // Calculate angle from velocity
+                    rotation = (float)Math.Atan2(vel.Y, vel.X);
+                    
+                    // Use the side-facing sprite (left or right) for diagonal movement
+                    if (vel.X > 0)
+                        directionRow = 3; // Right
+                    else
+                        directionRow = 2; // Left
+                    
+                    // Update source rect with diagonal sprite direction
+                    sourceRect = new Rectangle(
+                        frameIndex * SpriteFrameSize,
+                        directionRow * SpriteFrameSize,
+                        SpriteFrameSize,
+                        SpriteFrameSize
+                    );
+                }
+            }
             
             // Draw player sprite
             if (player.IsKnockedDown)
             {
                 // Draw knocked down player as lying down (flattened)
-                Rectangle destRect = new Rectangle((int)pos.X - size / 2, (int)pos.Y - 10, size, 20);
-                spriteBatch.Draw(sprite, destRect, tintColor);
+                Rectangle destRect = new Rectangle((int)pos.X - renderSize / 2, (int)pos.Y - 20, renderSize, 40);
+                spriteBatch.Draw(spriteSheet, destRect, sourceRect, tintColor);
             }
             else
             {
-                Rectangle destRect = new Rectangle((int)pos.X - size / 2, (int)pos.Y - size / 2, size, size);
-                spriteBatch.Draw(sprite, destRect, tintColor);
+                // Use centered position for rotation
+                Vector2 drawPos = new Vector2(pos.X, pos.Y);
+                spriteBatch.Draw(
+                    spriteSheet,
+                    drawPos,
+                    sourceRect,
+                    tintColor,
+                    rotation,
+                    origin,
+                    renderSize / (float)SpriteFrameSize, // Scale factor (2.0 for normal, 2.125 for controlled)
+                    SpriteEffects.None,
+                    0f
+                );
             }
             
             // Draw selection indicator for controlled player
             if (player.IsControlled && !player.IsKnockedDown)
             {
                 // Draw a circle around the controlled player
-                DrawCircleOutline(spriteBatch, pos, size / 2 + 5, Color.Yellow, 3);
+                DrawCircleOutline(spriteBatch, pos, renderSize / 2 + 10, Color.Yellow, 4);
             }
             
             // Draw player name above sprite (only if not knocked down)
@@ -550,7 +587,7 @@ namespace NoPasaranFC.Screens
             {
                 string displayName = player.Name.Length > 12 ? player.Name.Substring(0, 12) : player.Name;
                 Vector2 nameSize = font.MeasureString(displayName);
-                Vector2 namePos = new Vector2(pos.X - nameSize.X / 2, pos.Y - size / 2 - 25);
+                Vector2 namePos = new Vector2(pos.X - nameSize.X / 2, pos.Y - renderSize / 2 - 32);
                 
                 // Draw name background
                 spriteBatch.Draw(_pixel, new Rectangle((int)(namePos.X - 4), (int)(namePos.Y - 2), 
@@ -579,31 +616,52 @@ namespace NoPasaranFC.Screens
         private void DrawReferee(SpriteBatch spriteBatch)
         {
             var pos = _matchEngine.RefereePosition;
-            int size = 60;
+            int size = 120; // Double size to match player scale
             
             // Draw shadow
-            Rectangle shadowRect = new Rectangle((int)pos.X - size / 2, (int)pos.Y + size / 2 - 4, size, 6);
+            Rectangle shadowRect = new Rectangle((int)pos.X - size / 2, (int)pos.Y + size / 2 - 6, size, 12);
             spriteBatch.Draw(_pixel, shadowRect, new Color(0, 0, 0, 100));
             
-            // Draw referee (black and white)
-            Rectangle destRect = new Rectangle((int)pos.X - size / 2, (int)pos.Y - size / 2, size, size);
-            spriteBatch.Draw(_playerSprite, destRect, Color.Black);
+            // Draw referee using sprite sheet (black tint for referee uniform)
+            // Use first frame, facing down
+            Rectangle sourceRect = new Rectangle(0, 0, SpriteFrameSize, SpriteFrameSize);
+            Vector2 drawPos = new Vector2(pos.X, pos.Y);
+            Vector2 origin = new Vector2(SpriteFrameSize / 2, SpriteFrameSize / 2);
             
-            // Add a white stripe pattern for referee shirt
-            spriteBatch.Draw(_pixel, new Rectangle((int)pos.X - 15, (int)pos.Y - 20, 30, 8), Color.White);
+            spriteBatch.Draw(_playerSpriteBlue, drawPos, sourceRect, new Color(40, 40, 40), 0f, origin, 
+                size / (float)SpriteFrameSize, SpriteEffects.None, 0f);
+            
+            // Add white stripes for referee shirt
+            spriteBatch.Draw(_pixel, new Rectangle((int)pos.X - 30, (int)pos.Y - 35, 60, 12), Color.White);
+            spriteBatch.Draw(_pixel, new Rectangle((int)pos.X - 30, (int)pos.Y - 15, 60, 12), Color.White);
         }
         
         private void DrawBall(SpriteBatch spriteBatch, Vector2 ballPos)
         {
-            int ballSize = 32;
+            int ballSize = 32; // Scaled up to match larger players
             
             // Draw ball shadow
             Rectangle shadowRect = new Rectangle((int)ballPos.X - ballSize / 2, (int)ballPos.Y + ballSize / 2 - 3, ballSize, 6);
             spriteBatch.Draw(_pixel, shadowRect, new Color(0, 0, 0, 120));
             
-            // Draw ball (32x32)
-            Rectangle ballRect = new Rectangle((int)ballPos.X - ballSize / 2, (int)ballPos.Y - ballSize / 2, ballSize, ballSize);
-            spriteBatch.Draw(_ballSprite, ballRect, Color.White);
+            // Calculate source rectangle from ball sprite sheet (8x8 grid)
+            int frameIndex = (int)_ballAnimationFrame % 64; // 0-63
+            int frameCol = frameIndex % BallSpritesheetColumns;
+            int frameRow = frameIndex / BallSpritesheetColumns;
+            
+            Rectangle sourceRect = new Rectangle(
+                frameCol * BallFrameSize,
+                frameRow * BallFrameSize,
+                BallFrameSize,
+                BallFrameSize
+            );
+            
+            // Draw ball with animation frame
+            Vector2 drawPos = new Vector2(ballPos.X, ballPos.Y);
+            Vector2 origin = new Vector2(BallFrameSize / 2, BallFrameSize / 2);
+            
+            spriteBatch.Draw(_ballSprite, drawPos, sourceRect, Color.White, 0f, origin, 
+                ballSize / (float)BallFrameSize, SpriteEffects.None, 0f);
         }
         
         private void DrawCircle(SpriteBatch spriteBatch, Vector2 center, float radius, Color color, float thickness)

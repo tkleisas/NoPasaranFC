@@ -20,6 +20,10 @@ To add player sprites, create sprite sheets with the following specifications:
 
 **Total sheet size:** 256 x 256 pixels (4 frames × 64px wide, 4 directions × 64px tall)
 
+**Current files:**
+- `player_blue.png` - Home team (256x256 with 64x64 frames)
+- `player_red.png` - Away team (256x256 with 64x64 frames)
+
 **Required files:**
 - `player_blue.png` - Home team sprites
 - `player_red.png` - Away team sprites  

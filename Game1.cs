@@ -5,6 +5,7 @@ using NoPasaranFC.Models;
 using NoPasaranFC.Database;
 using NoPasaranFC.Gameplay;
 using NoPasaranFC.Screens;
+using Microsoft.Xna.Framework.Content;
 
 namespace NoPasaranFC;
 
@@ -14,6 +15,7 @@ public class Game1 : Game
     private SpriteBatch _spriteBatch;
     private SpriteFont _font;
     private ScreenManager _screenManager;
+    private ContentManager _contentManager;
     private Championship _championship;
     private DatabaseManager _database;
     
@@ -36,6 +38,7 @@ public class Game1 : Game
     public Game1()
     {
         _graphics = new GraphicsDeviceManager(this);
+        _contentManager = Content;
         Content.RootDirectory = "Content";
         IsMouseVisible = true;
         
@@ -83,7 +86,7 @@ public class Game1 : Game
         _font = Content.Load<SpriteFont>("Font");
         
         // Start with menu screen
-        var menuScreen = new MenuScreen(_championship, _database, _screenManager, GraphicsDevice);
+        var menuScreen = new MenuScreen(_championship, _database, _screenManager, _contentManager, GraphicsDevice);
         _screenManager.PushScreen(menuScreen);
     }
 

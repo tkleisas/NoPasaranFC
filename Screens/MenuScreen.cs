@@ -1,9 +1,11 @@
 using System;
+using System.Linq;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
 using NoPasaranFC.Models;
 using NoPasaranFC.Database;
+using Microsoft.Xna.Framework.Content;
 
 namespace NoPasaranFC.Screens
 {
@@ -12,21 +14,23 @@ namespace NoPasaranFC.Screens
         private Championship _championship;
         private DatabaseManager _database;
         private ScreenManager _screenManager;
+        private ContentManager  _contentManager;
         private GraphicsDevice _graphicsDevice;
         private KeyboardState _previousKeyState;
         private int _selectedOption;
-        private readonly string[] _menuOptions = { "View Standings", "Play Next Match", "Options", "Exit" };
+        private readonly string[] _menuOptions = { "View Standings", "Play Next Match", "New Season", "Options", "Exit" };
         private bool _inOptionsMenu = false;
         private int _selectedResolution = 2; // Default to 1280x720
         private bool _tempFullscreen = false;
         
         public bool ShouldExit { get; private set; }
         
-        public MenuScreen(Championship championship, DatabaseManager database, ScreenManager screenManager, GraphicsDevice graphicsDevice = null)
+        public MenuScreen(Championship championship, DatabaseManager database, ScreenManager screenManager, ContentManager content, GraphicsDevice graphicsDevice = null)
         {
             _championship = championship;
             _database = database;
             _screenManager = screenManager;
+            _contentManager = content;
             _graphicsDevice = graphicsDevice;
             _selectedOption = 0;
             ShouldExit = false;
@@ -130,25 +134,66 @@ namespace NoPasaranFC.Screens
                             
                             if (homeTeam != null && awayTeam != null)
                             {
-                                var matchScreen = new MatchScreen(homeTeam, awayTeam, nextMatch, _championship, _database, _screenManager);
+                                var matchScreen = new MatchScreen(homeTeam, awayTeam, nextMatch, _championship, _database, _screenManager,_contentManager);
                                 if (_graphicsDevice != null)
                                 {
                                     matchScreen.SetGraphicsDevice(_graphicsDevice);
                                 }
                                 _screenManager.PushScreen(matchScreen);
                             }
+                            else
+                            {
+                                // Debug: teams not found
+                                System.IO.File.WriteAllText("match_debug.txt", 
+                                    $"Teams not found! homeTeam={homeTeam}, awayTeam={awayTeam}, HomeId={nextMatch.HomeTeamId}, AwayId={nextMatch.AwayTeamId}");
+                            }
                         }
+                        // If no next match found, user will see "Season Complete!" message in menu
+                    }
+                    else
+                    {
+                        // Debug: player team not found
+                        System.IO.File.WriteAllText("match_debug.txt", 
+                            $"Player team not found! Total teams: {_championship.Teams.Count}");
                     }
                     break;
                 
-                case 2: // Options
+                case 2: // New Season
+                    StartNewSeason();
+                    break;
+                    
+                case 3: // Options
                     _inOptionsMenu = true;
                     break;
                     
-                case 3: // Exit
+                case 4: // Exit
                     ShouldExit = true;
                     break;
             }
+        }
+        
+        private void StartNewSeason()
+        {
+            // Reset all match results
+            foreach (var match in _championship.Matches)
+            {
+                match.IsPlayed = false;
+                match.HomeScore = 0;
+                match.AwayScore = 0;
+            }
+            
+            // Reset all team stats
+            foreach (var team in _championship.Teams)
+            {
+                team.Wins = 0;
+                team.Draws = 0;
+                team.Losses = 0;
+                team.GoalsFor = 0;
+                team.GoalsAgainst = 0;
+            }
+            
+            // Save to database
+            _database.SaveChampionship(_championship);
         }
         
         public override void Draw(SpriteBatch spriteBatch, SpriteFont font)
@@ -164,13 +209,43 @@ namespace NoPasaranFC.Screens
                 Vector2 titlePos = new Vector2((screenWidth - titleSize.X) / 2, screenHeight * 0.2f);
                 spriteBatch.DrawString(font, title, titlePos, Color.Yellow);
                 
+                // Check if season is complete
+                var playerTeam = _championship.Teams.Find(t => t.IsPlayerControlled);
+                bool seasonComplete = false;
+                if (playerTeam != null)
+                {
+                    var nextMatch = _championship.Matches.Find(m => !m.IsPlayed && 
+                        (m.HomeTeamId == playerTeam.Id || m.AwayTeamId == playerTeam.Id));
+                    seasonComplete = nextMatch == null;
+                }
+                
+                // Show season complete message if all matches are played
+                if (seasonComplete)
+                {
+                    string completeMsg = "*** SEASON COMPLETE! ***";
+                    Vector2 msgSize = font.MeasureString(completeMsg);
+                    Vector2 msgPos = new Vector2((screenWidth - msgSize.X) / 2, screenHeight * 0.3f);
+                    spriteBatch.DrawString(font, completeMsg, msgPos, Color.LightGreen);
+                    
+                    string useNewSeason = "Use 'New Season' to start again";
+                    Vector2 useSize = font.MeasureString(useNewSeason);
+                    Vector2 usePos = new Vector2((screenWidth - useSize.X) / 2, screenHeight * 0.3f + 30);
+                    spriteBatch.DrawString(font, useNewSeason, usePos, Color.Gray);
+                }
+                
                 // Draw menu options centered
-                float menuStartY = screenHeight * 0.4f;
+                float menuStartY = screenHeight * 0.45f;
                 for (int i = 0; i < _menuOptions.Length; i++)
                 {
                     var prefix = i == _selectedOption ? "> " : "  ";
                     var text = prefix + _menuOptions[i];
+                    
+                    // Dim "Play Next Match" if season is complete
                     var color = i == _selectedOption ? Color.Yellow : Color.White;
+                    if (i == 1 && seasonComplete) // Play Next Match option
+                    {
+                        color = new Color(100, 100, 100); // Dark gray
+                    }
                     
                     Vector2 textSize = font.MeasureString(text);
                     Vector2 textPos = new Vector2((screenWidth - textSize.X) / 2, menuStartY + i * 50);
