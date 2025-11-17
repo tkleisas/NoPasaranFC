@@ -301,6 +301,7 @@ namespace NoPasaranFC.Screens
             
             if (!_inOptionsMenu)
             {
+                    float logoScale = 0.5f; // Adjust scale as needed
                 // Draw main menu centered
                 string title = "NO PASARAN! - ΜΕΝΟΥ ΑΓΩΝΩΝ";
                 Vector2 titleSize = font.MeasureString(title);
