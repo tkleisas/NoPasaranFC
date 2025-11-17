@@ -116,7 +116,7 @@ public class Game1 : Game
 
     protected override void Draw(GameTime gameTime)
     {
-        GraphicsDevice.Clear(Color.Black);
+        GraphicsDevice.Clear(new Color(34, 139, 34));
 
         _spriteBatch.Begin();
         _screenManager.Draw(_spriteBatch, _font);

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Linq;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
@@ -18,10 +18,11 @@ namespace NoPasaranFC.Screens
         private GraphicsDevice _graphicsDevice;
         private KeyboardState _previousKeyState;
         private int _selectedOption;
-        private readonly string[] _menuOptions = { "View Standings", "Play Next Match", "New Season", "Options", "Exit" };
+        private readonly string[] _menuOptions = { "ΠΡΟΒΟΛΗ ΑΠΟΤΕΛΕΣΜΑΤΩΝ", "ΕΠΟΜΕΝΟΣ ΑΓΩΝΑΣ", "ΝΕΟ ΠΡΩΤΑΘΛΗΜΑ", "ΕΠΙΛΟΓΕΣ", "ΕΞΟΔΟΣ" };
         private bool _inOptionsMenu = false;
         private int _selectedResolution = 2; // Default to 1280x720
         private bool _tempFullscreen = false;
+        private Texture2D _grassTexture;
         
         public bool ShouldExit { get; private set; }
         
@@ -53,6 +54,7 @@ namespace NoPasaranFC.Screens
         public void SetGraphicsDevice(GraphicsDevice graphicsDevice)
         {
             _graphicsDevice = graphicsDevice;
+            CreateGrassTexture();
         }
         
         public override void Update(GameTime gameTime)
@@ -145,7 +147,7 @@ namespace NoPasaranFC.Screens
                             {
                                 // Debug: teams not found
                                 System.IO.File.WriteAllText("match_debug.txt", 
-                                    $"Teams not found! homeTeam={homeTeam}, awayTeam={awayTeam}, HomeId={nextMatch.HomeTeamId}, AwayId={nextMatch.AwayTeamId}");
+                                    $"Η ΟΜΑΔΑ ΔΕ ΒΡΕΘΗΚΕ! homeTeam={homeTeam}, awayTeam={awayTeam}, HomeId={nextMatch.HomeTeamId}, AwayId={nextMatch.AwayTeamId}");
                             }
                         }
                         // If no next match found, user will see "Season Complete!" message in menu
@@ -154,7 +156,7 @@ namespace NoPasaranFC.Screens
                     {
                         // Debug: player team not found
                         System.IO.File.WriteAllText("match_debug.txt", 
-                            $"Player team not found! Total teams: {_championship.Teams.Count}");
+                            $"Η ΟΜΑΔΑ ΤΟΥ ΠΑΙΧΤΗ ΔΕ ΒΡΕΘΗΚΕ! ΣΥΝΟΛΙΚΕΣ ΟΜΑΔΕΣ: {_championship.Teams.Count}");
                     }
                     break;
                 
@@ -196,15 +198,58 @@ namespace NoPasaranFC.Screens
             _database.SaveChampionship(_championship);
         }
         
+        private void DrawGrassBackground(SpriteBatch spriteBatch, int screenWidth, int screenHeight)
+        {
+            if (_grassTexture != null)
+            {
+                spriteBatch.Draw(_grassTexture, new Rectangle(0, 0, screenWidth, screenHeight), Color.White);
+            }
+        }
+        
+        private void CreateGrassTexture()
+        {
+            if (_graphicsDevice == null) return;
+            
+            _grassTexture?.Dispose();
+            
+            int textureSize = 200;
+            _grassTexture = new Texture2D(_graphicsDevice, textureSize, textureSize);
+            Color[] data = new Color[textureSize * textureSize];
+            
+            Random random = new Random(42);
+            int grassSize = 20;
+            
+            for (int y = 0; y < textureSize; y += grassSize)
+            {
+                for (int x = 0; x < textureSize; x += grassSize)
+                {
+                    int greenVariation = random.Next(-15, 15);
+                    Color grassColor = new Color(34 + greenVariation, 139 + greenVariation, 34 + greenVariation);
+                    
+                    for (int py = 0; py < grassSize && y + py < textureSize; py++)
+                    {
+                        for (int px = 0; px < grassSize && x + px < textureSize; px++)
+                        {
+                            data[(y + py) * textureSize + (x + px)] = grassColor;
+                        }
+                    }
+                }
+            }
+            
+            _grassTexture.SetData(data);
+        }
+        
         public override void Draw(SpriteBatch spriteBatch, SpriteFont font)
         {
             int screenWidth = Game1.ScreenWidth;
             int screenHeight = Game1.ScreenHeight;
             
+            DrawGrassBackground(spriteBatch, screenWidth, screenHeight);
+            
             if (!_inOptionsMenu)
             {
                 // Draw main menu centered
-                string title = "NO PASARAN! - Championship Menu";
+                string title = "NO PASARAN! - ΜΕΝΟΥ ΑΓΩΝΩΝ";
                 Vector2 titleSize = font.MeasureString(title);
                 Vector2 titlePos = new Vector2((screenWidth - titleSize.X) / 2, screenHeight * 0.2f);
                 spriteBatch.DrawString(font, title, titlePos, Color.Yellow);
@@ -222,12 +267,12 @@ namespace NoPasaranFC.Screens
                 // Show season complete message if all matches are played
                 if (seasonComplete)
                 {
-                    string completeMsg = "*** SEASON COMPLETE! ***";
+                    string completeMsg = "*** ΤΟ ΠΡΩΤΑΘΛΗΜΑ ΕΧΕΙ ΟΛΟΚΛΗΡΩΘΕΙ! ***";
                     Vector2 msgSize = font.MeasureString(completeMsg);
                     Vector2 msgPos = new Vector2((screenWidth - msgSize.X) / 2, screenHeight * 0.3f);
                     spriteBatch.DrawString(font, completeMsg, msgPos, Color.LightGreen);
                     
-                    string useNewSeason = "Use 'New Season' to start again";
+                    string useNewSeason = "ΕΠΙΛΕΞΤΕ 'ΝΕΟ ΠΡΩΤΑΘΛΗΜΑ' ΓΙΑ ΝΕΟ ΞΕΚΙΝΗΜΑ";
                     Vector2 useSize = font.MeasureString(useNewSeason);
                     Vector2 usePos = new Vector2((screenWidth - useSize.X) / 2, screenHeight * 0.3f + 30);
                     spriteBatch.DrawString(font, useNewSeason, usePos, Color.Gray);
@@ -238,7 +283,7 @@ namespace NoPasaranFC.Screens
                 for (int i = 0; i < _menuOptions.Length; i++)
                 {
                     var prefix = i == _selectedOption ? "> " : "  ";
-                    var text = prefix + _menuOptions[i];
+                    var text = prefix + _menuOptions[i]+ (i == _selectedOption ?" <":"  ");
                     
                     // Dim "Play Next Match" if season is complete
                     var color = i == _selectedOption ? Color.Yellow : Color.White;
@@ -255,7 +300,7 @@ namespace NoPasaranFC.Screens
             else
             {
                 // Draw options menu centered
-                string title = "OPTIONS";
+                string title = "ΕΠΙΛΟΓΕΣ";
                 Vector2 titleSize = font.MeasureString(title);
                 Vector2 titlePos = new Vector2((screenWidth - titleSize.X) / 2, screenHeight * 0.2f);
                 spriteBatch.DrawString(font, title, titlePos, Color.Yellow);
@@ -264,7 +309,7 @@ namespace NoPasaranFC.Screens
                 var resolutions = Game1.GetAvailableResolutions();
                 float menuStartY = screenHeight * 0.35f;
                 
-                spriteBatch.DrawString(font, "Resolution:", new Vector2(screenWidth * 0.3f, menuStartY), Color.White);
+                spriteBatch.DrawString(font, "ΑΝΑΛΥΣΗ:", new Vector2(screenWidth * 0.3f, menuStartY), Color.White);
                 
                 for (int i = 0; i < resolutions.Length; i++)
                 {
@@ -276,12 +321,12 @@ namespace NoPasaranFC.Screens
                 }
                 
                 // Draw fullscreen toggle
-                string fsText = _tempFullscreen ? "Fullscreen: ON (Press F)" : "Fullscreen: OFF (Press F)";
+                string fsText = _tempFullscreen ? "ΠΛΗΡΗΣ ΟΘΟΝΗ: ΕΝΕΡΓΟ (ΠΑΤΑ F)" : "ΠΛΗΡΗΣ ΟΘΟΝΗ: ΑΝΕΝΕΡΓΟ (ΠΑΤΑ F)";
                 Vector2 fsSize = font.MeasureString(fsText);
                 spriteBatch.DrawString(font, fsText, new Vector2((screenWidth - fsSize.X) / 2, menuStartY + 40 + resolutions.Length * 35 + 40), Color.Cyan);
                 
                 // Draw instructions
-                string instructions = "Press ENTER to apply, ESC to cancel";
+                string instructions = "ΠΑΤΑ ENTER ΓΙΑ ΕΦΑΡΜΟΓΗ, ESC ΓΙΑ ΑΚΥΡΩΣΗ";
                 Vector2 instrSize = font.MeasureString(instructions);
                 spriteBatch.DrawString(font, instructions, new Vector2((screenWidth - instrSize.X) / 2, screenHeight * 0.85f), Color.Gray);
             }
