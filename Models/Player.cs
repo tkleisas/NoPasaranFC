@@ -1,4 +1,4 @@
-using Microsoft.Xna.Framework;
+﻿using Microsoft.Xna.Framework;
 
 namespace NoPasaranFC.Models
 {
@@ -38,7 +38,11 @@ namespace NoPasaranFC.Models
         public bool IsKnockedDown { get; set; }
         public float KnockdownTimer { get; set; }
         
-        // Animation state
+        // Animation state (NEW SYSTEM)
+        public PlayerAnimationSystem AnimationSystem { get; set; }
+        public string CurrentAnimationState { get; set; } // "walk", "fall", "shoot", "tackle"
+        
+        // Animation state (OLD SYSTEM - kept for compatibility)
         public float AnimationFrame { get; set; }
         public float AnimationSpeed { get; set; }
         public int SpriteDirection { get; set; } // 0=down, 1=up, 2=left, 3=right
@@ -65,6 +69,7 @@ namespace NoPasaranFC.Models
             SpriteDirection = 0;
             SpriteFileName = "player_default.png"; // Default sprite
             SpriteColor = Color.White; // No tint by default
+            CurrentAnimationState = "walk";
         }
         
         public Player() { }

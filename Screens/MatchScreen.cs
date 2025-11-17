@@ -26,12 +26,15 @@ namespace NoPasaranFC.Screens
         private Minimap _minimap;
         
         // Sprite support
-        private Texture2D _playerSpriteRed;  // Away team sprite sheet
-        private Texture2D _playerSpriteBlue; // Home team sprite sheet
+        private Texture2D _playerSpriteRed;  // Away team sprite sheet (OLD)
+        private Texture2D _playerSpriteBlue; // Home team sprite sheet (OLD)
         private Texture2D _ballSprite;
         private Texture2D _grassTexture;
         private SpriteFont _playerNameFont;
         private ContentManager _content;
+        
+        // New animation system
+        private PlayerAnimationSystem _playerAnimSystem;
         
         // Sprite sheet configuration
         private const int SpriteFrameSize = 64; // Each frame is 64x64 in the sprite sheet
@@ -75,6 +78,16 @@ namespace NoPasaranFC.Screens
                     _playerSpriteBlue = _content.Load<Texture2D>("Sprites/player_blue");
                     _playerSpriteRed = _content.Load<Texture2D>("Sprites/player_red");
                     _ballSprite = _content.Load<Texture2D>("Sprites/ball");
+                    
+                    // Initialize new animation system (load shared resources once)
+                    PlayerAnimationSystem.LoadSharedResources(_content);
+                    
+                    // Initialize all players with their own animation system instance
+                    foreach (var player in _homeTeam.Players.Concat(_awayTeam.Players))
+                    {
+                        player.AnimationSystem = new PlayerAnimationSystem();
+                        player.CurrentAnimationState = "walk";
+                    }
                     
                     _graphicsInitialized = true;
                 }
@@ -158,7 +171,63 @@ namespace NoPasaranFC.Screens
             
             foreach (var player in _matchEngine.GetAllPlayers())
             {
-                // Update animation based on movement
+                // Update new animation system
+                if (player.AnimationSystem != null)
+                {
+                    // Determine animation state
+                    string newState = "idle";
+                    
+                    if (player.IsKnockedDown)
+                    {
+                        newState = "fall";
+                    }
+                    else if (player.Velocity.LengthSquared() > 0.1f)
+                    {
+                        newState = "walk";
+                    }
+                    else
+                    {
+                        newState = "idle";
+                    }
+                    
+                    // Play the appropriate animation
+                    player.AnimationSystem.PlayAnimation(newState);
+                    
+                    // Calculate rotation based on velocity direction
+                    if (player.Velocity.LengthSquared() > 0.1f)
+                    {
+                        // Get angle from velocity 
+                        // Atan2 gives: right=0°, down=90°, left=180°/-180°, up=-90°
+                        float angle = (float)Math.Atan2(player.Velocity.Y, player.Velocity.X);
+                        
+                        // Our sprite rotation mapping:
+                        // 0 = up, 1 = up-right, 2 = right, 3 = down-right,
+                        // 4 = down, 5 = down-left, 6 = left, 7 = up-left
+                        
+                        // To map correctly:
+                        // velocity up (angle=-90°) should give rotation 0
+                        // velocity right (angle=0°) should give rotation 2
+                        // velocity down (angle=90°) should give rotation 4
+                        // velocity left (angle=180°) should give rotation 6
+                        
+                        // Add 90 degrees (PiOver2) to shift: up becomes 0°, right becomes 90°, etc.
+                        float adjustedAngle = angle + MathHelper.PiOver2;
+                        
+                        // Normalize to 0-2π range
+                        if (adjustedAngle < 0) adjustedAngle += MathHelper.TwoPi;
+                        
+                        // Convert to 0-7 steps (each step is 45°)
+                        // Divide by Pi/4 (45°) and round to nearest
+                        int rotation = (int)Math.Round(adjustedAngle / (MathHelper.Pi / 4f)) % 8;
+                        
+                        player.AnimationSystem.SetRotation(rotation);
+                    }
+                    
+                    // Update the animation
+                    player.AnimationSystem.Update(deltaTime);
+                }
+                
+                // OLD SYSTEM - Update animation based on movement (kept for fallback)
                 if (player.Velocity.LengthSquared() > 0.1f)
                 {
                     // Moving - animate (advance frames based on time)
@@ -475,9 +544,6 @@ namespace NoPasaranFC.Screens
         
         private void DrawPlayer(SpriteBatch spriteBatch, Player player, SpriteFont font)
         {
-            // Get the appropriate sprite sheet for this player's team
-            Texture2D spriteSheet = player.TeamId == _homeTeam.Id ? _playerSpriteBlue : _playerSpriteRed;
-            
             Color tintColor;
             
             if (player.IsKnockedDown)
@@ -498,74 +564,79 @@ namespace NoPasaranFC.Screens
             
             var pos = player.FieldPosition;
             
-            // Render size (double the sprite frame size: 64x64 -> 128x128)
-            int renderSize = player.IsControlled ? 136 : 128; // Controlled player slightly larger
+            // Render size
+            float scale = player.IsControlled ? 2.125f : 2.0f; // Controlled player slightly larger
+            int renderSize = player.IsControlled ? 136 : 128; // For UI elements
             
-            // Calculate source rectangle from sprite sheet
-            int frameIndex = (int)player.AnimationFrame % SpritesheetColumns;
-            int directionRow = player.SpriteDirection % SpritesheetRows;
-            
-            Rectangle sourceRect = new Rectangle(
-                frameIndex * SpriteFrameSize,
-                directionRow * SpriteFrameSize,
-                SpriteFrameSize,
-                SpriteFrameSize
-            );
-            
-            // Calculate rotation for diagonal movement
-            float rotation = 0f;
-            Vector2 origin = new Vector2(SpriteFrameSize / 2, SpriteFrameSize / 2); // Center of sprite
-            
-            if (player.Velocity.LengthSquared() > 0.1f)
+            // Use new animation system if available
+            if (player.AnimationSystem != null)
             {
-                Vector2 vel = player.Velocity;
-                
-                // Determine if moving diagonally
-                bool isMovingDiagonally = Math.Abs(vel.X) > 10f && Math.Abs(vel.Y) > 10f;
-                
-                if (isMovingDiagonally)
-                {
-                    // Calculate angle from velocity
-                    rotation = (float)Math.Atan2(vel.Y, vel.X);
-                    
-                    // Use the side-facing sprite (left or right) for diagonal movement
-                    if (vel.X > 0)
-                        directionRow = 3; // Right
-                    else
-                        directionRow = 2; // Left
-                    
-                    // Update source rect with diagonal sprite direction
-                    sourceRect = new Rectangle(
-                        frameIndex * SpriteFrameSize,
-                        directionRow * SpriteFrameSize,
-                        SpriteFrameSize,
-                        SpriteFrameSize
-                    );
-                }
-            }
-            
-            // Draw player sprite
-            if (player.IsKnockedDown)
-            {
-                // Draw knocked down player as lying down (flattened)
-                Rectangle destRect = new Rectangle((int)pos.X - renderSize / 2, (int)pos.Y - 20, renderSize, 40);
-                spriteBatch.Draw(spriteSheet, destRect, sourceRect, tintColor);
+                bool isHomeTeam = player.TeamId == _homeTeam.Id;
+                player.AnimationSystem.Draw(spriteBatch, pos, isHomeTeam, tintColor, scale);
             }
             else
             {
-                // Use centered position for rotation
-                Vector2 drawPos = new Vector2(pos.X, pos.Y);
-                spriteBatch.Draw(
-                    spriteSheet,
-                    drawPos,
-                    sourceRect,
-                    tintColor,
-                    rotation,
-                    origin,
-                    renderSize / (float)SpriteFrameSize, // Scale factor (2.0 for normal, 2.125 for controlled)
-                    SpriteEffects.None,
-                    0f
+                // FALLBACK TO OLD SYSTEM
+                Texture2D spriteSheet = player.TeamId == _homeTeam.Id ? _playerSpriteBlue : _playerSpriteRed;
+                
+                // Calculate source rectangle from sprite sheet
+                int frameIndex = (int)player.AnimationFrame % SpritesheetColumns;
+                int directionRow = player.SpriteDirection % SpritesheetRows;
+                
+                Rectangle sourceRect = new Rectangle(
+                    frameIndex * SpriteFrameSize,
+                    directionRow * SpriteFrameSize,
+                    SpriteFrameSize,
+                    SpriteFrameSize
                 );
+                
+                // Calculate rotation for diagonal movement
+                float rotation = 0f;
+                Vector2 origin = new Vector2(SpriteFrameSize / 2, SpriteFrameSize / 2);
+                
+                if (player.Velocity.LengthSquared() > 0.1f)
+                {
+                    Vector2 vel = player.Velocity;
+                    bool isMovingDiagonally = Math.Abs(vel.X) > 10f && Math.Abs(vel.Y) > 10f;
+                    
+                    if (isMovingDiagonally)
+                    {
+                        rotation = (float)Math.Atan2(vel.Y, vel.X);
+                        if (vel.X > 0)
+                            directionRow = 3;
+                        else
+                            directionRow = 2;
+                        
+                        sourceRect = new Rectangle(
+                            frameIndex * SpriteFrameSize,
+                            directionRow * SpriteFrameSize,
+                            SpriteFrameSize,
+                            SpriteFrameSize
+                        );
+                    }
+                }
+                
+                // Draw player sprite
+                if (player.IsKnockedDown)
+                {
+                    Rectangle destRect = new Rectangle((int)pos.X - renderSize / 2, (int)pos.Y - 20, renderSize, 40);
+                    spriteBatch.Draw(spriteSheet, destRect, sourceRect, tintColor);
+                }
+                else
+                {
+                    Vector2 drawPos = new Vector2(pos.X, pos.Y);
+                    spriteBatch.Draw(
+                        spriteSheet,
+                        drawPos,
+                        sourceRect,
+                        tintColor,
+                        rotation,
+                        origin,
+                        renderSize / (float)SpriteFrameSize,
+                        SpriteEffects.None,
+                        0f
+                    );
+                }
             }
             
             // Draw selection indicator for controlled player

@@ -644,7 +644,7 @@ namespace NoPasaranFC.Gameplay
         private void KnockDownPlayer(Player player, Vector2 impactVelocity)
         {
             player.IsKnockedDown = true;
-            player.KnockdownTimer = 1.5f + (float)_random.NextDouble() * 1.0f; // 1.5 to 2.5 seconds
+            player.KnockdownTimer = 0.5f + (float)_random.NextDouble() * 1.0f; // 0.5 to 1.5 seconds
             
             // Apply impact velocity (player slides in direction of impact)
             player.Velocity = impactVelocity * 0.5f;

@@ -44,6 +44,18 @@
 /processorParam:TextureFormat=Color
 /build:Sprites/no_pasaran_fc_logo.png
 
+#begin Sprites/player_blue_multi.png
+/importer:TextureImporter
+/processor:TextureProcessor
+/processorParam:ColorKeyColor=255,0,255,255
+/processorParam:ColorKeyEnabled=True
+/processorParam:GenerateMipmaps=False
+/processorParam:PremultiplyAlpha=True
+/processorParam:ResizeToPowerOfTwo=False
+/processorParam:MakeSquare=False
+/processorParam:TextureFormat=Color
+/build:Sprites/player_blue_multi.png
+
 #begin Sprites/player_blue.png
 /importer:TextureImporter
 /processor:TextureProcessor

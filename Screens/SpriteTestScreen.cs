@@ -49,7 +49,7 @@ namespace NoPasaranFC.Screens
         private void InitializeTestAnimations()
         {
             // Test Animation 1: Simple forward sequence with no rotation/mirror
-            var anim1 = new SpriteAnimation("Simple Walk", 0.2f, true);
+            var anim1 = new SpriteAnimation("walk", 0.2f, true);
             anim1.AddFrame("player_red_multi", 8, 0, 0);
             anim1.AddFrame("player_red_multi", 9, 0, 0);
             anim1.AddFrame("player_red_multi", 10, 0, 0);
@@ -57,7 +57,7 @@ namespace NoPasaranFC.Screens
             _testAnimations.Add(anim1);
             
             // Test Animation 2: Using rotation
-            var anim2 = new SpriteAnimation("Fall", 0.15f, true);
+            var anim2 = new SpriteAnimation("fall", 0.15f, true);
             anim2.AddFrame("player_red_multi", 16, 0, 0); 
             anim2.AddFrame("player_red_multi", 17, 0, 0); 
             anim2.AddFrame("player_red_multi", 18, 0, 0); 
@@ -65,7 +65,7 @@ namespace NoPasaranFC.Screens
             _testAnimations.Add(anim2);
             
             // Test Animation 3: Using mirror
-            var anim3 = new SpriteAnimation("Shoot", 0.2f, false);
+            var anim3 = new SpriteAnimation("shoot", 0.2f, false);
             anim3.AddFrame("player_red_multi", 12, 0, 0); 
             anim3.AddFrame("player_red_multi", 13, 0, 0); 
             anim3.AddFrame("player_red_multi", 14, 0, 0); 
