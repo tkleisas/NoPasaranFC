@@ -18,13 +18,13 @@ namespace NoPasaranFC.Screens
         private GraphicsDevice _graphicsDevice;
         private KeyboardState _previousKeyState;
         private int _selectedOption;
-        private readonly string[] _menuOptions = { "ΠΡΟΒΟΛΗ ΑΠΟΤΕΛΕΣΜΑΤΩΝ", "ΕΠΟΜΕΝΟΣ ΑΓΩΝΑΣ", "ΝΕΟ ΠΡΩΤΑΘΛΗΜΑ", "ΕΠΙΛΟΓΕΣ", "SPRITE TESTS", "ΕΞΟΔΟΣ" };
+        private readonly string[] _menuOptions = { "ΠΡΟΒΟΛΗ ΑΠΟΤΕΛΕΣΜΑΤΩΝ", "ΕΠΟΜΕΝΟΣ ΑΓΩΝΑΣ", "ΝΕΟ ΠΡΩΤΑΘΛΗΜΑ", "ΕΠΙΛΟΓΕΣ", "ΕΞΟΔΟΣ" };
         private bool _inOptionsMenu = false;
         private int _selectedResolution = 2; // Default to 1280x720
         private bool _tempFullscreen = false;
         private Texture2D _grassTexture;
         private float _grassScrollOffset = 0f;
-        private int _optionsSelectedItem = 0; // 0=resolution, 1=fullscreen, 2=speed, 3=match duration
+        private int _optionsSelectedItem = 0; // 0=resolution, 1=fullscreen, 2=speed, 3=match duration, 4=sprite tests
         private Texture2D _logo;
         
         public bool ShouldExit { get; private set; }
@@ -97,12 +97,12 @@ namespace NoPasaranFC.Screens
                 // Options menu navigation
                 if (keyState.IsKeyDown(Keys.Up) && !_previousKeyState.IsKeyDown(Keys.Up))
                 {
-                    _optionsSelectedItem = (_optionsSelectedItem - 1 + 4) % 4;
+                    _optionsSelectedItem = (_optionsSelectedItem - 1 + 5) % 5;
                 }
                 
                 if (keyState.IsKeyDown(Keys.Down) && !_previousKeyState.IsKeyDown(Keys.Down))
                 {
-                    _optionsSelectedItem = (_optionsSelectedItem + 1) % 4;
+                    _optionsSelectedItem = (_optionsSelectedItem + 1) % 5;
                 }
                 
                 if (keyState.IsKeyDown(Keys.Left) && !_previousKeyState.IsKeyDown(Keys.Left))
@@ -122,10 +122,18 @@ namespace NoPasaranFC.Screens
                 
                 if (keyState.IsKeyDown(Keys.Enter) && !_previousKeyState.IsKeyDown(Keys.Enter))
                 {
-                    // Apply resolution
-                    var resolution = Game1.GetAvailableResolutions()[_selectedResolution];
-                    _screenManager.SetResolution(resolution.X, resolution.Y, _tempFullscreen);
-                    _inOptionsMenu = false;
+                    if (_optionsSelectedItem == 4)
+                    {
+                        // Launch sprite test screen
+                        _screenManager.PushScreen(new SpriteTestScreen(_screenManager, _contentManager, _graphicsDevice));
+                    }
+                    else
+                    {
+                        // Apply resolution
+                        var resolution = Game1.GetAvailableResolutions()[_selectedResolution];
+                        _screenManager.SetResolution(resolution.X, resolution.Y, _tempFullscreen);
+                        _inOptionsMenu = false;
+                    }
                 }
                 
                 if (keyState.IsKeyDown(Keys.Escape) && !_previousKeyState.IsKeyDown(Keys.Escape))
@@ -215,11 +223,7 @@ namespace NoPasaranFC.Screens
                     _inOptionsMenu = true;
                     break;
                     
-                case 4: // Sprite Tests
-                    _screenManager.PushScreen(new SpriteTestScreen(_screenManager, _contentManager, _graphicsDevice));
-                    break;
-                    
-                case 5: // Exit
+                case 4: // Exit
                     ShouldExit = true;
                     break;
             }
@@ -405,6 +409,12 @@ namespace NoPasaranFC.Screens
                 var durationColor = _optionsSelectedItem == 3 ? Color.Yellow : Color.White;
                 Vector2 durationSize = font.MeasureString(durationText);
                 spriteBatch.DrawString(font, durationText, new Vector2((screenWidth - durationSize.X) / 2, menuStartY + lineHeight * 3), durationColor);
+                
+                // Sprite tests
+                string spriteText = "ΔΟΚΙΜΗ SPRITES";
+                var spriteColor = _optionsSelectedItem == 4 ? Color.Yellow : Color.White;
+                Vector2 spriteSize = font.MeasureString(spriteText);
+                spriteBatch.DrawString(font, spriteText, new Vector2((screenWidth - spriteSize.X) / 2, menuStartY + lineHeight * 4), spriteColor);
                 
                 // Draw instructions
                 string instructions = "<=/=> ΓΙΑ ΑΛΛΑΓΗ, ENTER ΓΙΑ ΕΦΑΡΜΟΓΗ, ESC ΓΙΑ ΕΠΙΣΤΡΟΦΗ";

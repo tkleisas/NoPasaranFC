@@ -9,13 +9,13 @@ namespace NoPasaranFC.Gameplay
         private static readonly string[] TeamNames = new[]
         {
             "NO PASARAN!",
-            "BARTSELIOMA",
-            "KTEL",
-            "NONAME",
-            "MIHANIKOI",
-            "ASALAGITOS",
-            "ASTERAS EXARXION",
-            "TIGANITIS"
+            "Ã–¡—‘”≈À…ŸÃ¡",
+            " ‘≈À",
+            "NO NAME",
+            "Ã«◊¡Õ… œ…",
+            "¡”¡À¡√«‘œ”",
+            "¡”‘≈—¡” ≈Œ¡—◊≈…ŸÕ",
+            "‘«√¡Õ«‘«”"
         };
         
         private static readonly string[] FirstNames = new[]
@@ -29,7 +29,26 @@ namespace NoPasaranFC.Gameplay
             "Garcia", "Rodriguez", "Martinez", "Hernandez", "Lopez", "Gonzalez",
             "Perez", "Sanchez", "Ramirez", "Torres", "Flores", "Rivera", "Cruz"
         };
-        
+        private static readonly string[] NoPasaranNames = new[]
+        {
+            "‘‹Í·ÒÔÚ", "Dablo", " ÔÎÔÊ›˙ÒÔ", "”ıÒ‹Ì", "Ã‹ÙÊÈÂÍ",
+            "–ﬁÙÂÒ –·Ì", " ıÒÈ‹ÍÔÚ Ô Í·Î¸Ú", "”›ÒÍÈ", "¬ÒÈÙÚ",
+             "ÃÔ˝„ÈÔÚ", "”Ù‹ËÈÌ"
+        };
+        private static readonly PlayerPosition[] NoPasaranPositions = new[]
+        {
+            PlayerPosition.Goalkeeper,
+            PlayerPosition.Defender,
+            PlayerPosition.Defender,
+            PlayerPosition.Defender,
+            PlayerPosition.Defender,
+            PlayerPosition.Midfielder,
+            PlayerPosition.Midfielder,
+            PlayerPosition.Midfielder,
+            PlayerPosition.Midfielder,
+            PlayerPosition.Forward,
+            PlayerPosition.Forward,
+        };
         public static Championship CreateNewChampionship()
         {
             var championship = new Championship();
@@ -41,7 +60,28 @@ namespace NoPasaranFC.Gameplay
                 bool isPlayerControlled = teamName == "NO PASARAN!";
                 var team = new Team(teamName, isPlayerControlled);
                 team.Id = teamId++;
-                
+                if(teamName == "NO PASARAN!")
+                {
+                    // Create 11 specific players for NO PASARAN!
+                    int index = 0;
+                    foreach (var playerName in NoPasaranNames)
+                    {
+                        var position = NoPasaranPositions[index++];
+                        var player = new Player(playerName, position);
+                        // Assign random stats
+                        player.Speed = random.Next(40, 90);
+                        player.Shooting = random.Next(30, 95);
+                        player.Passing = random.Next(30, 90);
+                        player.Defending = random.Next(20, 90);
+                        player.Agility = random.Next(40, 90);
+                        player.Technique = random.Next(40, 90);
+                        player.Stamina = random.Next(50, 95);
+                        
+                        team.AddPlayer(player);
+                    }
+                    championship.Teams.Add(team);
+                    continue;
+                }
                 // Create 11 players for each team
                 // 1 Goalkeeper
                 team.AddPlayer(CreatePlayer(random, PlayerPosition.Goalkeeper));

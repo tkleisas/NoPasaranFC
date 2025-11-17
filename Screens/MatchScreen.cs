@@ -818,7 +818,7 @@ namespace NoPasaranFC.Screens
             }
             else
             {
-                countdownText = "GO!";
+                countdownText = "ΠΑΜΕ!";
             }
             
             // Large text in center of screen
