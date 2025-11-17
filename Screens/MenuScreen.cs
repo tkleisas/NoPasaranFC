@@ -18,7 +18,7 @@ namespace NoPasaranFC.Screens
         private GraphicsDevice _graphicsDevice;
         private KeyboardState _previousKeyState;
         private int _selectedOption;
-        private readonly string[] _menuOptions = { "ΠΡΟΒΟΛΗ ΑΠΟΤΕΛΕΣΜΑΤΩΝ", "ΕΠΟΜΕΝΟΣ ΑΓΩΝΑΣ", "ΝΕΟ ΠΡΩΤΑΘΛΗΜΑ", "ΕΠΙΛΟΓΕΣ", "ΕΞΟΔΟΣ" };
+        private readonly string[] _menuOptions = { "ΠΡΟΒΟΛΗ ΑΠΟΤΕΛΕΣΜΑΤΩΝ", "ΕΠΟΜΕΝΟΣ ΑΓΩΝΑΣ", "ΝΕΟ ΠΡΩΤΑΘΛΗΜΑ", "ΕΠΙΛΟΓΕΣ", "SPRITE TESTS", "ΕΞΟΔΟΣ" };
         private bool _inOptionsMenu = false;
         private int _selectedResolution = 2; // Default to 1280x720
         private bool _tempFullscreen = false;
@@ -215,7 +215,11 @@ namespace NoPasaranFC.Screens
                     _inOptionsMenu = true;
                     break;
                     
-                case 4: // Exit
+                case 4: // Sprite Tests
+                    _screenManager.PushScreen(new SpriteTestScreen(_screenManager, _contentManager, _graphicsDevice));
+                    break;
+                    
+                case 5: // Exit
                     ShouldExit = true;
                     break;
             }
@@ -312,16 +316,17 @@ namespace NoPasaranFC.Screens
                     int logoWidth = (int)(_logo.Width * logoScale);
                     int logoHeight = (int)(_logo.Height * logoScale);
                     Vector2 logoPos = new Vector2((screenWidth - logoWidth) / 2, screenHeight * 0.01f);
-                    
+
                     spriteBatch.Draw(_logo, logoPos, null, Color.White, 0f, Vector2.Zero, logoScale, SpriteEffects.None, 0f);
                 }
-                
-                // Draw main menu centered
-                string title = "NO PASARAN! - ΜΕΝΟΥ ΑΓΩΝΩΝ";
-                Vector2 titleSize = font.MeasureString(title);
-                Vector2 titlePos = new Vector2((screenWidth - titleSize.X) / 2, screenHeight * 0.5f);
-                spriteBatch.DrawString(font, title, titlePos, Color.Yellow);
-                
+                else
+                {
+                    // Draw main menu centered
+                    string title = "NO PASARAN! - ΜΕΝΟΥ ΑΓΩΝΩΝ";
+                    Vector2 titleSize = font.MeasureString(title);
+                    Vector2 titlePos = new Vector2((screenWidth - titleSize.X) / 2, screenHeight * 0.5f);
+                    spriteBatch.DrawString(font, title, titlePos, Color.Yellow);
+                }
                 // Check if season is complete
                 var playerTeam = _championship.Teams.Find(t => t.IsPlayerControlled);
                 bool seasonComplete = false;
