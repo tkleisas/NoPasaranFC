@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using Microsoft.Xna.Framework;
@@ -25,6 +25,10 @@ namespace NoPasaranFC.Gameplay
         
         public Vector2 BallPosition { get; set; }
         public Vector2 BallVelocity { get; set; }
+        public float BallHeight { get; set; } // Z-axis height
+        public float BallVerticalVelocity { get; set; } // Vertical velocity (up/down)
+        private float _shootButtonHoldTime = 0f;
+        private bool _wasShootButtonDown = false;
         public int HomeScore { get; private set; }
         public int AwayScore { get; private set; }
         public float MatchTime { get; private set; }
@@ -48,6 +52,9 @@ namespace NoPasaranFC.Gameplay
         private const float BallKickDistance = 50f; // Scaled for larger sprites
         private const float TackleDistance = 70f; // Scaled for larger sprites
         private const float TackleSuccessBase = 40f; // Base tackle success %
+        private const float Gravity = 1200f; // Gravity for ball vertical movement
+        private const float MaxShootHoldTime = 1.5f; // Maximum time to hold shoot button
+        private const float GoalPostHeight = 200f; // Height of goal posts
         
         // Viewport zoom (adjust to show desired portion of field)
         public const float ZoomLevel = 0.8f; // Higher value = more zoomed in, shows smaller area
@@ -61,7 +68,8 @@ namespace NoPasaranFC.Gameplay
             AwayScore = 0;
             MatchTime = 0f;
             BallVelocity = Vector2.Zero;
-            BallVelocity = Vector2.Zero;
+            BallHeight = 0f;
+            BallVerticalVelocity = 0f;
             
             // Initialize camera
             Camera = new Camera(viewportWidth, viewportHeight, ZoomLevel);
@@ -141,7 +149,7 @@ namespace NoPasaranFC.Gameplay
             team.Players[10].HomePosition = new Vector2(attackX, yOffset + FieldHeight * 0.67f);
         }
         
-        public void Update(GameTime gameTime, Vector2 moveDirection)
+        public void Update(GameTime gameTime, Vector2 moveDirection, bool isShootKeyDown)
         {
             float deltaTime = (float)gameTime.ElapsedGameTime.TotalSeconds;
             
@@ -190,7 +198,7 @@ namespace NoPasaranFC.Gameplay
             MatchTime += gameTimeIncrement;
             
             // Update all players
-            UpdatePlayers(deltaTime, moveDirection);
+            UpdatePlayers(deltaTime, moveDirection, isShootKeyDown);
             
             // Check for collisions between players
             CheckPlayerCollisions(deltaTime);
@@ -208,11 +216,48 @@ namespace NoPasaranFC.Gameplay
             CheckGoal();
         }
         
-        private void UpdatePlayers(float deltaTime, Vector2 moveDirection)
+        private void UpdatePlayers(float deltaTime, Vector2 moveDirection, bool isShootKeyDown)
         {
             // Update controlled player
             if (_controlledPlayer != null)
             {
+                float distToBall = Vector2.Distance(_controlledPlayer.FieldPosition, BallPosition);
+                
+                // Handle shoot button for charging shot or tackle
+                if (isShootKeyDown && distToBall < BallKickDistance * 1.5f && BallHeight < 50f)
+                {
+                    // Near ball - charge shot
+                    if (!_wasShootButtonDown)
+                    {
+                        // Just pressed
+                        _shootButtonHoldTime = 0f;
+                    }
+                    _shootButtonHoldTime += deltaTime;
+                    _shootButtonHoldTime = Math.Min(_shootButtonHoldTime, MaxShootHoldTime);
+                    _wasShootButtonDown = true;
+                }
+                else if (_wasShootButtonDown && !isShootKeyDown)
+                {
+                    // Button released
+                    if (distToBall < BallKickDistance * 1.5f && BallHeight < 50f)
+                    {
+                        // Near ball - shoot!
+                        PerformShoot(moveDirection);
+                    }
+                    else
+                    {
+                        // Not near ball - try to tackle
+                        Tackle();
+                    }
+                    _wasShootButtonDown = false;
+                    _shootButtonHoldTime = 0f;
+                }
+                else if (!_wasShootButtonDown && !isShootKeyDown)
+                {
+                    // Reset state when not pressing
+                    _shootButtonHoldTime = 0f;
+                }
+                
                 // Handle knockdown for controlled player
                 if (_controlledPlayer.IsKnockedDown)
                 {
@@ -244,8 +289,8 @@ namespace NoPasaranFC.Gameplay
                         _controlledPlayer.FieldPosition = newPosition;
                         
                         // If controlled player is near ball and moving, kick it
-                        float distToBall = Vector2.Distance(_controlledPlayer.FieldPosition, BallPosition);
-                        if (distToBall < BallKickDistance && moveDirection.Length() > 0.1f)
+                        float distToBallForKick = Vector2.Distance(_controlledPlayer.FieldPosition, BallPosition);
+                        if (distToBallForKick < BallKickDistance && moveDirection.Length() > 0.1f)
                         {
                             // Kick ball in movement direction
                             float kickPower = _controlledPlayer.Shooting / 10f + 5f;
@@ -383,8 +428,8 @@ namespace NoPasaranFC.Gameplay
                 ClampToField(ref newPosition);
                 player.FieldPosition = newPosition;
                 
-                // If AI player is near ball and moving toward it, kick it
-                if (distanceToBall < BallKickDistance && urgency > 0.7f)
+                // If AI player is near ball and moving toward it, kick it (only if ball is on ground)
+                if (distanceToBall < BallKickDistance && urgency > 0.7f && BallHeight < 50f)
                 {
                     // Kick ball toward opponent goal
                     bool isHomeTeam = player.TeamId == _homeTeam.Id;
@@ -399,6 +444,30 @@ namespace NoPasaranFC.Gameplay
                         goalDirection.Normalize();
                         float kickPower = player.Shooting / 15f + 3f;
                         BallVelocity = goalDirection * kickPower * player.Speed * 0.7f;
+                        
+                        // AI can do varied shots based on shooting skill and distance to goal
+                        float distToGoal = Vector2.Distance(BallPosition, new Vector2(targetGoalX, targetGoalY));
+                        float shootingSkill = player.Shooting / 100f; // 0-1 range
+                        
+                        // Calculate shot height based on:
+                        // - Shooting skill (better players can do higher shots)
+                        // - Distance to goal (further away = higher shot)
+                        // - Random variation for realism
+                        float baseHeight = 50f; // Minimum height (ground shot)
+                        float skillBonus = shootingSkill * 300f; // Up to 300 extra based on skill
+                        float distanceBonus = Math.Min(distToGoal / 20f, 200f); // Up to 200 based on distance
+                        float randomFactor = (float)_random.NextDouble() * 150f; // Random 0-150
+                        
+                        // Occasionally do a high shot (20% chance for skilled players)
+                        if (_random.NextDouble() < shootingSkill * 0.2f)
+                        {
+                            BallVerticalVelocity = baseHeight + skillBonus + distanceBonus + randomFactor;
+                        }
+                        else
+                        {
+                            // Most shots are lower
+                            BallVerticalVelocity = baseHeight + randomFactor * 0.5f;
+                        }
                     }
                 }
             }
@@ -411,16 +480,42 @@ namespace NoPasaranFC.Gameplay
         
         private void UpdateBall(float deltaTime)
         {
-            // Apply velocity to ball position
+            // Apply horizontal velocity to ball position
             BallPosition += BallVelocity * deltaTime;
             
-            // Apply friction
-            BallVelocity *= BallFriction;
+            // Apply vertical physics (gravity)
+            BallVerticalVelocity -= Gravity * deltaTime;
+            BallHeight += BallVerticalVelocity * deltaTime;
             
-            // Stop ball if moving very slowly
-            if (BallVelocity.Length() < 1f)
+            // Ball bounces when it hits the ground
+            if (BallHeight <= 0f)
             {
-                BallVelocity = Vector2.Zero;
+                BallHeight = 0f;
+                if (Math.Abs(BallVerticalVelocity) > 50f) // Bounce threshold
+                {
+                    BallVerticalVelocity = -BallVerticalVelocity * 0.6f; // Bounce with energy loss
+                }
+                else
+                {
+                    BallVerticalVelocity = 0f; // Stop bouncing
+                }
+            }
+            
+            // Apply friction only when ball is on ground
+            if (BallHeight <= 0f)
+            {
+                BallVelocity *= BallFriction;
+                
+                // Stop ball if moving very slowly
+                if (BallVelocity.Length() < 1f)
+                {
+                    BallVelocity = Vector2.Zero;
+                }
+            }
+            else
+            {
+                // Air resistance when ball is in the air
+                BallVelocity *= 0.99f;
             }
             
             // Clamp ball to field
@@ -569,6 +664,35 @@ namespace NoPasaranFC.Gameplay
                 return BallPosition.X > centerX; // Ball in right half
         }
         
+        private void PerformShoot(Vector2 moveDirection)
+        {
+            // Calculate power based on hold time (0 to 1)
+            float power = _shootButtonHoldTime / MaxShootHoldTime;
+            
+            // Determine shoot direction
+            Vector2 shootDirection = moveDirection.Length() > 0.1f ? moveDirection : _controlledPlayer.Velocity;
+            if (shootDirection.Length() < 0.1f)
+            {
+                // Default to shooting toward nearest goal
+                float leftGoalDist = BallPosition.X - StadiumMargin;
+                float rightGoalDist = (StadiumMargin + FieldWidth) - BallPosition.X;
+                shootDirection = leftGoalDist < rightGoalDist ? Vector2.UnitX * -1 : Vector2.UnitX;
+            }
+            else
+            {
+                shootDirection.Normalize();
+            }
+            
+            // Calculate horizontal and vertical velocity
+            float basePower = _controlledPlayer.Shooting / 10f + 5f;
+            float horizontalPower = basePower * (1f + power * 2f); // More power = faster
+            BallVelocity = shootDirection * horizontalPower * _controlledPlayer.Speed;
+            
+            // Calculate vertical velocity (height)
+            // More hold time = higher shot
+            BallVerticalVelocity = power * 800f; // Max height with max hold
+        }
+        
         private void ClampToField(ref Vector2 position)
         {
             position.X = MathHelper.Clamp(position.X, StadiumMargin, StadiumMargin + FieldWidth);
@@ -605,18 +729,30 @@ namespace NoPasaranFC.Gameplay
             float goalTop = StadiumMargin + (FieldHeight - GoalWidth) / 2;
             float goalBottom = goalTop + GoalWidth;
             
+            // Check if ball is below goal post height (not too high)
+            bool ballBelowGoalHeight = BallHeight <= GoalPostHeight;
+            
             // Left goal (home team defends)
             if (BallPosition.X <= StadiumMargin + GoalDepth && 
-                BallPosition.Y > goalTop && BallPosition.Y < goalBottom)
+                BallPosition.Y > goalTop && BallPosition.Y < goalBottom &&
+                ballBelowGoalHeight)
             {
                 AwayScore++;
                 ResetAfterGoal();
             }
             // Right goal (away team defends)
             else if (BallPosition.X >= StadiumMargin + FieldWidth - GoalDepth && 
-                     BallPosition.Y > goalTop && BallPosition.Y < goalBottom)
+                     BallPosition.Y > goalTop && BallPosition.Y < goalBottom &&
+                     ballBelowGoalHeight)
             {
                 HomeScore++;
+                ResetAfterGoal();
+            }
+            // Ball went over goal - throw-in from goal line
+            else if ((BallPosition.X <= StadiumMargin || BallPosition.X >= StadiumMargin + FieldWidth) &&
+                     !ballBelowGoalHeight)
+            {
+                // Reset ball to corner/edge (simplified - could be throw-in)
                 ResetAfterGoal();
             }
         }
@@ -625,6 +761,8 @@ namespace NoPasaranFC.Gameplay
         {
             BallPosition = new Vector2(StadiumMargin + FieldWidth / 2, StadiumMargin + FieldHeight / 2);
             BallVelocity = Vector2.Zero;
+            BallHeight = 0f;
+            BallVerticalVelocity = 0f;
             InitializePositions();
         }
         
@@ -747,35 +885,15 @@ namespace NoPasaranFC.Gameplay
             }
         }
         
-        public void Shoot()
+        
+        public bool IsChargingShot()
         {
-            if (_controlledPlayer == null) return;
-            
-            float distToBall = Vector2.Distance(_controlledPlayer.FieldPosition, BallPosition);
-            
-            // Check if player is near the ball - if so, shoot
-            if (distToBall < BallKickDistance * 1.5f)
-            {
-                // Shoot toward opponent goal
-                bool isHomeTeam = _controlledPlayer.TeamId == _homeTeam.Id;
-                float targetGoalX = isHomeTeam ? 
-                    StadiumMargin + FieldWidth - 50f : 
-                    StadiumMargin + 50f;
-                float targetGoalY = StadiumMargin + FieldHeight / 2;
-                
-                Vector2 shootDirection = new Vector2(targetGoalX, targetGoalY) - BallPosition;
-                if (shootDirection.Length() > 0)
-                {
-                    shootDirection.Normalize();
-                    float shootPower = _controlledPlayer.Shooting / 5f + 10f;
-                    BallVelocity = shootDirection * shootPower * _controlledPlayer.Speed * 1.5f;
-                }
-            }
-            else if (distToBall < TackleDistance * 2f)
-            {
-                // Not close enough to shoot, try to tackle instead
-                Tackle();
-            }
+            return _wasShootButtonDown && _shootButtonHoldTime > 0f;
+        }
+        
+        public float GetShotPower()
+        {
+            return Math.Min(_shootButtonHoldTime / MaxShootHoldTime, 1f);
         }
         
         public List<Player> GetAllPlayers()

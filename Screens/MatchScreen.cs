@@ -1,4 +1,4 @@
-using Microsoft.Xna.Framework;
+﻿using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Content;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
@@ -132,19 +132,16 @@ namespace NoPasaranFC.Screens
             if (moveDirection != Vector2.Zero)
                 moveDirection.Normalize();
             
-            // Shoot/Tackle with X
-            if (keyState.IsKeyDown(Keys.X) && !_previousKeyState.IsKeyDown(Keys.X))
-            {
-                _matchEngine.Shoot();
-            }
+            // Shoot/Tackle with X - now supports holding for power
+            bool isShootKeyDown = keyState.IsKeyDown(Keys.X);
+            
+            _matchEngine.Update(gameTime, moveDirection, isShootKeyDown);
             
             // Switch player with Space
             if (keyState.IsKeyDown(Keys.Space) && !_previousKeyState.IsKeyDown(Keys.Space))
             {
                 _matchEngine.SwitchControlledPlayer();
             }
-            
-            _matchEngine.Update(gameTime, moveDirection);
             
             // Update player animations
             UpdatePlayerAnimations(gameTime);
@@ -504,10 +501,6 @@ namespace NoPasaranFC.Screens
             // Render size (double the sprite frame size: 64x64 -> 128x128)
             int renderSize = player.IsControlled ? 136 : 128; // Controlled player slightly larger
             
-            // Draw shadow underneath (larger for bigger sprites)
-            Rectangle shadowRect = new Rectangle((int)pos.X - renderSize / 2, (int)pos.Y + renderSize / 2 - 6, renderSize, 12);
-            spriteBatch.Draw(_pixel, shadowRect, new Color(0, 0, 0, 100));
-            
             // Calculate source rectangle from sprite sheet
             int frameIndex = (int)player.AnimationFrame % SpritesheetColumns;
             int directionRow = player.SpriteDirection % SpritesheetRows;
@@ -580,6 +573,26 @@ namespace NoPasaranFC.Screens
             {
                 // Draw a circle around the controlled player
                 DrawCircleOutline(spriteBatch, pos, renderSize / 2 + 10, Color.Yellow, 4);
+                
+                // Draw shot power indicator if charging
+                if (_matchEngine.IsChargingShot())
+                {
+                    float power = _matchEngine.GetShotPower();
+                    int barWidth = 60;
+                    int barHeight = 8;
+                    int barX = (int)(pos.X - barWidth / 2);
+                    int barY = (int)(pos.Y - renderSize / 2 - 50); // Above player
+                    
+                    // Background
+                    spriteBatch.Draw(_pixel, new Rectangle(barX, barY, barWidth, barHeight), new Color(0, 0, 0, 180));
+                    
+                    // Power fill
+                    Color powerColor = power < 0.5f ? Color.Yellow : (power < 0.8f ? Color.Orange : Color.Red);
+                    spriteBatch.Draw(_pixel, new Rectangle(barX, barY, (int)(barWidth * power), barHeight), powerColor);
+                    
+                    // Border
+                    DrawRectangleOutline(spriteBatch, _pixel, new Rectangle(barX, barY, barWidth, barHeight), Color.White, 2);
+                }
             }
             
             // Draw player name above sprite (only if not knocked down)
@@ -638,11 +651,22 @@ namespace NoPasaranFC.Screens
         
         private void DrawBall(SpriteBatch spriteBatch, Vector2 ballPos)
         {
-            int ballSize = 32; // Scaled up to match larger players
+            int baseBallSize = 32; // Base size
             
-            // Draw ball shadow
-            Rectangle shadowRect = new Rectangle((int)ballPos.X - ballSize / 2, (int)ballPos.Y + ballSize / 2 - 3, ballSize, 6);
-            spriteBatch.Draw(_pixel, shadowRect, new Color(0, 0, 0, 120));
+            // Calculate scale based on height (ball appears bigger when higher)
+            float heightScale = 1f + (_matchEngine.BallHeight / 400f); // Grows up to 2x at max height
+            int ballSize = (int)(baseBallSize * heightScale);
+            
+            // Draw ball shadow (always on ground, scaled based on height)
+            int shadowSize = (int)(baseBallSize * (1f + _matchEngine.BallHeight / 800f)); // Shadow grows when ball is higher
+            float shadowAlpha = Math.Max(50, 120 - _matchEngine.BallHeight * 0.3f); // Fainter when ball is higher
+            Rectangle shadowRect = new Rectangle(
+                (int)ballPos.X - shadowSize / 2, 
+                (int)ballPos.Y + shadowSize / 2 - 3, 
+                shadowSize, 
+                6
+            );
+            spriteBatch.Draw(_pixel, shadowRect, new Color(0, 0, 0, (int)shadowAlpha));
             
             // Calculate source rectangle from ball sprite sheet (8x8 grid)
             int frameIndex = (int)_ballAnimationFrame % 64; // 0-63
@@ -656,8 +680,8 @@ namespace NoPasaranFC.Screens
                 BallFrameSize
             );
             
-            // Draw ball with animation frame
-            Vector2 drawPos = new Vector2(ballPos.X, ballPos.Y);
+            // Draw ball with animation frame (adjusted Y position for height)
+            Vector2 drawPos = new Vector2(ballPos.X, ballPos.Y - _matchEngine.BallHeight);
             Vector2 origin = new Vector2(BallFrameSize / 2, BallFrameSize / 2);
             
             spriteBatch.Draw(_ballSprite, drawPos, sourceRect, Color.White, 0f, origin, 
@@ -706,7 +730,7 @@ namespace NoPasaranFC.Screens
             spriteBatch.DrawString(font, timeText, new Vector2((screenWidth - timeSize.X) / 2, screenHeight - 50), Color.White);
             
             // Draw controls centered at bottom
-            string controls = "Arrows: Move | Space: Switch | X: Shoot/Tackle";
+            string controls = "Arrows: Move | Space: Switch | X: Hold to Charge Shot";
             Vector2 controlsSize = font.MeasureString(controls);
             spriteBatch.DrawString(font, controls, new Vector2((screenWidth - controlsSize.X) / 2, screenHeight - 25), Color.LightGray);
         }
