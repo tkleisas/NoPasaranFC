@@ -25,6 +25,7 @@ namespace NoPasaranFC.Screens
         private Texture2D _grassTexture;
         private float _grassScrollOffset = 0f;
         private int _optionsSelectedItem = 0; // 0=resolution, 1=fullscreen, 2=speed, 3=match duration
+        private Texture2D _logo;
         
         public bool ShouldExit { get; private set; }
         
@@ -37,6 +38,9 @@ namespace NoPasaranFC.Screens
             _graphicsDevice = graphicsDevice;
             _selectedOption = 0;
             ShouldExit = false;
+            
+            // Load logo
+            _logo = content.Load<Texture2D>("Sprites/no_pasaran_fc_logo");
             
             // Initialize temp fullscreen to current state
             _tempFullscreen = Game1.IsFullscreen;
@@ -301,11 +305,21 @@ namespace NoPasaranFC.Screens
             
             if (!_inOptionsMenu)
             {
-                    float logoScale = 0.5f; // Adjust scale as needed
+                // Draw logo at top center
+                if (_logo != null)
+                {
+                    float logoScale = 1.0f; // Adjust scale as needed
+                    int logoWidth = (int)(_logo.Width * logoScale);
+                    int logoHeight = (int)(_logo.Height * logoScale);
+                    Vector2 logoPos = new Vector2((screenWidth - logoWidth) / 2, screenHeight * 0.01f);
+                    
+                    spriteBatch.Draw(_logo, logoPos, null, Color.White, 0f, Vector2.Zero, logoScale, SpriteEffects.None, 0f);
+                }
+                
                 // Draw main menu centered
                 string title = "NO PASARAN! - ΜΕΝΟΥ ΑΓΩΝΩΝ";
                 Vector2 titleSize = font.MeasureString(title);
-                Vector2 titlePos = new Vector2((screenWidth - titleSize.X) / 2, screenHeight * 0.2f);
+                Vector2 titlePos = new Vector2((screenWidth - titleSize.X) / 2, screenHeight * 0.5f);
                 spriteBatch.DrawString(font, title, titlePos, Color.Yellow);
                 
                 // Check if season is complete
@@ -323,17 +337,17 @@ namespace NoPasaranFC.Screens
                 {
                     string completeMsg = "*** ΤΟ ΠΡΩΤΑΘΛΗΜΑ ΕΧΕΙ ΟΛΟΚΛΗΡΩΘΕΙ! ***";
                     Vector2 msgSize = font.MeasureString(completeMsg);
-                    Vector2 msgPos = new Vector2((screenWidth - msgSize.X) / 2, screenHeight * 0.3f);
+                    Vector2 msgPos = new Vector2((screenWidth - msgSize.X) / 2, screenHeight * 0.6f);
                     spriteBatch.DrawString(font, completeMsg, msgPos, Color.LightGreen);
                     
                     string useNewSeason = "ΕΠΙΛΕΞΤΕ 'ΝΕΟ ΠΡΩΤΑΘΛΗΜΑ' ΓΙΑ ΝΕΟ ΞΕΚΙΝΗΜΑ";
                     Vector2 useSize = font.MeasureString(useNewSeason);
-                    Vector2 usePos = new Vector2((screenWidth - useSize.X) / 2, screenHeight * 0.3f + 30);
+                    Vector2 usePos = new Vector2((screenWidth - useSize.X) / 2, screenHeight * 0.6f + 30);
                     spriteBatch.DrawString(font, useNewSeason, usePos, Color.Gray);
                 }
                 
                 // Draw menu options centered
-                float menuStartY = screenHeight * 0.45f;
+                float menuStartY = screenHeight * 0.62f;
                 for (int i = 0; i < _menuOptions.Length; i++)
                 {
                     var prefix = i == _selectedOption ? "> " : "  ";
