@@ -184,7 +184,10 @@ namespace NoPasaranFC.Gameplay
                 return;
             }
             
-            MatchTime += deltaTime;
+            // Update match time - map real time to game time (90 minutes)
+            float realTimeDuration = GameSettings.Instance.GetMatchDurationSeconds();
+            float gameTimeIncrement = (90f / realTimeDuration) * deltaTime;
+            MatchTime += gameTimeIncrement;
             
             // Update all players
             UpdatePlayers(deltaTime, moveDirection);
@@ -234,7 +237,7 @@ namespace NoPasaranFC.Gameplay
                     // Normal movement (only if not knocked down)
                     if (moveDirection.Length() > 0)
                     {
-                        float moveSpeed = _controlledPlayer.Speed * 3f;
+                        float moveSpeed = _controlledPlayer.Speed * 3f * GameSettings.Instance.PlayerSpeedMultiplier;
                         var newPosition = _controlledPlayer.FieldPosition + moveDirection * moveSpeed * deltaTime;
                         _controlledPlayer.Velocity = moveDirection * moveSpeed;
                         ClampToField(ref newPosition);
@@ -374,7 +377,7 @@ namespace NoPasaranFC.Gameplay
             if (distance > 15f)
             {
                 direction.Normalize();
-                float moveSpeed = player.Speed * 2.5f * urgency;
+                float moveSpeed = player.Speed * 2.5f * urgency * GameSettings.Instance.PlayerSpeedMultiplier;
                 var newPosition = player.FieldPosition + direction * moveSpeed * deltaTime;
                 player.Velocity = direction * moveSpeed; // Store velocity for collision
                 ClampToField(ref newPosition);

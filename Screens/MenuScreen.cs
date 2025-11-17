@@ -23,6 +23,8 @@ namespace NoPasaranFC.Screens
         private int _selectedResolution = 2; // Default to 1280x720
         private bool _tempFullscreen = false;
         private Texture2D _grassTexture;
+        private float _grassScrollOffset = 0f;
+        private int _optionsSelectedItem = 0; // 0=resolution, 1=fullscreen, 2=speed, 3=match duration
         
         public bool ShouldExit { get; private set; }
         
@@ -61,6 +63,13 @@ namespace NoPasaranFC.Screens
         {
             var keyState = Keyboard.GetState();
             
+            // Update grass scroll
+            _grassScrollOffset += 50f * (float)gameTime.ElapsedGameTime.TotalSeconds;
+            if (_grassScrollOffset >= 200f) // Texture size
+            {
+                _grassScrollOffset -= 200f;
+            }
+            
             if (!_inOptionsMenu)
             {
                 // Main menu navigation
@@ -84,12 +93,22 @@ namespace NoPasaranFC.Screens
                 // Options menu navigation
                 if (keyState.IsKeyDown(Keys.Up) && !_previousKeyState.IsKeyDown(Keys.Up))
                 {
-                    _selectedResolution = (_selectedResolution - 1 + Game1.GetAvailableResolutions().Length) % Game1.GetAvailableResolutions().Length;
+                    _optionsSelectedItem = (_optionsSelectedItem - 1 + 4) % 4;
                 }
                 
                 if (keyState.IsKeyDown(Keys.Down) && !_previousKeyState.IsKeyDown(Keys.Down))
                 {
-                    _selectedResolution = (_selectedResolution + 1) % Game1.GetAvailableResolutions().Length;
+                    _optionsSelectedItem = (_optionsSelectedItem + 1) % 4;
+                }
+                
+                if (keyState.IsKeyDown(Keys.Left) && !_previousKeyState.IsKeyDown(Keys.Left))
+                {
+                    HandleOptionsChange(-1);
+                }
+                
+                if (keyState.IsKeyDown(Keys.Right) && !_previousKeyState.IsKeyDown(Keys.Right))
+                {
+                    HandleOptionsChange(1);
                 }
                 
                 if (keyState.IsKeyDown(Keys.F) && !_previousKeyState.IsKeyDown(Keys.F))
@@ -112,6 +131,30 @@ namespace NoPasaranFC.Screens
             }
             
             _previousKeyState = keyState;
+        }
+        
+        private void HandleOptionsChange(int direction)
+        {
+            switch (_optionsSelectedItem)
+            {
+                case 0: // Resolution
+                    _selectedResolution = (_selectedResolution + direction + Game1.GetAvailableResolutions().Length) % Game1.GetAvailableResolutions().Length;
+                    break;
+                case 1: // Fullscreen
+                    if (direction != 0)
+                        _tempFullscreen = !_tempFullscreen;
+                    break;
+                case 2: // Player speed
+                    GameSettings.Instance.PlayerSpeedMultiplier = Math.Clamp(GameSettings.Instance.PlayerSpeedMultiplier + direction * 0.1f, 0.5f, 2.0f);
+                    break;
+                case 3: // Match duration
+                    float[] durations = { 3f, 5f, 10f, 15f, 30f, 45f, 90f };
+                    int currentIndex = Array.FindIndex(durations, d => Math.Abs(d - GameSettings.Instance.MatchDurationMinutes) < 0.1f);
+                    if (currentIndex == -1) currentIndex = 0;
+                    currentIndex = (currentIndex + direction + durations.Length) % durations.Length;
+                    GameSettings.Instance.MatchDurationMinutes = durations[currentIndex];
+                    break;
+            }
         }
         
         private void HandleSelection()
@@ -202,7 +245,17 @@ namespace NoPasaranFC.Screens
         {
             if (_grassTexture != null)
             {
-                spriteBatch.Draw(_grassTexture, new Rectangle(0, 0, screenWidth, screenHeight), Color.White);
+                int tilesX = (int)Math.Ceiling(screenWidth / 200f) + 1;
+                int tilesY = (int)Math.Ceiling(screenHeight / 200f) + 1;
+                
+                for (int y = -1; y < tilesY; y++)
+                {
+                    for (int x = -1; x < tilesX; x++)
+                    {
+                        Vector2 pos = new Vector2(x * 200 - _grassScrollOffset, y * 200);
+                        spriteBatch.Draw(_grassTexture, pos, Color.White);
+                    }
+                }
             }
         }
         
@@ -217,7 +270,7 @@ namespace NoPasaranFC.Screens
             Color[] data = new Color[textureSize * textureSize];
             
             Random random = new Random(42);
-            int grassSize = 20;
+            int grassSize = 10; // Smaller tiles for less blocky look
             
             for (int y = 0; y < textureSize; y += grassSize)
             {
@@ -283,7 +336,7 @@ namespace NoPasaranFC.Screens
                 for (int i = 0; i < _menuOptions.Length; i++)
                 {
                     var prefix = i == _selectedOption ? "> " : "  ";
-                    var text = prefix + _menuOptions[i]+ (i == _selectedOption ?" <":"  ");
+                    var text = prefix + _menuOptions[i] + (i == _selectedOption ? " <" : "  ");
                     
                     // Dim "Play Next Match" if season is complete
                     var color = i == _selectedOption ? Color.Yellow : Color.White;
@@ -302,31 +355,39 @@ namespace NoPasaranFC.Screens
                 // Draw options menu centered
                 string title = "ΕΠΙΛΟΓΕΣ";
                 Vector2 titleSize = font.MeasureString(title);
-                Vector2 titlePos = new Vector2((screenWidth - titleSize.X) / 2, screenHeight * 0.2f);
+                Vector2 titlePos = new Vector2((screenWidth - titleSize.X) / 2, screenHeight * 0.15f);
                 spriteBatch.DrawString(font, title, titlePos, Color.Yellow);
                 
-                // Draw resolution options
+                float menuStartY = screenHeight * 0.3f;
+                float lineHeight = 50f;
+                
+                // Resolution
                 var resolutions = Game1.GetAvailableResolutions();
-                float menuStartY = screenHeight * 0.35f;
+                string resText = $"ΑΝΑΛΥΣΗ: {resolutions[_selectedResolution].X}x{resolutions[_selectedResolution].Y}";
+                var resColor = _optionsSelectedItem == 0 ? Color.Yellow : Color.White;
+                Vector2 resSize = font.MeasureString(resText);
+                spriteBatch.DrawString(font, resText, new Vector2((screenWidth - resSize.X) / 2, menuStartY), resColor);
                 
-                spriteBatch.DrawString(font, "ΑΝΑΛΥΣΗ:", new Vector2(screenWidth * 0.3f, menuStartY), Color.White);
-                
-                for (int i = 0; i < resolutions.Length; i++)
-                {
-                    var prefix = i == _selectedResolution ? "> " : "  ";
-                    var text = $"{prefix}{resolutions[i].X}x{resolutions[i].Y}";
-                    var color = i == _selectedResolution ? Color.Yellow : Color.White;
-                    
-                    spriteBatch.DrawString(font, text, new Vector2(screenWidth * 0.35f, menuStartY + 40 + i * 35), color);
-                }
-                
-                // Draw fullscreen toggle
-                string fsText = _tempFullscreen ? "ΠΛΗΡΗΣ ΟΘΟΝΗ: ΕΝΕΡΓΟ (ΠΑΤΑ F)" : "ΠΛΗΡΗΣ ΟΘΟΝΗ: ΑΝΕΝΕΡΓΟ (ΠΑΤΑ F)";
+                // Fullscreen
+                string fsText = $"ΠΛΗΡΗΣ ΟΘΟΝΗ: {(_tempFullscreen ? "ΕΝΕΡΓΟ" : "ΑΝΕΝΕΡΓΟ")}";
+                var fsColor = _optionsSelectedItem == 1 ? Color.Yellow : Color.White;
                 Vector2 fsSize = font.MeasureString(fsText);
-                spriteBatch.DrawString(font, fsText, new Vector2((screenWidth - fsSize.X) / 2, menuStartY + 40 + resolutions.Length * 35 + 40), Color.Cyan);
+                spriteBatch.DrawString(font, fsText, new Vector2((screenWidth - fsSize.X) / 2, menuStartY + lineHeight), fsColor);
+                
+                // Player speed
+                string speedText = $"ΤΑΧΥΤΗΤΑ ΠΑΙΚΤΩΝ: {GameSettings.Instance.PlayerSpeedMultiplier:F1}x";
+                var speedColor = _optionsSelectedItem == 2 ? Color.Yellow : Color.White;
+                Vector2 speedSize = font.MeasureString(speedText);
+                spriteBatch.DrawString(font, speedText, new Vector2((screenWidth - speedSize.X) / 2, menuStartY + lineHeight * 2), speedColor);
+                
+                // Match duration
+                string durationText = $"ΔΙΑΡΚΕΙΑ ΑΓΩΝΑ: {GameSettings.Instance.MatchDurationMinutes:F0} λεπτά";
+                var durationColor = _optionsSelectedItem == 3 ? Color.Yellow : Color.White;
+                Vector2 durationSize = font.MeasureString(durationText);
+                spriteBatch.DrawString(font, durationText, new Vector2((screenWidth - durationSize.X) / 2, menuStartY + lineHeight * 3), durationColor);
                 
                 // Draw instructions
-                string instructions = "ΠΑΤΑ ENTER ΓΙΑ ΕΦΑΡΜΟΓΗ, ESC ΓΙΑ ΑΚΥΡΩΣΗ";
+                string instructions = "<=/=> ΓΙΑ ΑΛΛΑΓΗ, ENTER ΓΙΑ ΕΦΑΡΜΟΓΗ, ESC ΓΙΑ ΕΠΙΣΤΡΟΦΗ";
                 Vector2 instrSize = font.MeasureString(instructions);
                 spriteBatch.DrawString(font, instructions, new Vector2((screenWidth - instrSize.X) / 2, screenHeight * 0.85f), Color.Gray);
             }
