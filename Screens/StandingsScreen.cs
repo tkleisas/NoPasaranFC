@@ -35,32 +35,32 @@ namespace NoPasaranFC.Screens
             int screenHeight = Game1.ScreenHeight;
             
             // Draw title centered
-            string title = "Championship Standings";
+            string title = "апотекеслата пяытахкглатос";
             Vector2 titleSize = font.MeasureString(title);
             spriteBatch.DrawString(font, title, new Vector2((screenWidth - titleSize.X) / 2, 50), Color.Yellow);
             
             // Define column positions
-            float tableStartX = screenWidth * 0.2f;
+            float tableStartX = screenWidth * 0.05f;
             float posCol = tableStartX;
-            float teamCol = tableStartX + 40;
-            float wCol = tableStartX + 280;
-            float dCol = tableStartX + 320;
-            float lCol = tableStartX + 360;
-            float gfCol = tableStartX + 400;
-            float gaCol = tableStartX + 450;
-            float ptsCol = tableStartX + 500;
+            float teamCol = tableStartX + 110;
+            float wCol = tableStartX + 460;
+            float dCol = tableStartX + 570;
+            float lCol = tableStartX + 680;
+            float gfCol = tableStartX + 790;
+            float gaCol = tableStartX + 900;
+            float ptsCol = tableStartX + 1010;
             
             float headerY = 100;
             
             // Draw header
-            spriteBatch.DrawString(font, "Pos", new Vector2(posCol, headerY), Color.Gray);
-            spriteBatch.DrawString(font, "Team", new Vector2(teamCol, headerY), Color.Gray);
-            spriteBatch.DrawString(font, "W", new Vector2(wCol, headerY), Color.Gray);
-            spriteBatch.DrawString(font, "D", new Vector2(dCol, headerY), Color.Gray);
-            spriteBatch.DrawString(font, "L", new Vector2(lCol, headerY), Color.Gray);
-            spriteBatch.DrawString(font, "GF", new Vector2(gfCol, headerY), Color.Gray);
-            spriteBatch.DrawString(font, "GA", new Vector2(gaCol, headerY), Color.Gray);
-            spriteBatch.DrawString(font, "Pts", new Vector2(ptsCol, headerY), Color.Gray);
+            spriteBatch.DrawString(font, "хесг", new Vector2(posCol, headerY), Color.Red);
+            spriteBatch.DrawString(font, "олада", new Vector2(teamCol, headerY), Color.Red);
+            spriteBatch.DrawString(font, "мийес", new Vector2(wCol, headerY), Color.Red);
+            spriteBatch.DrawString(font, "исоп.", new Vector2(dCol, headerY), Color.Red);
+            spriteBatch.DrawString(font, "гттес", new Vector2(lCol, headerY), Color.Red);
+            spriteBatch.DrawString(font, "тея.у", new Vector2(gfCol, headerY), Color.Red);
+            spriteBatch.DrawString(font, "тея.й", new Vector2(gaCol, headerY), Color.Red);
+            spriteBatch.DrawString(font, "бахлои", new Vector2(ptsCol, headerY), Color.Red);
             
             // Draw standings rows
             var standings = _championship.GetStandings();
