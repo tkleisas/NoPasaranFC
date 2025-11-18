@@ -11,6 +11,7 @@ namespace NoPasaranFC.Screens
         
         public int ScreenWidth => Game1.ScreenWidth;
         public int ScreenHeight => Game1.ScreenHeight;
+        public Game1 Game => _game;
         
         public ScreenManager(Game1 game)
         {
@@ -51,6 +52,12 @@ namespace NoPasaranFC.Screens
         public void Update(GameTime gameTime)
         {
             CurrentScreen?.Update(gameTime);
+            
+            // Pop finished screens
+            if (CurrentScreen != null && CurrentScreen.IsFinished)
+            {
+                PopScreen();
+            }
         }
         
         public void Draw(SpriteBatch spriteBatch, SpriteFont font)

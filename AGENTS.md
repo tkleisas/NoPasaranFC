@@ -6,7 +6,7 @@ We should use simple placeholder bitmap graphics (sprites) with routines for loa
 Data should persist using a SQLite database.
 The player can control one football player at a time while the other players of the team are controlled by the computer.
 Create the appropriate c# classes for the players and teams. Also track score and league score.
-
+Use UTF8 encoding for all text data as there is multilingual support.
 ## Completed Tasks:
 
 1. ✅ Created Models folder with classes:
@@ -70,11 +70,41 @@ Create the appropriate c# classes for the players and teams. Also track score an
    - Properly aligned columns work with proportional fonts
    - Clean, readable table layout
 
+12. ✅ **Settings persistence system**:
+   - Created comprehensive GameSettings model with video, audio, gameplay, and camera settings
+   - Added Settings table to SQLite database
+   - Implemented SaveSettings() and LoadSettings() methods in DatabaseManager
+   - Settings automatically loaded on game start
+   - Created SettingsScreen with scrolling support for all settings:
+     * **Video Settings**: Resolution (800x600 to 1920x1080), Fullscreen, VSync
+     * **Audio Settings**: Master Volume, Music Volume, SFX Volume, Mute All
+     * **Gameplay Settings**: Difficulty (Easy/Normal/Hard), Match Duration (1-10 min), Player Speed (0.5x-2.0x)
+     * **Display Settings**: Show Minimap, Show Player Names, Show Stamina
+     * **Camera Settings**: Camera Zoom (0.5x-2.0x), Camera Speed (0.05-0.5)
+     * **Language**: English/Greek (en/el)
+   - Scrollable interface with visual indicators (▲ MORE / ▼ MORE)
+   - Keyboard controls: Arrow keys for navigation, Left/Right for adjustment, PgUp/PgDn for quick scrolling
+   - All 17 settings persist across game restarts
+   - Settings accessible from main menu
+
+13. ✅ **Extended font character support**:
+   - Updated Font.spritefont with 9 comprehensive character ranges
+   - Added support for arrows (←→↑↓) and geometric shapes (▲▼◄►)
+   - Extended Greek character support (7936-8191)
+   - Latin extended characters (160-255) for European languages
+   - Mathematical operators and symbols (8704-8959)
+   - Box drawing and UI elements (9472-9727)
+   - General punctuation and currency symbols (8192-8303)
+   - Miscellaneous symbols (9728-9983)
+   - Created FONT_CHARACTER_SUPPORT.md documentation
+
 ## Current Features:
 - Championship mode with 8 teams
 - Player-controlled team: "NO PASARAN!"
 - SQLite database persistence (auto-save/load)
+- **Persistent settings system** - All video, audio, gameplay, and camera settings saved to database
 - Menu system for navigation
+- Settings screen with comprehensive options
 - League standings display
 - Playable matches with advanced controls:
   * Arrows: Move controlled player

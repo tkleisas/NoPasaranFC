@@ -220,7 +220,8 @@ namespace NoPasaranFC.Screens
                     break;
                     
                 case 3: // Options
-                    _inOptionsMenu = true;
+                    var settingsScreen = new SettingsScreen(_database, (Game1)_screenManager.Game, _contentManager, _graphicsDevice);
+                    _screenManager.PushScreen(settingsScreen);
                     break;
                     
                 case 4: // Exit

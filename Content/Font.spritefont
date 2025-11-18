@@ -15,6 +15,41 @@
         <Start>&#902;</Start>
         <End>&#974;</End>
       </CharacterRegion>
+      <!-- Extended Latin and symbols -->
+      <CharacterRegion>
+        <Start>&#160;</Start>
+        <End>&#255;</End>
+      </CharacterRegion>
+      <!-- Greek Extended -->
+      <CharacterRegion>
+        <Start>&#7936;</Start>
+        <End>&#8191;</End>
+      </CharacterRegion>
+      <!-- General Punctuation and Currency -->
+      <CharacterRegion>
+        <Start>&#8192;</Start>
+        <End>&#8303;</End>
+      </CharacterRegion>
+      <!-- Arrows (includes ▲ ▼ ← → ↑ ↓) -->
+      <CharacterRegion>
+        <Start>&#8592;</Start>
+        <End>&#8703;</End>
+      </CharacterRegion>
+      <!-- Mathematical Operators -->
+      <CharacterRegion>
+        <Start>&#8704;</Start>
+        <End>&#8959;</End>
+      </CharacterRegion>
+      <!-- Box Drawing and Geometric Shapes (includes ▲ ▼) -->
+      <CharacterRegion>
+        <Start>&#9472;</Start>
+        <End>&#9727;</End>
+      </CharacterRegion>
+      <!-- Miscellaneous Symbols -->
+      <CharacterRegion>
+        <Start>&#9728;</Start>
+        <End>&#9983;</End>
+      </CharacterRegion>
     </CharacterRegions>
   </Asset>
 </XnaContent>

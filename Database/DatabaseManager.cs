@@ -71,6 +71,27 @@ namespace NoPasaranFC.Database
                     Id INTEGER PRIMARY KEY AUTOINCREMENT,
                     CurrentMatchweek INTEGER DEFAULT 0
                 );
+                
+                CREATE TABLE IF NOT EXISTS Settings (
+                    Id INTEGER PRIMARY KEY CHECK (Id = 1),
+                    ResolutionWidth INTEGER DEFAULT 1280,
+                    ResolutionHeight INTEGER DEFAULT 720,
+                    IsFullscreen INTEGER DEFAULT 0,
+                    VSync INTEGER DEFAULT 1,
+                    MasterVolume REAL DEFAULT 1.0,
+                    MusicVolume REAL DEFAULT 0.7,
+                    SfxVolume REAL DEFAULT 0.8,
+                    MuteAll INTEGER DEFAULT 0,
+                    Difficulty INTEGER DEFAULT 1,
+                    MatchDurationMinutes REAL DEFAULT 3.0,
+                    PlayerSpeedMultiplier REAL DEFAULT 1.0,
+                    ShowMinimap INTEGER DEFAULT 1,
+                    ShowPlayerNames INTEGER DEFAULT 1,
+                    ShowStamina INTEGER DEFAULT 1,
+                    CameraZoom REAL DEFAULT 0.8,
+                    CameraSpeed REAL DEFAULT 0.1,
+                    Language TEXT DEFAULT 'en'
+                );
             ";
             command.ExecuteNonQuery();
         }
@@ -369,6 +390,87 @@ namespace NoPasaranFC.Database
                 DELETE FROM Championship;
             ";
             command.ExecuteNonQuery();
+        }
+        
+        public void SaveSettings(GameSettings settings)
+        {
+            using var connection = new SqliteConnection(ConnectionString);
+            connection.Open();
+            
+            var command = connection.CreateCommand();
+            command.CommandText = @"
+                INSERT OR REPLACE INTO Settings (
+                    Id, ResolutionWidth, ResolutionHeight, IsFullscreen, VSync,
+                    MasterVolume, MusicVolume, SfxVolume, MuteAll,
+                    Difficulty, MatchDurationMinutes, PlayerSpeedMultiplier,
+                    ShowMinimap, ShowPlayerNames, ShowStamina,
+                    CameraZoom, CameraSpeed, Language
+                ) VALUES (
+                    1, @resWidth, @resHeight, @fullscreen, @vsync,
+                    @masterVol, @musicVol, @sfxVol, @muteAll,
+                    @difficulty, @matchDuration, @speedMulti,
+                    @showMap, @showNames, @showStamina,
+                    @camZoom, @camSpeed, @language
+                );
+            ";
+            
+            command.Parameters.AddWithValue("@resWidth", settings.ResolutionWidth);
+            command.Parameters.AddWithValue("@resHeight", settings.ResolutionHeight);
+            command.Parameters.AddWithValue("@fullscreen", settings.IsFullscreen ? 1 : 0);
+            command.Parameters.AddWithValue("@vsync", settings.VSync ? 1 : 0);
+            command.Parameters.AddWithValue("@masterVol", settings.MasterVolume);
+            command.Parameters.AddWithValue("@musicVol", settings.MusicVolume);
+            command.Parameters.AddWithValue("@sfxVol", settings.SfxVolume);
+            command.Parameters.AddWithValue("@muteAll", settings.MuteAll ? 1 : 0);
+            command.Parameters.AddWithValue("@difficulty", settings.Difficulty);
+            command.Parameters.AddWithValue("@matchDuration", settings.MatchDurationMinutes);
+            command.Parameters.AddWithValue("@speedMulti", settings.PlayerSpeedMultiplier);
+            command.Parameters.AddWithValue("@showMap", settings.ShowMinimap ? 1 : 0);
+            command.Parameters.AddWithValue("@showNames", settings.ShowPlayerNames ? 1 : 0);
+            command.Parameters.AddWithValue("@showStamina", settings.ShowStamina ? 1 : 0);
+            command.Parameters.AddWithValue("@camZoom", settings.CameraZoom);
+            command.Parameters.AddWithValue("@camSpeed", settings.CameraSpeed);
+            command.Parameters.AddWithValue("@language", settings.Language);
+            
+            command.ExecuteNonQuery();
+        }
+        
+        public GameSettings LoadSettings()
+        {
+            using var connection = new SqliteConnection(ConnectionString);
+            connection.Open();
+            
+            var command = connection.CreateCommand();
+            command.CommandText = "SELECT * FROM Settings WHERE Id = 1";
+            
+            using var reader = command.ExecuteReader();
+            if (reader.Read())
+            {
+                var settings = new GameSettings(true)
+                {
+                    ResolutionWidth = reader.GetInt32(1),
+                    ResolutionHeight = reader.GetInt32(2),
+                    IsFullscreen = reader.GetInt32(3) == 1,
+                    VSync = reader.GetInt32(4) == 1,
+                    MasterVolume = reader.GetFloat(5),
+                    MusicVolume = reader.GetFloat(6),
+                    SfxVolume = reader.GetFloat(7),
+                    MuteAll = reader.GetInt32(8) == 1,
+                    Difficulty = reader.GetInt32(9),
+                    MatchDurationMinutes = reader.GetFloat(10),
+                    PlayerSpeedMultiplier = reader.GetFloat(11),
+                    ShowMinimap = reader.GetInt32(12) == 1,
+                    ShowPlayerNames = reader.GetInt32(13) == 1,
+                    ShowStamina = reader.GetInt32(14) == 1,
+                    CameraZoom = reader.GetFloat(15),
+                    CameraSpeed = reader.GetFloat(16),
+                    Language = reader.GetString(17)
+                };
+                return settings;
+            }
+            
+            // Return default settings if none exist
+            return new GameSettings(true);
         }
     }
 }

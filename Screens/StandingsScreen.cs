@@ -81,9 +81,9 @@ namespace NoPasaranFC.Screens
                 spriteBatch.DrawString(font, team.Points.ToString(), new Vector2(ptsCol, rowY), color);
             }
             
-            string instructions = "Press ESC to return";
+            string instructions = "пата ESC циа епистяожг";
             Vector2 instrSize = font.MeasureString(instructions);
-            spriteBatch.DrawString(font, instructions, new Vector2((screenWidth - instrSize.X) / 2, screenHeight - 60), Color.Gray);
+            spriteBatch.DrawString(font, instructions, new Vector2((screenWidth - instrSize.X) / 2, screenHeight - 60), Color.Red);
         }
     }
 }

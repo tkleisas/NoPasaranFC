@@ -68,6 +68,14 @@ public class Game1 : Game
         _database = new DatabaseManager();
         _screenManager = new ScreenManager(this);
         
+        // Load settings from database
+        var settings = _database.LoadSettings();
+        GameSettings.SetInstance(settings);
+        
+        // Apply video settings
+        ApplyResolution(settings.ResolutionWidth, settings.ResolutionHeight, settings.IsFullscreen);
+        _graphics.SynchronizeWithVerticalRetrace = settings.VSync;
+        
         // Try to load existing championship or create new one
         _championship = _database.LoadChampionship();
         
