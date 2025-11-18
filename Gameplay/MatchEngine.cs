@@ -431,10 +431,11 @@ namespace NoPasaranFC.Gameplay
                     else
                     {
                         // Move toward opponent goal when not chasing ball
+                        // Stay further from goal line to avoid getting stuck
                         bool isHomeTeam = player.TeamId == _homeTeam.Id;
                         float targetGoalX = isHomeTeam ? 
-                            StadiumMargin + FieldWidth - 100f : 
-                            StadiumMargin + 100f;
+                            StadiumMargin + FieldWidth - 300f : 
+                            StadiumMargin + 300f;
                         targetPosition = new Vector2(targetGoalX, player.HomePosition.Y);
                         urgency = 0.5f;
                     }
@@ -462,12 +463,21 @@ namespace NoPasaranFC.Gameplay
                 // If AI player is near ball and moving toward it, kick it (only if ball is on ground)
                 if (distanceToBall < BallKickDistance && urgency > 0.7f && BallHeight < 50f)
                 {
-                    // Kick ball toward opponent goal
+                    // Kick ball toward opponent goal (aim AT the goal, not before it)
                     bool isHomeTeam = player.TeamId == _homeTeam.Id;
+                    
+                    // Aim at the goal center, with slight variation for realism
+                    float goalCenterY = StadiumMargin + FieldHeight / 2;
+                    float goalTop = StadiumMargin + (FieldHeight - GoalWidth) / 2;
+                    float goalBottom = goalTop + GoalWidth;
+                    
+                    // Random Y position within goal area
+                    float targetGoalY = goalTop + (float)_random.NextDouble() * GoalWidth;
+                    
+                    // Aim past the goal line (not before it)
                     float targetGoalX = isHomeTeam ? 
-                        StadiumMargin + FieldWidth - 100f : 
-                        StadiumMargin + 100f;
-                    float targetGoalY = StadiumMargin + FieldHeight / 2;
+                        StadiumMargin + FieldWidth + 50f : // Right goal (aim past the line)
+                        StadiumMargin - 50f; // Left goal (aim past the line)
                     
                     Vector2 goalDirection = new Vector2(targetGoalX, targetGoalY) - BallPosition;
                     if (goalDirection.Length() > 0)
