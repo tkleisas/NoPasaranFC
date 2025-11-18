@@ -98,6 +98,40 @@ Use UTF8 encoding for all text data as there is multilingual support.
    - Miscellaneous symbols (9728-9983)
    - Created FONT_CHARACTER_SUPPORT.md documentation
 
+14. ✅ **Goalpost and goal detection improvements** + **Dynamic text celebration**:
+   - **Mesh net appearance**: Goals now have realistic net with grid/mesh pattern
+     * Vertical, horizontal, and diagonal lines create net texture
+     * Semi-transparent gray netting behind goal posts
+     * White goal posts rendered in front of net
+   - **Improved goal detection**: Ball must now cross the goal line (not just enter goal area)
+     * Left goal: Ball X < goal line AND within goal width
+     * Right goal: Ball X > goal line AND within goal width
+     * Proper height checking (ball below 200px height)
+     * Modified ClampBallToField to allow ball through goal area
+   - **Ball over crossbar detection**: Ball going over goalposts registers as "out"
+   - **Goal celebration animation** (✨ Enhanced - renders any text!): 
+     * Refactored to use bitmap-based rendering system
+     * **Can display ANY text string** - not limited to "GOAL!"
+     * Renders text 4x larger with point sampling (no anti-aliasing)
+     * Scans pixels line by line to extract visible pixels (alpha > 200)
+     * Ball spacing: 24px in rendered bitmap (doubled for clarity)
+     * Normal ball size: 32px (grows 0.5x to 1.5x during animation)
+     * Number of balls automatically determined by text complexity
+     * Ease-out animation with staggered delays (based on position)
+     * 2.5 second celebration duration
+     * Large text overlay displayed with ball formation
+     * Semi-transparent background overlay during celebration
+     * Match state pauses during celebration (GoalCelebration state)
+     * Font-accurate rendering - uses actual SpriteFont glyphs
+     * Usage: `GoalCelebration.Start("ANY TEXT", font, graphicsDevice)`
+   - **Complete ball-out handling system**:
+     * Ball over crossbar → placed near corner for restart
+     * Ball out on goal line → corner kick or goal kick positioning
+     * Ball out on sideline → throw-in positioning
+     * Nearest player automatically positioned near restart ball
+     * Different placement logic for top/bottom and left/right sides
+     * Ball placed with appropriate margin from field boundaries
+
 ## Current Features:
 - Championship mode with 8 teams
 - Player-controlled team: "NO PASARAN!"

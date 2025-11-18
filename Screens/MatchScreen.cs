@@ -79,6 +79,12 @@ namespace NoPasaranFC.Screens
                     _playerSpriteRed = _content.Load<Texture2D>("Sprites/player_red");
                     _ballSprite = _content.Load<Texture2D>("Sprites/ball");
                     
+                    // Load font for celebration
+                    var font = _content.Load<SpriteFont>("Font");
+                    
+                    // Set celebration resources in match engine
+                    _matchEngine.SetCelebrationResources(font, graphicsDevice);
+                    
                     // Initialize new animation system (load shared resources once)
                     PlayerAnimationSystem.LoadSharedResources(_content);
                     
@@ -390,6 +396,36 @@ namespace NoPasaranFC.Screens
             {
                 DrawCountdown(spriteBatch, font);
             }
+            
+            // Draw goal celebration
+            if (_matchEngine.CurrentState == MatchEngine.MatchState.GoalCelebration)
+            {
+                DrawGoalCelebration(spriteBatch, font);
+            }
+        }
+        
+        private void DrawGoalCelebration(SpriteBatch spriteBatch, SpriteFont font)
+        {
+            // Draw ball particles forming "GOAL!"
+            _matchEngine.GoalCelebration.Draw(spriteBatch, _ballSprite, Game1.ScreenWidth, Game1.ScreenHeight);
+            
+            // Draw "GOAL!" text
+            if (_matchEngine.GoalCelebration.ShouldDrawGoalText())
+            {
+                string goalText = "GOAL!";
+                float scale = _matchEngine.GoalCelebration.GetGoalTextScale();
+                Vector2 textSize = font.MeasureString(goalText);
+                Vector2 position = new Vector2(
+                    Game1.ScreenWidth / 2 - (textSize.X * scale) / 2,
+                    Game1.ScreenHeight / 2 + 150 // Below the ball formation
+                );
+                
+                // Draw text with shadow
+                spriteBatch.DrawString(font, goalText, position + new Vector2(4, 4) * scale, 
+                    Color.Black * 0.5f, 0f, Vector2.Zero, scale, SpriteEffects.None, 0f);
+                spriteBatch.DrawString(font, goalText, position, 
+                    Color.Yellow, 0f, Vector2.Zero, scale, SpriteEffects.None, 0f);
+            }
         }
         
         private void DrawStadium(SpriteBatch spriteBatch)
@@ -522,24 +558,115 @@ namespace NoPasaranFC.Screens
             float centerY = margin + MatchEngine.FieldHeight / 2;
             float goalWidth = 400f;
             float goalDepth = 60f;
+            float goalHeight = 200f; // Height of goal posts
             
-            // Left goal
-            var leftGoal = new Rectangle((int)(margin - goalDepth), (int)(centerY - goalWidth / 2), 
-                (int)goalDepth, (int)goalWidth);
-            spriteBatch.Draw(_pixel, leftGoal, new Color(200, 200, 200, 200)); // Semi-transparent gray
+            // === LEFT GOAL ===
+            DrawGoalStructure(spriteBatch, margin - goalDepth, centerY - goalWidth / 2, 
+                goalDepth, goalWidth, goalHeight, true);
             
-            // Left goal posts
-            spriteBatch.Draw(_pixel, new Rectangle((int)margin, (int)(centerY - goalWidth / 2) - 5, 8, 10), Color.White);
-            spriteBatch.Draw(_pixel, new Rectangle((int)margin, (int)(centerY + goalWidth / 2) - 5, 8, 10), Color.White);
+            // === RIGHT GOAL ===
+            DrawGoalStructure(spriteBatch, margin + MatchEngine.FieldWidth, centerY - goalWidth / 2, 
+                goalDepth, goalWidth, goalHeight, false);
+        }
+        
+        private void DrawGoalStructure(SpriteBatch spriteBatch, float x, float y, 
+            float depth, float width, float height, bool facingRight)
+        {
+            // Draw goal net with mesh pattern
+            DrawGoalNet(spriteBatch, x, y, depth, width, height, facingRight);
             
-            // Right goal
-            var rightGoal = new Rectangle((int)(margin + MatchEngine.FieldWidth), (int)(centerY - goalWidth / 2), 
-                (int)goalDepth, (int)goalWidth);
-            spriteBatch.Draw(_pixel, rightGoal, new Color(200, 200, 200, 200));
+            // Draw goal posts and crossbar (in front of net)
+            Color postColor = Color.White;
+            int postThickness = 8;
             
-            // Right goal posts
-            spriteBatch.Draw(_pixel, new Rectangle((int)(margin + MatchEngine.FieldWidth) - 8, (int)(centerY - goalWidth / 2) - 5, 8, 10), Color.White);
-            spriteBatch.Draw(_pixel, new Rectangle((int)(margin + MatchEngine.FieldWidth) - 8, (int)(centerY + goalWidth / 2) - 5, 8, 10), Color.White);
+            float goalLineX = facingRight ? x + depth : x;
+            
+            // Left/Top post (vertical)
+            spriteBatch.Draw(_pixel, new Rectangle(
+                (int)goalLineX - postThickness / 2, 
+                (int)y - postThickness / 2, 
+                postThickness, 
+                postThickness), postColor);
+            
+            // Right/Bottom post (vertical)
+            spriteBatch.Draw(_pixel, new Rectangle(
+                (int)goalLineX - postThickness / 2, 
+                (int)(y + width) - postThickness / 2, 
+                postThickness, 
+                postThickness), postColor);
+            
+            // Crossbar (horizontal) - at the top
+            spriteBatch.Draw(_pixel, new Rectangle(
+                (int)goalLineX - postThickness / 2, 
+                (int)y - postThickness / 2, 
+                postThickness, 
+                (int)width + postThickness), postColor);
+        }
+        
+        private void DrawGoalNet(SpriteBatch spriteBatch, float x, float y, 
+            float depth, float width, float height, bool facingRight)
+        {
+            Color netColor = new Color(220, 220, 220, 150); // Light gray, semi-transparent
+            Color netLineColor = new Color(180, 180, 180, 200); // Slightly darker lines
+            
+            // Draw back panel (solid background)
+            Rectangle backPanel = new Rectangle(
+                (int)x, 
+                (int)y, 
+                (int)depth, 
+                (int)width);
+            spriteBatch.Draw(_pixel, backPanel, new Color(100, 100, 100, 100));
+            
+            // Draw mesh pattern - vertical lines
+            int meshSpacing = 20;
+            for (int i = 0; i < depth; i += meshSpacing)
+            {
+                float netX = facingRight ? x + i : x + depth - i;
+                spriteBatch.Draw(_pixel, new Rectangle(
+                    (int)netX, 
+                    (int)y, 
+                    2, 
+                    (int)width), netLineColor);
+            }
+            
+            // Draw mesh pattern - horizontal lines
+            for (int i = 0; i < width; i += meshSpacing)
+            {
+                spriteBatch.Draw(_pixel, new Rectangle(
+                    (int)x, 
+                    (int)(y + i), 
+                    (int)depth, 
+                    2), netLineColor);
+            }
+            
+            // Draw diagonal mesh for more realistic net appearance
+            for (int i = 0; i < width; i += meshSpacing * 2)
+            {
+                for (int j = 0; j < depth; j += meshSpacing * 2)
+                {
+                    float x1 = facingRight ? x + j : x + depth - j;
+                    float y1 = y + i;
+                    float x2 = facingRight ? x + j + meshSpacing : x + depth - j - meshSpacing;
+                    float y2 = y + i + meshSpacing;
+                    
+                    DrawLine(spriteBatch, new Vector2(x1, y1), new Vector2(x2, y2), netLineColor, 1);
+                }
+            }
+        }
+        
+        private void DrawLine(SpriteBatch spriteBatch, Vector2 start, Vector2 end, Color color, int thickness)
+        {
+            Vector2 edge = end - start;
+            float angle = (float)Math.Atan2(edge.Y, edge.X);
+            
+            spriteBatch.Draw(_pixel,
+                new Rectangle((int)start.X, (int)start.Y, (int)edge.Length(), thickness),
+                null,
+                color,
+                angle,
+                new Vector2(0, 0.5f),
+                SpriteEffects.None,
+                0);
         }
         
         private void DrawPlayer(SpriteBatch spriteBatch, Player player, SpriteFont font)

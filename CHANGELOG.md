@@ -2,6 +2,53 @@
 
 ## [Latest] - 2025-11-18
 
+### Added - Goalpost Improvements & Celebration
+
+- ✅ **Realistic Goal Nets**
+  - Mesh/grid pattern with vertical, horizontal, and diagonal lines
+  - Semi-transparent gray netting texture
+  - White goal posts rendered in front of net
+  - Goal dimensions: 400px wide × 60px deep × 200px high
+
+- ✅ **Improved Goal Detection**
+  - Ball must fully cross goal line (not just enter goal area)
+  - Proper height checking (ball below crossbar at 200px)
+  - Ball over crossbar registers as "out" (not a goal)
+  - Modified `ClampBallToField()` to allow ball through goal area
+  - Goals now actually score! Fixed collision detection bug
+
+- ✅ **Smart Ball-Out System**
+  - **Ball over crossbar**: Placed near corner for restart
+  - **Ball out on goal line**: Positioned for corner kick or goal kick
+  - **Ball out on sideline**: Positioned for throw-in
+  - **Automatic player positioning**: Nearest player moves near restart ball
+  - **Multiple handlers**: `HandleBallOverCrossbar()`, `HandleBallOutGoalLine()`, `HandleBallOutSideline()`
+  - **Intelligent placement**: Different logic for top/bottom and left/right
+  - **Appropriate margins**: Ball placed with buffer from boundaries (20-50px)
+
+- ✅ **Goal Celebration Animation** (✨ Enhanced - Dynamic Text Rendering!)
+  - **Refactored to bitmap-based system** - can now display ANY text
+  - Renders text 4x larger with point sampling (no anti-aliasing)
+  - Scans bitmap line by line extracting pixels where alpha > 200
+  - Creates ball particles dynamically based on text complexity
+  - Ball spacing: 24px intervals in rendered bitmap (doubled for clarity)
+  - Normal ball size: 32px (grows from 0.5x to 1.5x during animation)
+  - Automatic ball count - no hardcoded letter shapes
+  - Font-accurate rendering using actual SpriteFont glyphs
+  - Ease-out animation with position-based stagger
+  - 2.5 second celebration duration
+  - Semi-transparent overlay during celebration
+  - New `GoalCelebration` match state pauses gameplay
+  - Automatic return to kickoff after celebration
+  - **API**: `GoalCelebration.Start("ANY TEXT", font, graphicsDevice)`
+  - Works with ANY font character including Greek, symbols, etc.
+
+- ✅ **Enhanced Match Flow**
+  - Match states now include: CameraInit, Countdown, Playing, GoalCelebration, HalfTime, Ended
+  - Goal celebration triggers automatically on valid goal
+  - Players and ball freeze during celebration
+  - Smooth transition back to kickoff
+
 ### Added - Settings System
 - ✅ **Comprehensive Settings Model**
   - Video settings (Resolution, Fullscreen, VSync)

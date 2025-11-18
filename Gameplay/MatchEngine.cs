@@ -18,10 +18,11 @@ namespace NoPasaranFC.Gameplay
         private Vector2 _refereeVelocity;
         
         // Match state
-        public enum MatchState { CameraInit, Countdown, Playing, HalfTime, Ended }
+        public enum MatchState { CameraInit, Countdown, Playing, HalfTime, Ended, GoalCelebration }
         public MatchState CurrentState { get; private set; }
         public float CountdownTimer { get; private set; }
         public int CountdownNumber { get; private set; }
+        public GoalCelebration GoalCelebration { get; private set; }
         
         public Vector2 BallPosition { get; set; }
         public Vector2 BallVelocity { get; set; }
@@ -59,6 +60,9 @@ namespace NoPasaranFC.Gameplay
         // Viewport zoom (adjust to show desired portion of field)
         public const float ZoomLevel = 0.8f; // Higher value = more zoomed in, shows smaller area
         
+        private Microsoft.Xna.Framework.Graphics.SpriteFont _font;
+        private Microsoft.Xna.Framework.Graphics.GraphicsDevice _graphicsDevice;
+        
         public MatchEngine(Team homeTeam, Team awayTeam, int viewportWidth, int viewportHeight)
         {
             _homeTeam = homeTeam;
@@ -78,12 +82,22 @@ namespace NoPasaranFC.Gameplay
             RefereePosition = new Vector2(StadiumMargin + FieldWidth / 2, StadiumMargin + FieldHeight / 2);
             _refereeVelocity = Vector2.Zero;
             
+            // Initialize goal celebration
+            GoalCelebration = new GoalCelebration();
+            
             // Start with camera initialization (center on ball first)
             CurrentState = MatchState.CameraInit;
             CountdownTimer = 0.5f; // Half second to center camera
             CountdownNumber = 3;
             
             InitializePositions();
+        }
+        
+        public void SetCelebrationResources(Microsoft.Xna.Framework.Graphics.SpriteFont font, 
+            Microsoft.Xna.Framework.Graphics.GraphicsDevice graphicsDevice)
+        {
+            _font = font;
+            _graphicsDevice = graphicsDevice;
         }
         
         private void InitializePositions()
@@ -188,6 +202,23 @@ namespace NoPasaranFC.Gameplay
                 }
                 
                 // Don't update gameplay during countdown, but keep camera following ball
+                Camera.Follow(BallPosition, deltaTime);
+                return;
+            }
+            
+            // Handle goal celebration
+            if (CurrentState == MatchState.GoalCelebration)
+            {
+                GoalCelebration.Update(deltaTime);
+                
+                if (!GoalCelebration.IsActive)
+                {
+                    // Celebration ended, reset for kickoff
+                    CurrentState = MatchState.Playing;
+                    ResetAfterGoal();
+                }
+                
+                // Keep camera on ball during celebration
                 Camera.Follow(BallPosition, deltaTime);
                 return;
             }
@@ -701,17 +732,31 @@ namespace NoPasaranFC.Gameplay
         
         private void ClampBallToField()
         {
-            if (BallPosition.X < StadiumMargin)
+            float goalTop = StadiumMargin + (FieldHeight - GoalWidth) / 2;
+            float goalBottom = goalTop + GoalWidth;
+            
+            // Check if ball is in goal area (horizontally)
+            bool inLeftGoalArea = BallPosition.X < StadiumMargin && 
+                                  BallPosition.Y >= goalTop && BallPosition.Y <= goalBottom;
+            bool inRightGoalArea = BallPosition.X > StadiumMargin + FieldWidth && 
+                                   BallPosition.Y >= goalTop && BallPosition.Y <= goalBottom;
+            
+            // Only clamp X if NOT in goal area (allow goals to happen)
+            if (!inLeftGoalArea && !inRightGoalArea)
             {
-                BallPosition = new Vector2(StadiumMargin, BallPosition.Y);
-                BallVelocity = new Vector2(-BallVelocity.X * 0.5f, BallVelocity.Y);
-            }
-            else if (BallPosition.X > StadiumMargin + FieldWidth)
-            {
-                BallPosition = new Vector2(StadiumMargin + FieldWidth, BallPosition.Y);
-                BallVelocity = new Vector2(-BallVelocity.X * 0.5f, BallVelocity.Y);
+                if (BallPosition.X < StadiumMargin)
+                {
+                    BallPosition = new Vector2(StadiumMargin, BallPosition.Y);
+                    BallVelocity = new Vector2(-BallVelocity.X * 0.5f, BallVelocity.Y);
+                }
+                else if (BallPosition.X > StadiumMargin + FieldWidth)
+                {
+                    BallPosition = new Vector2(StadiumMargin + FieldWidth, BallPosition.Y);
+                    BallVelocity = new Vector2(-BallVelocity.X * 0.5f, BallVelocity.Y);
+                }
             }
             
+            // Always clamp Y (top/bottom boundaries)
             if (BallPosition.Y < StadiumMargin)
             {
                 BallPosition = new Vector2(BallPosition.X, StadiumMargin);
@@ -728,33 +773,165 @@ namespace NoPasaranFC.Gameplay
         {
             float goalTop = StadiumMargin + (FieldHeight - GoalWidth) / 2;
             float goalBottom = goalTop + GoalWidth;
+            float leftGoalLine = StadiumMargin;
+            float rightGoalLine = StadiumMargin + FieldWidth;
+            
+            // Define out-of-bounds areas (with some buffer for goal depth)
+            float leftOutBound = StadiumMargin - GoalDepth - 20;
+            float rightOutBound = StadiumMargin + FieldWidth + GoalDepth + 20;
+            float topOutBound = StadiumMargin - 20;
+            float bottomOutBound = StadiumMargin + FieldHeight + 20;
             
             // Check if ball is below goal post height (not too high)
             bool ballBelowGoalHeight = BallHeight <= GoalPostHeight;
             
-            // Left goal (home team defends)
-            if (BallPosition.X <= StadiumMargin + GoalDepth && 
-                BallPosition.Y > goalTop && BallPosition.Y < goalBottom &&
+            // === GOAL DETECTION ===
+            // Left goal (home team defends) - Ball must cross the goal line
+            if (BallPosition.X < leftGoalLine && 
+                BallPosition.Y >= goalTop && BallPosition.Y <= goalBottom &&
                 ballBelowGoalHeight)
             {
                 AwayScore++;
-                ResetAfterGoal();
+                TriggerGoalCelebration();
+                return;
             }
-            // Right goal (away team defends)
-            else if (BallPosition.X >= StadiumMargin + FieldWidth - GoalDepth && 
-                     BallPosition.Y > goalTop && BallPosition.Y < goalBottom &&
+            // Right goal (away team defends) - Ball must cross the goal line
+            else if (BallPosition.X > rightGoalLine && 
+                     BallPosition.Y >= goalTop && BallPosition.Y <= goalBottom &&
                      ballBelowGoalHeight)
             {
                 HomeScore++;
-                ResetAfterGoal();
+                TriggerGoalCelebration();
+                return;
             }
-            // Ball went over goal - throw-in from goal line
-            else if ((BallPosition.X <= StadiumMargin || BallPosition.X >= StadiumMargin + FieldWidth) &&
-                     !ballBelowGoalHeight)
+            
+            // === BALL OUT OF BOUNDS DETECTION ===
+            // Ball went over the crossbar (over goal posts)
+            if ((BallPosition.X < leftGoalLine || BallPosition.X > rightGoalLine) &&
+                BallPosition.Y >= goalTop && BallPosition.Y <= goalBottom &&
+                !ballBelowGoalHeight)
             {
-                // Reset ball to corner/edge (simplified - could be throw-in)
-                ResetAfterGoal();
+                // Ball went over crossbar - corner kick or goal kick
+                bool leftSide = BallPosition.X < leftGoalLine;
+                HandleBallOverCrossbar(leftSide);
+                return;
             }
+            
+            // Ball went out past goal line (not in goal area)
+            if (BallPosition.X < leftOutBound)
+            {
+                // Ball went out on left side - corner or goal kick
+                HandleBallOutGoalLine(true, BallPosition.Y);
+                return;
+            }
+            else if (BallPosition.X > rightOutBound)
+            {
+                // Ball went out on right side - corner or goal kick
+                HandleBallOutGoalLine(false, BallPosition.Y);
+                return;
+            }
+            
+            // Ball went out on top or bottom (throw-in)
+            if (BallPosition.Y < topOutBound)
+            {
+                HandleBallOutSideline(BallPosition.X, true); // Top sideline
+                return;
+            }
+            else if (BallPosition.Y > bottomOutBound)
+            {
+                HandleBallOutSideline(BallPosition.X, false); // Bottom sideline
+                return;
+            }
+        }
+        
+        private void HandleBallOverCrossbar(bool leftSide)
+        {
+            // Determine which team last touched based on ball direction
+            // For now, simplified: corner kick from opposite side
+            float xPos = leftSide ? StadiumMargin - 20 : StadiumMargin + FieldWidth + 20;
+            float yPos = BallPosition.Y < StadiumMargin + FieldHeight / 2 ? 
+                StadiumMargin + 50 : StadiumMargin + FieldHeight - 50;
+            
+            PlaceBallForRestart(new Vector2(xPos, yPos));
+        }
+        
+        private void HandleBallOutGoalLine(bool leftSide, float yPosition)
+        {
+            // Place ball for corner kick or goal kick
+            float xPos = leftSide ? StadiumMargin + 30 : StadiumMargin + FieldWidth - 30;
+            float yPos = yPosition < StadiumMargin + FieldHeight / 2 ? 
+                StadiumMargin + 30 : StadiumMargin + FieldHeight - 30;
+            
+            PlaceBallForRestart(new Vector2(xPos, yPos));
+        }
+        
+        private void HandleBallOutSideline(float xPosition, bool topSide)
+        {
+            // Place ball for throw-in
+            float xPos = Math.Clamp(xPosition, StadiumMargin + 50, StadiumMargin + FieldWidth - 50);
+            float yPos = topSide ? StadiumMargin + 20 : StadiumMargin + FieldHeight - 20;
+            
+            PlaceBallForRestart(new Vector2(xPos, yPos));
+        }
+        
+        private void PlaceBallForRestart(Vector2 position)
+        {
+            BallPosition = position;
+            BallVelocity = Vector2.Zero;
+            BallHeight = 0f;
+            BallVerticalVelocity = 0f;
+            
+            // Find nearest player from team that gets the ball
+            // For now, just find any nearby player
+            var allPlayers = GetAllPlayers();
+            Player nearestPlayer = null;
+            float minDistance = float.MaxValue;
+            
+            foreach (var player in allPlayers)
+            {
+                float dist = Vector2.Distance(player.FieldPosition, position);
+                if (dist < minDistance)
+                {
+                    minDistance = dist;
+                    nearestPlayer = player;
+                }
+            }
+            
+            // Move nearest player close to ball
+            if (nearestPlayer != null && minDistance > 100f)
+            {
+                Vector2 directionToBall = position - nearestPlayer.FieldPosition;
+                directionToBall.Normalize();
+                nearestPlayer.FieldPosition = position - directionToBall * 80f;
+            }
+        }
+        
+        private void TriggerGoalCelebration()
+        {
+            CurrentState = MatchState.GoalCelebration;
+            
+            // Start celebration with font rendering
+            if (_font != null && _graphicsDevice != null)
+            {
+                GoalCelebration.Start("ΓΚΟΛ!", _font, _graphicsDevice);
+            }
+            else
+            {
+                GoalCelebration.Start(); // Fallback to empty
+            }
+            
+            // Stop ball movement
+            BallVelocity = Vector2.Zero;
+            BallVerticalVelocity = 0f;
+        }
+        
+        private void ResetAfterOut()
+        {
+            // Simple reset for now - could be improved with throw-ins, corners, etc.
+            BallPosition = new Vector2(StadiumMargin + FieldWidth / 2, StadiumMargin + FieldHeight / 2);
+            BallVelocity = Vector2.Zero;
+            BallHeight = 0f;
+            BallVerticalVelocity = 0f;
         }
         
         private void ResetAfterGoal()
