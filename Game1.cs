@@ -93,6 +93,16 @@ public class Game1 : Game
         _spriteBatch = new SpriteBatch(GraphicsDevice);
         _font = Content.Load<SpriteFont>("Font");
         
+        // Initialize audio system
+        AudioManager.Instance.Initialize(Content);
+        AudioManager.Instance.MusicVolume = GameSettings.Instance.MusicVolume;
+        AudioManager.Instance.SfxVolume = GameSettings.Instance.SfxVolume;
+        AudioManager.Instance.MusicEnabled = GameSettings.Instance.MusicEnabled;
+        AudioManager.Instance.SfxEnabled = GameSettings.Instance.SfxEnabled;
+        
+        // Start menu music
+        AudioManager.Instance.PlayMusic("menu_music");
+        
         // Start with menu screen
         var menuScreen = new MenuScreen(_championship, _database, _screenManager, _contentManager, GraphicsDevice);
         _screenManager.PushScreen(menuScreen);
@@ -101,6 +111,9 @@ public class Game1 : Game
     protected override void Update(GameTime gameTime)
     {
         _screenManager.Update(gameTime);
+        
+        // Update audio manager
+        AudioManager.Instance.Update();
         
         // Make sure MenuScreen has graphics device reference
         if (_screenManager.CurrentScreen is MenuScreen menuScreen)

@@ -60,6 +60,9 @@ namespace NoPasaranFC.Screens
             _graphicsInitialized = false;
             _minimap = new Minimap(Game1.ScreenWidth, Game1.ScreenHeight, 150, 100); // Minimap 150x100 pixels
             _content = content;
+            
+            // Switch to match music
+            Gameplay.AudioManager.Instance.PlayMusic("match_music");
         }
         
         public void SetGraphicsDevice(GraphicsDevice graphicsDevice)
@@ -318,6 +321,10 @@ namespace NoPasaranFC.Screens
             
             // Save to database
             _database.SaveChampionship(_championship);
+            
+            // Play end whistle and return to menu music
+            Gameplay.AudioManager.Instance.PlaySoundEffect("whistle_end");
+            Gameplay.AudioManager.Instance.PlayMusic("menu_music");
             
             // Return to menu
             _screenManager.PopScreen();

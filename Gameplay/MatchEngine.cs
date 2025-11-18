@@ -194,6 +194,7 @@ namespace NoPasaranFC.Gameplay
                 if (CountdownTimer <= 0)
                 {
                     CurrentState = MatchState.Playing;
+                    AudioManager.Instance.PlaySoundEffect("whistle_start");
                 }
                 else
                 {
@@ -326,6 +327,7 @@ namespace NoPasaranFC.Gameplay
                             // Kick ball in movement direction
                             float kickPower = _controlledPlayer.Shooting / 10f + 5f;
                             BallVelocity = moveDirection * kickPower * _controlledPlayer.Speed;
+                            AudioManager.Instance.PlaySoundEffect("kick_ball", 0.6f);
                         }
                     }
                     else
@@ -509,6 +511,9 @@ namespace NoPasaranFC.Gameplay
                             // Most shots are lower
                             BallVerticalVelocity = baseHeight + randomFactor * 0.5f;
                         }
+                        
+                        // Play kick sound
+                        AudioManager.Instance.PlaySoundEffect("kick_ball", 0.5f);
                     }
                 }
             }
@@ -690,6 +695,9 @@ namespace NoPasaranFC.Gameplay
             // Apply impact velocity (player slides in direction of impact)
             player.Velocity = impactVelocity * 0.5f;
             
+            // Play tackle sound
+            AudioManager.Instance.PlaySoundEffect("tackle", 0.7f);
+            
             // Note: Don't auto-switch here - let the player choose when to switch with Space
             // This makes the gameplay more realistic and gives player control
         }
@@ -732,6 +740,9 @@ namespace NoPasaranFC.Gameplay
             // Calculate vertical velocity (height)
             // More hold time = higher shot
             BallVerticalVelocity = power * 800f; // Max height with max hold
+            
+            // Play kick sound (louder for shooting)
+            AudioManager.Instance.PlaySoundEffect("kick_ball", 0.8f + power * 0.4f);
         }
         
         private void ClampToField(ref Vector2 position)
@@ -919,6 +930,10 @@ namespace NoPasaranFC.Gameplay
         private void TriggerGoalCelebration()
         {
             CurrentState = MatchState.GoalCelebration;
+            
+            // Play goal sound effects
+            AudioManager.Instance.PlaySoundEffect("goal");
+            AudioManager.Instance.PlaySoundEffect("crowd_cheer", 1.2f);
             
             // Start celebration with font rendering
             if (_font != null && _graphicsDevice != null)

@@ -1,0 +1,151 @@
+using Microsoft.Xna.Framework.Audio;
+using Microsoft.Xna.Framework.Content;
+using Microsoft.Xna.Framework.Media;
+using System;
+using System.Collections.Generic;
+
+namespace NoPasaranFC.Gameplay
+{
+    public class AudioManager
+    {
+        private static AudioManager _instance;
+        public static AudioManager Instance => _instance ??= new AudioManager();
+
+        private ContentManager _content;
+        private Dictionary<string, SoundEffect> _soundEffects;
+        private Dictionary<string, Song> _songs;
+        private Song _currentSong;
+        private string _currentSongName;
+        
+        // Volume settings (0.0 to 1.0)
+        public float MusicVolume { get; set; } = 0.7f;
+        public float SfxVolume { get; set; } = 0.8f;
+        public bool MusicEnabled { get; set; } = true;
+        public bool SfxEnabled { get; set; } = true;
+
+        private AudioManager()
+        {
+            _soundEffects = new Dictionary<string, SoundEffect>();
+            _songs = new Dictionary<string, Song>();
+        }
+
+        public void Initialize(ContentManager content)
+        {
+            _content = content;
+            LoadAudio();
+        }
+
+        private void LoadAudio()
+        {
+            // Try to load sound effects (gracefully handle missing files)
+            TryLoadSoundEffect("menu_select", "Audio/SFX/menu_select");
+            TryLoadSoundEffect("menu_move", "Audio/SFX/menu_move");
+            TryLoadSoundEffect("menu_back", "Audio/SFX/menu_back");
+            TryLoadSoundEffect("whistle_start", "Audio/SFX/whistle_start");
+            TryLoadSoundEffect("whistle_end", "Audio/SFX/whistle_end");
+            TryLoadSoundEffect("kick_ball", "Audio/SFX/kick_ball");
+            TryLoadSoundEffect("tackle", "Audio/SFX/tackle");
+            TryLoadSoundEffect("goal", "Audio/SFX/goal");
+            TryLoadSoundEffect("crowd_cheer", "Audio/SFX/crowd_cheer");
+            TryLoadSoundEffect("crowd_aww", "Audio/SFX/crowd_aww");
+            
+            // Try to load music (gracefully handle missing files)
+            TryLoadSong("menu_music", "Audio/Music/menu");
+            TryLoadSong("match_music", "Audio/Music/match");
+            TryLoadSong("victory_music", "Audio/Music/victory");
+        }
+
+        private void TryLoadSoundEffect(string name, string assetPath)
+        {
+            try
+            {
+                var sfx = _content.Load<SoundEffect>(assetPath);
+                _soundEffects[name] = sfx;
+            }
+            catch (Exception)
+            {
+                // Audio file not found - continue without it
+                System.Diagnostics.Debug.WriteLine($"Audio file not found: {assetPath}");
+            }
+        }
+
+        private void TryLoadSong(string name, string assetPath)
+        {
+            try
+            {
+                var song = _content.Load<Song>(assetPath);
+                _songs[name] = song;
+            }
+            catch (Exception)
+            {
+                // Audio file not found - continue without it
+                System.Diagnostics.Debug.WriteLine($"Music file not found: {assetPath}");
+            }
+        }
+
+        public void PlaySoundEffect(string name, float volumeMultiplier = 1.0f)
+        {
+            if (!SfxEnabled) return;
+            
+            if (_soundEffects.TryGetValue(name, out var sfx))
+            {
+                sfx.Play(SfxVolume * volumeMultiplier, 0f, 0f);
+            }
+        }
+
+        public void PlayMusic(string name, bool loop = true)
+        {
+            if (!MusicEnabled) return;
+            
+            if (_songs.TryGetValue(name, out var song))
+            {
+                // Don't restart if already playing
+                if (_currentSongName == name && MediaPlayer.State == MediaState.Playing)
+                    return;
+                
+                _currentSong = song;
+                _currentSongName = name;
+                MediaPlayer.IsRepeating = loop;
+                MediaPlayer.Volume = MusicVolume;
+                MediaPlayer.Play(song);
+            }
+        }
+
+        public void StopMusic()
+        {
+            MediaPlayer.Stop();
+            _currentSong = null;
+            _currentSongName = null;
+        }
+
+        public void PauseMusic()
+        {
+            if (MediaPlayer.State == MediaState.Playing)
+            {
+                MediaPlayer.Pause();
+            }
+        }
+
+        public void ResumeMusic()
+        {
+            if (MediaPlayer.State == MediaState.Paused)
+            {
+                MediaPlayer.Resume();
+            }
+        }
+
+        public void UpdateMusicVolume()
+        {
+            MediaPlayer.Volume = MusicVolume;
+        }
+
+        public void Update()
+        {
+            // Update volume in case it changed
+            if (MediaPlayer.State == MediaState.Playing)
+            {
+                MediaPlayer.Volume = MusicVolume;
+            }
+        }
+    }
+}

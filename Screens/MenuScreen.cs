@@ -80,15 +80,18 @@ namespace NoPasaranFC.Screens
                 if (keyState.IsKeyDown(Keys.Down) && !_previousKeyState.IsKeyDown(Keys.Down))
                 {
                     _selectedOption = (_selectedOption + 1) % _menuOptions.Length;
+                    Gameplay.AudioManager.Instance.PlaySoundEffect("menu_move");
                 }
                 
                 if (keyState.IsKeyDown(Keys.Up) && !_previousKeyState.IsKeyDown(Keys.Up))
                 {
                     _selectedOption = (_selectedOption - 1 + _menuOptions.Length) % _menuOptions.Length;
+                    Gameplay.AudioManager.Instance.PlaySoundEffect("menu_move");
                 }
                 
                 if (keyState.IsKeyDown(Keys.Enter) && !_previousKeyState.IsKeyDown(Keys.Enter))
                 {
+                    Gameplay.AudioManager.Instance.PlaySoundEffect("menu_select");
                     HandleSelection();
                 }
             }
@@ -98,30 +101,36 @@ namespace NoPasaranFC.Screens
                 if (keyState.IsKeyDown(Keys.Up) && !_previousKeyState.IsKeyDown(Keys.Up))
                 {
                     _optionsSelectedItem = (_optionsSelectedItem - 1 + 5) % 5;
+                    Gameplay.AudioManager.Instance.PlaySoundEffect("menu_move");
                 }
                 
                 if (keyState.IsKeyDown(Keys.Down) && !_previousKeyState.IsKeyDown(Keys.Down))
                 {
                     _optionsSelectedItem = (_optionsSelectedItem + 1) % 5;
+                    Gameplay.AudioManager.Instance.PlaySoundEffect("menu_move");
                 }
                 
                 if (keyState.IsKeyDown(Keys.Left) && !_previousKeyState.IsKeyDown(Keys.Left))
                 {
                     HandleOptionsChange(-1);
+                    Gameplay.AudioManager.Instance.PlaySoundEffect("menu_move");
                 }
                 
                 if (keyState.IsKeyDown(Keys.Right) && !_previousKeyState.IsKeyDown(Keys.Right))
                 {
                     HandleOptionsChange(1);
+                    Gameplay.AudioManager.Instance.PlaySoundEffect("menu_move");
                 }
                 
                 if (keyState.IsKeyDown(Keys.F) && !_previousKeyState.IsKeyDown(Keys.F))
                 {
                     _tempFullscreen = !_tempFullscreen;
+                    Gameplay.AudioManager.Instance.PlaySoundEffect("menu_move");
                 }
                 
                 if (keyState.IsKeyDown(Keys.Enter) && !_previousKeyState.IsKeyDown(Keys.Enter))
                 {
+                    Gameplay.AudioManager.Instance.PlaySoundEffect("menu_select");
                     if (_optionsSelectedItem == 4)
                     {
                         // Launch sprite test screen
@@ -138,6 +147,7 @@ namespace NoPasaranFC.Screens
                 
                 if (keyState.IsKeyDown(Keys.Escape) && !_previousKeyState.IsKeyDown(Keys.Escape))
                 {
+                    Gameplay.AudioManager.Instance.PlaySoundEffect("menu_back");
                     _inOptionsMenu = false;
                 }
             }

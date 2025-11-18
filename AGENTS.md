@@ -172,9 +172,28 @@ Use UTF8 encoding for all text data as there is multilingual support.
   * Visual indicator when all matches are complete
   * Automatic detection of unplayed matches
 
+15. ✅ **Complete Audio System**:
+   - **AudioManager singleton**: Manages all music and SFX
+   - **Music system**: Menu music, match music, victory music (looping)
+   - **Sound effects**: Menu navigation, ball kicks, tackles, goals, whistles, crowd
+   - **Volume controls**: Separate music and SFX volumes (0.0-1.0)
+   - **Settings integration**: Audio settings persist in database
+   - **Graceful handling**: Missing audio files don't crash the game
+   - **Menu sounds**: 
+     * `menu_move` - Arrow key navigation
+     * `menu_select` - Enter key confirmation
+     * `menu_back` - Escape key
+   - **Match sounds**:
+     * `whistle_start` - Match/kickoff starts
+     * `whistle_end` - Match ends
+     * `kick_ball` - Ball kicked (volume varies with power)
+     * `tackle` - Player collision/tackle
+     * `goal` - Goal scored
+     * `crowd_cheer` - Crowd celebration (louder)
+   - **Music transitions**: Menu ↔ Match music automatically
+   - **Created AUDIO_SYSTEM.md**: Complete documentation with asset guidelines
+
 ## Next Steps (Future Enhancements):
-- Add sound effects (kicks, tackles, goals, crowd)
-- Add background music
 - Improve AI with formation awareness
 - Add more match events (fouls, corners, throw-ins, offsides)
 - Add player substitutions

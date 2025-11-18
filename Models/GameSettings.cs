@@ -27,6 +27,8 @@ namespace NoPasaranFC.Models
         public float MusicVolume { get; set; } = 0.7f;
         public float SfxVolume { get; set; } = 0.8f;
         public bool MuteAll { get; set; } = false;
+        public bool MusicEnabled { get; set; } = true;
+        public bool SfxEnabled { get; set; } = true;
         
         // Gameplay settings
         public int Difficulty { get; set; } = 1; // 0=Easy, 1=Normal, 2=Hard
