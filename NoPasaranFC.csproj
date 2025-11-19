@@ -28,6 +28,8 @@
     <PackageReference Include="MonoGame.Content.Builder.Task" Version="3.8.*" />
   </ItemGroup>
   <ItemGroup>
+    <Folder Include="Content\Audio\Music\" />
+    <Folder Include="Content\Audio\SFX\" />
     <Folder Include="Content\Sprites\" />
   </ItemGroup>
 </Project>

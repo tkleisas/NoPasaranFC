@@ -48,6 +48,7 @@ namespace NoPasaranFC.Screens
         public SettingsScreen(DatabaseManager database, Game1 game, ContentManager content, GraphicsDevice graphicsDevice)
             : base(content, graphicsDevice)
         {
+            System.Diagnostics.Debug.WriteLine("SettingsScreen: Constructor start");
             _database = database;
             _game = game;
             _settings = GameSettings.Instance;
@@ -68,6 +69,7 @@ namespace NoPasaranFC.Screens
             // Find current language index
             _languageIndex = Array.IndexOf(_languages, _settings.Language);
             if (_languageIndex == -1) _languageIndex = 0;
+            System.Diagnostics.Debug.WriteLine("SettingsScreen: Constructor complete");
         }
 
         public override void Update(GameTime gameTime)
@@ -225,11 +227,14 @@ namespace NoPasaranFC.Screens
 
         public override void Draw(SpriteBatch spriteBatch, SpriteFont font)
         {
+            System.Diagnostics.Debug.WriteLine("SettingsScreen: Draw start");
             var screenCenter = new Vector2(Game1.ScreenWidth / 2, Game1.ScreenHeight / 2);
             
             // Draw title
             var title = "SETTINGS";
+            System.Diagnostics.Debug.WriteLine("SettingsScreen: About to MeasureString");
             var titleSize = font.MeasureString(title);
+            System.Diagnostics.Debug.WriteLine("SettingsScreen: MeasureString complete");
             spriteBatch.DrawString(font, title, 
                 new Vector2(screenCenter.X - titleSize.X / 2, 50), Color.Yellow);
             
@@ -277,7 +282,7 @@ namespace NoPasaranFC.Screens
             }
             
             // Draw instructions
-            var instructions = "Arrow Keys: navigate | Enter: toggle | Left/Right: adjust | PgUp/PgDn: scroll";
+            var instructions = "1312";
             var instrSize = font.MeasureString(instructions);
             spriteBatch.DrawString(font, instructions, 
                 new Vector2(screenCenter.X - instrSize.X / 2, Game1.ScreenHeight - 50), Color.Gray);

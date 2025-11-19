@@ -191,10 +191,11 @@ namespace NoPasaranFC.Gameplay
             {
                 CountdownTimer -= deltaTime;
                 
-                if (CountdownTimer <= 0)
+                if (CountdownTimer <= 0 )
                 {
-                    CurrentState = MatchState.Playing;
                     AudioManager.Instance.PlaySoundEffect("whistle_start");
+                    CurrentState = MatchState.Playing;
+                    
                 }
                 else
                 {

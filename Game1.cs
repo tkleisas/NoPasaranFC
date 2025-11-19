@@ -93,6 +93,11 @@ public class Game1 : Game
         _spriteBatch = new SpriteBatch(GraphicsDevice);
         _font = Content.Load<SpriteFont>("Font");
         
+        // Warmup font to prevent first-frame stuttering (especially in debugger)
+        _font.MeasureString("SETTINGS");
+        _font.MeasureString("▲ MORE");
+        _font.MeasureString("ΕΠΙΛΟΓΕΣ");
+        
         // Initialize audio system
         AudioManager.Instance.Initialize(Content);
         AudioManager.Instance.MusicVolume = GameSettings.Instance.MusicVolume;
