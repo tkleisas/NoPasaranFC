@@ -132,6 +132,58 @@ Use UTF8 encoding for all text data as there is multilingual support.
      * Different placement logic for top/bottom and left/right sides
      * Ball placed with appropriate margin from field boundaries
 
+16. ✅ **Team Roster System**:
+   - **22-player rosters**: Each team now has full squad (11 starters + 11 substitutes)
+   - **Database persistence**: IsStarting and ShirtNumber fields added to Players table
+   - **JSON seeding system**:
+     * Load teams from `Database/teams_seed.json` file
+     * UTF-8 support for Greek/multilingual names
+     * Auto-generate 22 players if `players` array is empty
+     * Position-appropriate stat generation
+   - **Starting lineup management**:
+     * Match engine uses only starting XI (IsStarting = true)
+     * Auto-designates first 11 as starting if none marked
+     * Proper formation (1 GK, 4 DEF, 4 MID, 2 FWD)
+   - **TeamSeeder class**: Handles JSON parsing and auto-generation
+   - **Enhanced ChampionshipInitializer**: Supports both JSON and legacy generation
+   - **Default roster**: NO PASARAN! team with 22 Greek-named players fully defined
+   - Created ROSTER_SYSTEM.md documentation
+
+17. ✅ **Audio System Improvements**:
+   - **Non-retriggerable sounds**: Added `allowRetrigger` parameter to PlaySoundEffect
+   - **Sound instance tracking**: Prevents kick_ball from overlapping
+   - **Automatic cleanup**: Finished sound instances disposed in Update loop
+   - Ball kick sounds now play cleanly without stuttering
+
+18. ✅ **Match End Overlay**:
+   - **5-second final score display**: Shows "ΤΕΛΙΚΟ ΣΚΟΡ" (Final Score in Greek)
+   - **FinalScore match state**: New state between playing and ended
+   - **Countdown timer**: Shows remaining seconds before return to menu
+   - **Score display**: Team names with final score
+   - **Semi-transparent overlay**: Dark background for visibility
+
+19. ✅ **Visual Improvements**:
+   - **Referee removed**: No more distracting horizontal stripes during gameplay
+   - **Clean countdown**: Simplified match start countdown display
+
+20. ✅ **Lineup Selection Screen**:
+   - **Pre-match lineup editor**: Select starting XI before each match
+   - **Full roster view**: See all 22 players with shirt numbers
+   - **Interactive selection**:
+     * Up/Down arrows to navigate player list
+     * Space to toggle starter/bench status
+     * Must have exactly 11 starters to proceed
+     * PageUp/PageDown for quick scrolling
+   - **Formation preview**: Visual representation of selected lineup
+     * Shows player positions on field
+     * Displays shirt numbers on formation
+     * Shows formation (e.g., 4-4-2)
+     * Position breakdown (GK/DEF/MID/FWD counts)
+   - **Real-time validation**: Color-coded starter count indicator
+   - **Database persistence**: Lineup choices saved automatically
+   - **Player information**: Name, position, shirt number, starter status
+   - Greek language support for UI text
+
 ## Current Features:
 - Championship mode with 8 teams
 - Player-controlled team: "NO PASARAN!"

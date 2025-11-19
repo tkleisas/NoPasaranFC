@@ -19,7 +19,7 @@ namespace NoPasaranFC.Database
         
         public DatabaseManager()
         {
-            ConnectionString = $"Data Source={GetDatabasePath()}";
+            ConnectionString = $"Data Source={GetDatabasePath()};Mode=ReadWriteCreate;";
             InitializeDatabase();
         }
         
@@ -27,6 +27,11 @@ namespace NoPasaranFC.Database
         {
             using var connection = new SqliteConnection(ConnectionString);
             connection.Open();
+            
+            // Enable UTF-8 encoding
+            var pragmaCommand = connection.CreateCommand();
+            pragmaCommand.CommandText = "PRAGMA encoding = 'UTF-8';";
+            pragmaCommand.ExecuteNonQuery();
             
             var command = connection.CreateCommand();
             command.CommandText = @"
@@ -53,6 +58,8 @@ namespace NoPasaranFC.Database
                     Agility INTEGER DEFAULT 50,
                     Technique INTEGER DEFAULT 50,
                     Stamina INTEGER DEFAULT 100,
+                    IsStarting INTEGER DEFAULT 0,
+                    ShirtNumber INTEGER DEFAULT 0,
                     FOREIGN KEY(TeamId) REFERENCES Teams(Id)
                 );
                 
@@ -152,8 +159,8 @@ namespace NoPasaranFC.Database
             {
                 // New player without ID
                 command.CommandText = @"
-                    INSERT INTO Players (TeamId, Name, Position, Speed, Shooting, Passing, Defending, Agility, Technique, Stamina)
-                    VALUES (@teamId, @name, @position, @speed, @shooting, @passing, @defending, @agility, @technique, @stamina);
+                    INSERT INTO Players (TeamId, Name, Position, Speed, Shooting, Passing, Defending, Agility, Technique, Stamina, IsStarting, ShirtNumber)
+                    VALUES (@teamId, @name, @position, @speed, @shooting, @passing, @defending, @agility, @technique, @stamina, @isStarting, @shirtNumber);
                     SELECT last_insert_rowid();
                 ";
                 command.Parameters.AddWithValue("@teamId", player.TeamId);
@@ -166,6 +173,8 @@ namespace NoPasaranFC.Database
                 command.Parameters.AddWithValue("@agility", player.Agility);
                 command.Parameters.AddWithValue("@technique", player.Technique);
                 command.Parameters.AddWithValue("@stamina", player.Stamina);
+                command.Parameters.AddWithValue("@isStarting", player.IsStarting ? 1 : 0);
+                command.Parameters.AddWithValue("@shirtNumber", player.ShirtNumber);
                 
                 player.Id = Convert.ToInt32(command.ExecuteScalar());
             }
@@ -173,8 +182,8 @@ namespace NoPasaranFC.Database
             {
                 // Player with ID - use INSERT OR REPLACE
                 command.CommandText = @"
-                    INSERT OR REPLACE INTO Players (Id, TeamId, Name, Position, Speed, Shooting, Passing, Defending, Agility, Technique, Stamina)
-                    VALUES (@id, @teamId, @name, @position, @speed, @shooting, @passing, @defending, @agility, @technique, @stamina);
+                    INSERT OR REPLACE INTO Players (Id, TeamId, Name, Position, Speed, Shooting, Passing, Defending, Agility, Technique, Stamina, IsStarting, ShirtNumber)
+                    VALUES (@id, @teamId, @name, @position, @speed, @shooting, @passing, @defending, @agility, @technique, @stamina, @isStarting, @shirtNumber);
                 ";
                 command.Parameters.AddWithValue("@id", player.Id);
                 command.Parameters.AddWithValue("@teamId", player.TeamId);
@@ -187,6 +196,8 @@ namespace NoPasaranFC.Database
                 command.Parameters.AddWithValue("@agility", player.Agility);
                 command.Parameters.AddWithValue("@technique", player.Technique);
                 command.Parameters.AddWithValue("@stamina", player.Stamina);
+                command.Parameters.AddWithValue("@isStarting", player.IsStarting ? 1 : 0);
+                command.Parameters.AddWithValue("@shirtNumber", player.ShirtNumber);
                 
                 command.ExecuteNonQuery();
             }
@@ -248,7 +259,9 @@ namespace NoPasaranFC.Database
                     Defending = reader.GetInt32(7),
                     Agility = reader.IsDBNull(8) ? 50 : reader.GetInt32(8),
                     Technique = reader.IsDBNull(9) ? 50 : reader.GetInt32(9),
-                    Stamina = reader.IsDBNull(10) ? 100 : reader.GetInt32(10)
+                    Stamina = reader.IsDBNull(10) ? 100 : reader.GetInt32(10),
+                    IsStarting = reader.IsDBNull(11) ? false : reader.GetInt32(11) == 1,
+                    ShirtNumber = reader.IsDBNull(12) ? 0 : reader.GetInt32(12)
                 };
                 players.Add(player);
             }

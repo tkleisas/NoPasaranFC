@@ -69,6 +69,10 @@ namespace NoPasaranFC.Gameplay
             _homeTeam = homeTeam;
             _awayTeam = awayTeam;
             _random = new Random();
+            
+            // Filter to only use starting players (if they exist, otherwise use first 11)
+            EnsureStartingLineup(homeTeam);
+            EnsureStartingLineup(awayTeam);
             HomeScore = 0;
             AwayScore = 0;
             MatchTime = 0f;
@@ -110,8 +114,10 @@ namespace NoPasaranFC.Gameplay
             // Ball at center
             BallPosition = new Vector2(StadiumMargin + FieldWidth / 2, StadiumMargin + FieldHeight / 2);
             
-            // Find the first player controlled player
-            var controlledTeamPlayers = _homeTeam.IsPlayerControlled ? _homeTeam.Players : _awayTeam.Players;
+            // Find the first starting player from controlled team
+            var controlledTeamPlayers = _homeTeam.IsPlayerControlled ? 
+                _homeTeam.Players.Where(p => p.IsStarting).ToList() : 
+                _awayTeam.Players.Where(p => p.IsStarting).ToList();
             if (controlledTeamPlayers.Any())
             {
                 _controlledPlayer = controlledTeamPlayers[0];
@@ -363,8 +369,8 @@ namespace NoPasaranFC.Gameplay
                 }
             }
             
-            // Update AI players
-            foreach (var player in _homeTeam.Players.Concat(_awayTeam.Players))
+            // Update AI players (only starting players)
+            foreach (var player in _homeTeam.Players.Where(p => p.IsStarting).Concat(_awayTeam.Players.Where(p => p.IsStarting)))
             {
                 if (player.IsControlled) continue;
                 
@@ -1126,7 +1132,21 @@ namespace NoPasaranFC.Gameplay
         
         public List<Player> GetAllPlayers()
         {
-            return _homeTeam.Players.Concat(_awayTeam.Players).ToList();
+            return _homeTeam.Players.Where(p => p.IsStarting).Concat(_awayTeam.Players.Where(p => p.IsStarting)).ToList();
+        }
+        
+        private void EnsureStartingLineup(Team team)
+        {
+            var startingPlayers = team.Players.Where(p => p.IsStarting).ToList();
+            
+            // If no starting players marked, mark the first 11 as starting
+            if (startingPlayers.Count == 0 && team.Players.Count >= 11)
+            {
+                for (int i = 0; i < 11 && i < team.Players.Count; i++)
+                {
+                    team.Players[i].IsStarting = true;
+                }
+            }
         }
     }
 }

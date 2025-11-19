@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using NoPasaranFC.Models;
+using NoPasaranFC.Database;
 
 namespace NoPasaranFC.Gameplay
 {
@@ -9,13 +11,13 @@ namespace NoPasaranFC.Gameplay
         private static readonly string[] TeamNames = new[]
         {
             "NO PASARAN!",
-            "ÌÐÁÑÔÓÅËÉÙÌÁ",
-            "ÊÔÅË",
+            "ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½",
+            "ï¿½ï¿½ï¿½ï¿½",
             "NO NAME",
-            "ÌÇ×ÁÍÉÊÏÉ",
-            "ÁÓÁËÁÃÇÔÏÓ",
-            "ÁÓÔÅÑÁÓ ÅÎÁÑ×ÅÉÙÍ",
-            "ÔÇÃÁÍÇÔÇÓ"
+            "ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½",
+            "ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½",
+            "ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½",
+            "ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½"
         };
         
         private static readonly string[] FirstNames = new[]
@@ -31,9 +33,9 @@ namespace NoPasaranFC.Gameplay
         };
         private static readonly string[] NoPasaranNames = new[]
         {
-            "ÔÜêáñïò", "Dablo", "ÊïëïæÝúñï", "ÓðõñÜí", "ÌÜôæéåê",
-            "ÐÞôåñ Ðáí", "ÊõñéÜêïò ï êáëüò", "ÓÝñêé", "Âñéôò",
-             "Ìïýãéïò", "ÓôÜèéí"
+            "ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½", "Dablo", "ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½", "ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½", "ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½",
+            "ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½", "ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½", "ï¿½ï¿½ï¿½ï¿½ï¿½", "ï¿½ï¿½ï¿½ï¿½ï¿½",
+             "ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½", "ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½"
         };
         private static readonly PlayerPosition[] NoPasaranPositions = new[]
         {
@@ -52,56 +54,32 @@ namespace NoPasaranFC.Gameplay
         public static Championship CreateNewChampionship()
         {
             var championship = new Championship();
-            var random = new Random();
             
-            int teamId = 1;
-            foreach (var teamName in TeamNames)
+            // Try to load teams from JSON seed file
+            string jsonPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Database", "teams_seed.json");
+            List<Team> teams = null;
+            
+            if (File.Exists(jsonPath))
             {
-                bool isPlayerControlled = teamName == "NO PASARAN!";
-                var team = new Team(teamName, isPlayerControlled);
+                teams = TeamSeeder.LoadTeamsFromJson(jsonPath);
+            }
+            
+            // Fallback to old generation if JSON loading failed
+            if (teams == null || teams.Count == 0)
+            {
+                teams = GenerateTeamsLegacy();
+            }
+            
+            // Assign team IDs and update player TeamIds
+            int teamId = 1;
+            foreach (var team in teams)
+            {
                 team.Id = teamId++;
-                if(teamName == "NO PASARAN!")
-                {
-                    // Create 11 specific players for NO PASARAN!
-                    int index = 0;
-                    foreach (var playerName in NoPasaranNames)
-                    {
-                        var position = NoPasaranPositions[index++];
-                        var player = new Player(playerName, position);
-                        // Assign random stats
-                        player.Speed = random.Next(40, 90);
-                        player.Shooting = random.Next(30, 95);
-                        player.Passing = random.Next(30, 90);
-                        player.Defending = random.Next(20, 90);
-                        player.Agility = random.Next(40, 90);
-                        player.Technique = random.Next(40, 90);
-                        player.Stamina = random.Next(50, 95);
-                        
-                        team.AddPlayer(player);
-                    }
-                    championship.Teams.Add(team);
-                    continue;
-                }
-                // Create 11 players for each team
-                // 1 Goalkeeper
-                team.AddPlayer(CreatePlayer(random, PlayerPosition.Goalkeeper));
                 
-                // 4 Defenders
-                for (int i = 0; i < 4; i++)
+                // Update all player TeamIds to match the assigned team ID
+                foreach (var player in team.Players)
                 {
-                    team.AddPlayer(CreatePlayer(random, PlayerPosition.Defender));
-                }
-                
-                // 4 Midfielders
-                for (int i = 0; i < 4; i++)
-                {
-                    team.AddPlayer(CreatePlayer(random, PlayerPosition.Midfielder));
-                }
-                
-                // 2 Forwards
-                for (int i = 0; i < 2; i++)
-                {
-                    team.AddPlayer(CreatePlayer(random, PlayerPosition.Forward));
+                    player.TeamId = team.Id;
                 }
                 
                 championship.Teams.Add(team);
@@ -165,6 +143,83 @@ namespace NoPasaranFC.Gameplay
             }
             
             return player;
+        }
+        
+        private static List<Team> GenerateTeamsLegacy()
+        {
+            var teams = new List<Team>();
+            var random = new Random();
+            
+            foreach (var teamName in TeamNames)
+            {
+                bool isPlayerControlled = teamName == "NO PASARAN!";
+                var team = new Team(teamName, isPlayerControlled);
+                
+                if(teamName == "NO PASARAN!")
+                {
+                    // Create 11 specific players for NO PASARAN!
+                    int index = 0;
+                    foreach (var playerName in NoPasaranNames)
+                    {
+                        var position = NoPasaranPositions[index++];
+                        var player = new Player(playerName, position);
+                        // Assign random stats
+                        player.Speed = random.Next(40, 90);
+                        player.Shooting = random.Next(30, 95);
+                        player.Passing = random.Next(30, 90);
+                        player.Defending = random.Next(20, 90);
+                        player.Agility = random.Next(40, 90);
+                        player.Technique = random.Next(40, 90);
+                        player.Stamina = random.Next(50, 95);
+                        player.IsStarting = true;
+                        player.ShirtNumber = index;
+                        
+                        team.AddPlayer(player);
+                    }
+                    teams.Add(team);
+                    continue;
+                }
+                
+                // Create 11 players for each team
+                int shirtNum = 1;
+                
+                // 1 Goalkeeper
+                var gk = CreatePlayer(random, PlayerPosition.Goalkeeper);
+                gk.IsStarting = true;
+                gk.ShirtNumber = shirtNum++;
+                team.AddPlayer(gk);
+                
+                // 4 Defenders
+                for (int i = 0; i < 4; i++)
+                {
+                    var def = CreatePlayer(random, PlayerPosition.Defender);
+                    def.IsStarting = true;
+                    def.ShirtNumber = shirtNum++;
+                    team.AddPlayer(def);
+                }
+                
+                // 4 Midfielders
+                for (int i = 0; i < 4; i++)
+                {
+                    var mid = CreatePlayer(random, PlayerPosition.Midfielder);
+                    mid.IsStarting = true;
+                    mid.ShirtNumber = shirtNum++;
+                    team.AddPlayer(mid);
+                }
+                
+                // 2 Forwards
+                for (int i = 0; i < 2; i++)
+                {
+                    var fwd = CreatePlayer(random, PlayerPosition.Forward);
+                    fwd.IsStarting = true;
+                    fwd.ShirtNumber = shirtNum++;
+                    team.AddPlayer(fwd);
+                }
+                
+                teams.Add(team);
+            }
+            
+            return teams;
         }
     }
 }

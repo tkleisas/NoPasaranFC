@@ -850,18 +850,32 @@ namespace NoPasaranFC.Screens
             }
             
             // Draw player name above sprite (only if not knocked down)
-            if (!player.IsKnockedDown)
+            if (!player.IsKnockedDown && !string.IsNullOrEmpty(player.Name))
             {
-                string displayName = player.Name.Length > 12 ? player.Name.Substring(0, 12) : player.Name;
-                Vector2 nameSize = font.MeasureString(displayName);
-                Vector2 namePos = new Vector2(pos.X - nameSize.X / 2, pos.Y - renderSize / 2 - 32);
-                
-                // Draw name background
-                spriteBatch.Draw(_pixel, new Rectangle((int)(namePos.X - 4), (int)(namePos.Y - 2), 
-                    (int)(nameSize.X + 8), (int)(nameSize.Y + 4)), new Color(0, 0, 0, 150));
-                
-                // Draw name text
-                spriteBatch.DrawString(font, displayName, namePos, Color.White);
+                try
+                {
+                    // Safely truncate name to max 12 characters
+                    string displayName = player.Name;
+                    if (displayName.Length > 12)
+                    {
+                        displayName = displayName.Substring(0, 12);
+                    }
+                    
+                    Vector2 nameSize = font.MeasureString(displayName);
+                    Vector2 namePos = new Vector2(pos.X - nameSize.X / 2, pos.Y - renderSize / 2 - 32);
+                    
+                    // Draw name background
+                    spriteBatch.Draw(_pixel, new Rectangle((int)(namePos.X - 4), (int)(namePos.Y - 2), 
+                        (int)(nameSize.X + 8), (int)(nameSize.Y + 4)), new Color(0, 0, 0, 150));
+                    
+                    // Draw name text
+                    spriteBatch.DrawString(font, displayName, namePos, Color.White);
+                }
+                catch (Exception)
+                {
+                    // If name rendering fails (e.g., unsupported characters), skip it
+                    System.Diagnostics.Debug.WriteLine($"Failed to render name: {player.Name}");
+                }
             }
         }
         

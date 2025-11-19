@@ -201,12 +201,23 @@ namespace NoPasaranFC.Screens
                             
                             if (homeTeam != null && awayTeam != null)
                             {
-                                var matchScreen = new MatchScreen(homeTeam, awayTeam, nextMatch, _championship, _database, _screenManager,_contentManager);
-                                if (_graphicsDevice != null)
+                                // Show lineup screen before match if it's the player's team
+                                if (playerTeam.Id == homeTeam.Id || playerTeam.Id == awayTeam.Id)
                                 {
-                                    matchScreen.SetGraphicsDevice(_graphicsDevice);
+                                    var lineupScreen = new LineupScreen(playerTeam, nextMatch, _championship, 
+                                        _database, _screenManager, _contentManager, _graphicsDevice);
+                                    _screenManager.PushScreen(lineupScreen);
                                 }
-                                _screenManager.PushScreen(matchScreen);
+                                else
+                                {
+                                    // Non-player match - go directly to match screen
+                                    var matchScreen = new MatchScreen(homeTeam, awayTeam, nextMatch, _championship, _database, _screenManager,_contentManager);
+                                    if (_graphicsDevice != null)
+                                    {
+                                        matchScreen.SetGraphicsDevice(_graphicsDevice);
+                                    }
+                                    _screenManager.PushScreen(matchScreen);
+                                }
                             }
                             else
                             {

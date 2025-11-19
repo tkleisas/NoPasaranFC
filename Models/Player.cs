@@ -51,6 +51,10 @@ namespace NoPasaranFC.Models
         public string SpriteFileName { get; set; } // e.g., "player1.png", "goalkeeper1.png"
         public Color SpriteColor { get; set; } // Tint color for team differentiation
         
+        // Roster management
+        public bool IsStarting { get; set; } // Whether player is in starting lineup
+        public int ShirtNumber { get; set; } // Player's shirt number
+        
         public Player(string name, PlayerPosition position)
         {
             Name = name;
@@ -70,6 +74,8 @@ namespace NoPasaranFC.Models
             SpriteFileName = "player_default.png"; // Default sprite
             SpriteColor = Color.White; // No tint by default
             CurrentAnimationState = "walk";
+            IsStarting = false;
+            ShirtNumber = 0;
         }
         
         public Player() { }
