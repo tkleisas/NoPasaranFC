@@ -14,6 +14,7 @@ namespace NoPasaranFC.Gameplay
         private ContentManager _content;
         private Dictionary<string, SoundEffect> _soundEffects;
         private Dictionary<string, Song> _songs;
+        private Dictionary<string, SoundEffectInstance> _activeSoundInstances;
         private Song _currentSong;
         private string _currentSongName;
         
@@ -27,6 +28,7 @@ namespace NoPasaranFC.Gameplay
         {
             _soundEffects = new Dictionary<string, SoundEffect>();
             _songs = new Dictionary<string, Song>();
+            _activeSoundInstances = new Dictionary<string, SoundEffectInstance>();
         }
 
         public void Initialize(ContentManager content)
@@ -83,13 +85,40 @@ namespace NoPasaranFC.Gameplay
             }
         }
 
-        public void PlaySoundEffect(string name, float volumeMultiplier = 1.0f)
+        public void PlaySoundEffect(string name, float volumeMultiplier = 1.0f, bool allowRetrigger = true)
         {
             if (!SfxEnabled) return;
             
             if (_soundEffects.TryGetValue(name, out var sfx))
             {
-                sfx.Play(SfxVolume * volumeMultiplier, 0f, 0f);
+                // Check if this sound is already playing and shouldn't be retriggered
+                if (!allowRetrigger && _activeSoundInstances.TryGetValue(name, out var existingInstance))
+                {
+                    if (existingInstance.State == SoundState.Playing)
+                    {
+                        return; // Don't retrigger while still playing
+                    }
+                    else
+                    {
+                        // Clean up stopped instance
+                        existingInstance.Dispose();
+                        _activeSoundInstances.Remove(name);
+                    }
+                }
+                
+                // For non-retriggerable sounds, create an instance we can track
+                if (!allowRetrigger)
+                {
+                    var instance = sfx.CreateInstance();
+                    instance.Volume = SfxVolume * volumeMultiplier;
+                    instance.Play();
+                    _activeSoundInstances[name] = instance;
+                }
+                else
+                {
+                    // For retriggerable sounds, just play normally (allows overlapping)
+                    sfx.Play(SfxVolume * volumeMultiplier, 0f, 0f);
+                }
             }
         }
 
@@ -117,6 +146,31 @@ namespace NoPasaranFC.Gameplay
             _currentSong = null;
             _currentSongName = null;
         }
+        
+        public void Update()
+        {
+            // Clean up finished sound instances
+            var finishedSounds = new List<string>();
+            foreach (var kvp in _activeSoundInstances)
+            {
+                if (kvp.Value.State == SoundState.Stopped)
+                {
+                    kvp.Value.Dispose();
+                    finishedSounds.Add(kvp.Key);
+                }
+            }
+            
+            foreach (var soundName in finishedSounds)
+            {
+                _activeSoundInstances.Remove(soundName);
+            }
+            
+            // Update volume in case it changed
+            if (MediaPlayer.State == MediaState.Playing)
+            {
+                MediaPlayer.Volume = MusicVolume;
+            }
+        }
 
         public void PauseMusic()
         {
@@ -137,15 +191,6 @@ namespace NoPasaranFC.Gameplay
         public void UpdateMusicVolume()
         {
             MediaPlayer.Volume = MusicVolume;
-        }
-
-        public void Update()
-        {
-            // Update volume in case it changed
-            if (MediaPlayer.State == MediaState.Playing)
-            {
-                MediaPlayer.Volume = MusicVolume;
-            }
         }
     }
 }

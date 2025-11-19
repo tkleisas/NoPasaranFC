@@ -328,7 +328,7 @@ namespace NoPasaranFC.Gameplay
                             // Kick ball in movement direction
                             float kickPower = _controlledPlayer.Shooting / 10f + 5f;
                             BallVelocity = moveDirection * kickPower * _controlledPlayer.Speed;
-                            AudioManager.Instance.PlaySoundEffect("kick_ball", 0.6f);
+                            AudioManager.Instance.PlaySoundEffect("kick_ball", 0.6f, allowRetrigger: false);
                         }
                     }
                     else
@@ -514,7 +514,7 @@ namespace NoPasaranFC.Gameplay
                         }
                         
                         // Play kick sound
-                        AudioManager.Instance.PlaySoundEffect("kick_ball", 0.5f);
+                        AudioManager.Instance.PlaySoundEffect("kick_ball", 0.5f, allowRetrigger: false);
                     }
                 }
             }
@@ -743,7 +743,7 @@ namespace NoPasaranFC.Gameplay
             BallVerticalVelocity = power * 800f; // Max height with max hold
             
             // Play kick sound (louder for shooting)
-            AudioManager.Instance.PlaySoundEffect("kick_ball", 0.8f + power * 0.4f);
+            AudioManager.Instance.PlaySoundEffect("kick_ball", 0.8f + power * 0.4f, allowRetrigger: false);
         }
         
         private void ClampToField(ref Vector2 position)
