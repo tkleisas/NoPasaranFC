@@ -18,11 +18,12 @@ namespace NoPasaranFC.Gameplay
         private Vector2 _refereeVelocity;
         
         // Match state
-        public enum MatchState { CameraInit, Countdown, Playing, HalfTime, Ended, GoalCelebration }
+        public enum MatchState { CameraInit, Countdown, Playing, HalfTime, Ended, GoalCelebration, FinalScore }
         public MatchState CurrentState { get; private set; }
         public float CountdownTimer { get; private set; }
         public int CountdownNumber { get; private set; }
         public GoalCelebration GoalCelebration { get; private set; }
+        public float FinalScoreTimer { get; private set; }
         
         public Vector2 BallPosition { get; set; }
         public Vector2 BallVelocity { get; set; }
@@ -225,10 +226,34 @@ namespace NoPasaranFC.Gameplay
                 return;
             }
             
+            // Handle final score overlay
+            if (CurrentState == MatchState.FinalScore)
+            {
+                FinalScoreTimer -= deltaTime;
+                
+                if (FinalScoreTimer <= 0)
+                {
+                    CurrentState = MatchState.Ended;
+                }
+                
+                // Keep camera on ball during overlay
+                Camera.Follow(BallPosition, deltaTime);
+                return;
+            }
+            
             // Update match time - map real time to game time (90 minutes)
             float realTimeDuration = GameSettings.Instance.GetMatchDurationSeconds();
             float gameTimeIncrement = (90f / realTimeDuration) * deltaTime;
             MatchTime += gameTimeIncrement;
+            
+            // Check if match should end
+            if (MatchTime >= 90f)
+            {
+                CurrentState = MatchState.FinalScore;
+                FinalScoreTimer = 5f;
+                AudioManager.Instance.PlaySoundEffect("whistle_end");
+                return;
+            }
             
             // Update all players
             UpdatePlayers(deltaTime, moveDirection, isShootKeyDown);

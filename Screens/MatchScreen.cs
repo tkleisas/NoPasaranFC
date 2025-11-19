@@ -136,7 +136,7 @@ namespace NoPasaranFC.Screens
         
         public override void Update(GameTime gameTime)
         {
-            if (_matchEngine.IsMatchOver)
+            if (_matchEngine.CurrentState == MatchEngine.MatchState.Ended)
             {
                 EndMatch();
                 return;
@@ -379,9 +379,6 @@ namespace NoPasaranFC.Screens
                 DrawPlayer(spriteBatch, player, font);
             }
             
-            // Draw referee
-            DrawReferee(spriteBatch);
-            
             // Draw ball
             var ballPos = _matchEngine.BallPosition;
             DrawBall(spriteBatch, ballPos);
@@ -409,6 +406,12 @@ namespace NoPasaranFC.Screens
             {
                 DrawGoalCelebration(spriteBatch, font);
             }
+            
+            // Draw final score overlay
+            if (_matchEngine.CurrentState == MatchEngine.MatchState.FinalScore)
+            {
+                DrawFinalScoreOverlay(spriteBatch, font);
+            }
         }
         
         private void DrawGoalCelebration(SpriteBatch spriteBatch, SpriteFont font)
@@ -433,6 +436,52 @@ namespace NoPasaranFC.Screens
                 spriteBatch.DrawString(font, goalText, position, 
                     Color.Yellow, 0f, Vector2.Zero, scale, SpriteEffects.None, 0f);
             }
+        }
+        
+        private void DrawFinalScoreOverlay(SpriteBatch spriteBatch, SpriteFont font)
+        {
+            // Draw semi-transparent background overlay
+            spriteBatch.Draw(_pixel, new Rectangle(0, 0, Game1.ScreenWidth, Game1.ScreenHeight), 
+                Color.Black * 0.7f);
+            
+            // Title: "ΤΕΛΙΚΟ ΣΚΟΡ" (Final Score in Greek)
+            string titleText = "ΤΕΛΙΚΟ ΣΚΟΡ";
+            float titleScale = 2.5f;
+            Vector2 titleSize = font.MeasureString(titleText);
+            Vector2 titlePos = new Vector2(
+                Game1.ScreenWidth / 2 - (titleSize.X * titleScale) / 2,
+                Game1.ScreenHeight / 2 - 150
+            );
+            
+            // Draw title with shadow
+            spriteBatch.DrawString(font, titleText, titlePos + new Vector2(4, 4) * titleScale,
+                Color.Black * 0.8f, 0f, Vector2.Zero, titleScale, SpriteEffects.None, 0f);
+            spriteBatch.DrawString(font, titleText, titlePos,
+                Color.Yellow, 0f, Vector2.Zero, titleScale, SpriteEffects.None, 0f);
+            
+            // Score display
+            string scoreText = $"{_homeTeam.Name}  {_matchEngine.HomeScore} - {_matchEngine.AwayScore}  {_awayTeam.Name}";
+            float scoreScale = 1.8f;
+            Vector2 scoreSize = font.MeasureString(scoreText);
+            Vector2 scorePos = new Vector2(
+                Game1.ScreenWidth / 2 - (scoreSize.X * scoreScale) / 2,
+                Game1.ScreenHeight / 2
+            );
+            
+            // Draw score with shadow
+            spriteBatch.DrawString(font, scoreText, scorePos + new Vector2(3, 3) * scoreScale,
+                Color.Black * 0.8f, 0f, Vector2.Zero, scoreScale, SpriteEffects.None, 0f);
+            spriteBatch.DrawString(font, scoreText, scorePos,
+                Color.White, 0f, Vector2.Zero, scoreScale, SpriteEffects.None, 0f);
+            
+            // Timer indicator (small text showing remaining time)
+            string timerText = $"{_matchEngine.FinalScoreTimer:F1}s";
+            Vector2 timerSize = font.MeasureString(timerText);
+            Vector2 timerPos = new Vector2(
+                Game1.ScreenWidth / 2 - timerSize.X / 2,
+                Game1.ScreenHeight / 2 + 100
+            );
+            spriteBatch.DrawString(font, timerText, timerPos, Color.Gray);
         }
         
         private void DrawStadium(SpriteBatch spriteBatch)
@@ -833,6 +882,10 @@ namespace NoPasaranFC.Screens
         
         private void DrawReferee(SpriteBatch spriteBatch)
         {
+            // Don't draw referee during countdown to avoid visual artifacts
+            if (_matchEngine.CurrentState == MatchEngine.MatchState.Countdown)
+                return;
+            
             var pos = _matchEngine.RefereePosition;
             int size = 120; // Double size to match player scale
             
@@ -960,9 +1013,6 @@ namespace NoPasaranFC.Screens
             float scale = 3.0f; // Make it 3x larger
             Vector2 scaledSize = textSize * scale;
             Vector2 position = new Vector2((screenWidth - scaledSize.X) / 2, (screenHeight - scaledSize.Y) / 2);
-            
-            // Draw shadow
-            spriteBatch.DrawString(font, countdownText, position + new Vector2(4, 4), Color.Black, 0f, Vector2.Zero, scale, SpriteEffects.None, 0f);
             
             // Draw text
             Color countdownColor = _matchEngine.CountdownNumber > 0 ? Color.Yellow : Color.LightGreen;
