@@ -368,6 +368,23 @@ namespace NoPasaranFC.Screens
             // Draw field markings
             DrawFieldMarkings(spriteBatch);
             
+            // Check if ball is inside goal area (behind goal line)
+            var ballPos = _matchEngine.BallPosition;
+            float leftGoalLine = MatchEngine.StadiumMargin;
+            float rightGoalLine = MatchEngine.StadiumMargin + MatchEngine.FieldWidth;
+            float goalTop = MatchEngine.StadiumMargin + (MatchEngine.FieldHeight - MatchEngine.GoalWidth) / 2;
+            float goalBottom = goalTop + MatchEngine.GoalWidth;
+            
+            bool ballInsideLeftGoal = ballPos.X < leftGoalLine && ballPos.Y >= goalTop && ballPos.Y <= goalBottom;
+            bool ballInsideRightGoal = ballPos.X > rightGoalLine && ballPos.Y >= goalTop && ballPos.Y <= goalBottom;
+            bool ballInsideGoal = ballInsideLeftGoal || ballInsideRightGoal;
+            
+            // Draw ball BEFORE goalposts if inside goal (so it appears behind the net)
+            if (ballInsideGoal)
+            {
+                DrawBall(spriteBatch, ballPos);
+            }
+            
             // Draw goals
             DrawGoals(spriteBatch);
             
@@ -377,9 +394,11 @@ namespace NoPasaranFC.Screens
                 DrawPlayer(spriteBatch, player, font);
             }
             
-            // Draw ball
-            var ballPos = _matchEngine.BallPosition;
-            DrawBall(spriteBatch, ballPos);
+            // Draw ball AFTER goalposts if outside goal (normal rendering)
+            if (!ballInsideGoal)
+            {
+                DrawBall(spriteBatch, ballPos);
+            }
             
             // End camera-transformed drawing
             spriteBatch.End();
@@ -987,10 +1006,19 @@ namespace NoPasaranFC.Screens
             int screenWidth = Game1.ScreenWidth;
             int screenHeight = Game1.ScreenHeight;
             
-            // Draw score centered at top
+            // Draw score centered at top with yellow shadow for visibility
             string scoreText = $"{_homeTeam.Name} {_matchEngine.HomeScore} - {_matchEngine.AwayScore} {_awayTeam.Name}";
             Vector2 scoreSize = font.MeasureString(scoreText);
-            spriteBatch.DrawString(font, scoreText, new Vector2((screenWidth - scoreSize.X) / 2, 10), Color.White);
+            Vector2 scorePos = new Vector2((screenWidth - scoreSize.X) / 2, 10);
+            
+            // Yellow shadow (offset by 2 pixels in all directions for better visibility)
+            spriteBatch.DrawString(font, scoreText, scorePos + new Vector2(-2, -2), Color.Yellow);
+            spriteBatch.DrawString(font, scoreText, scorePos + new Vector2(2, -2), Color.Yellow);
+            spriteBatch.DrawString(font, scoreText, scorePos + new Vector2(-2, 2), Color.Yellow);
+            spriteBatch.DrawString(font, scoreText, scorePos + new Vector2(2, 2), Color.Yellow);
+            
+            // Red text on top
+            spriteBatch.DrawString(font, scoreText, scorePos, Color.Red);
             
             // Draw time centered
             string timeText = $"Time: {(int)_matchEngine.MatchTime}'";

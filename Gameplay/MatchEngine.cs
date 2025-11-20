@@ -32,6 +32,9 @@ namespace NoPasaranFC.Gameplay
         public float BallVerticalVelocity { get; set; } // Vertical velocity (up/down)
         private float _shootButtonHoldTime = 0f;
         private bool _wasShootButtonDown = false;
+        private bool _goalScored = false;
+        private float _goalCelebrationDelay = 0f;
+        private const float GoalCelebrationDelayTime = 0.5f; // Half second delay to see ball in goal
         public int HomeScore { get; private set; }
         public int AwayScore { get; private set; }
         public float MatchTime { get; private set; }
@@ -59,7 +62,7 @@ namespace NoPasaranFC.Gameplay
         private const float TackleDistance = 70f; // Scaled for larger sprites
         private const float TackleSuccessBase = 40f; // Base tackle success %
         private const float Gravity = 1200f; // Gravity for ball vertical movement
-        private const float MaxShootHoldTime = 1.5f; // Maximum time to hold shoot button
+        private const float MaxShootHoldTime = 0.8f; // Maximum time to hold shoot button (faster charging)
         // Viewport zoom (adjust to show desired portion of field)
         public const float ZoomLevel = 0.8f; // Higher value = more zoomed in, shows smaller area
         
@@ -218,6 +221,18 @@ namespace NoPasaranFC.Gameplay
                 // Don't update gameplay during countdown, but keep camera following ball
                 Camera.Follow(BallPosition, deltaTime);
                 return;
+            }
+            
+            // Handle goal scored delay (ball continues moving before celebration)
+            if (_goalScored && CurrentState == MatchState.Playing)
+            {
+                _goalCelebrationDelay += deltaTime;
+                if (_goalCelebrationDelay >= GoalCelebrationDelayTime)
+                {
+                    TriggerGoalCelebration();
+                    _goalScored = false;
+                }
+                // Let ball physics continue during delay
             }
             
             // Handle goal celebration
@@ -569,6 +584,9 @@ namespace NoPasaranFC.Gameplay
             // Apply horizontal velocity to ball position
             BallPosition += BallVelocity * deltaTime;
             
+            // Check collision with back of goal net
+            CheckGoalNetCollision();
+            
             // Apply vertical physics (gravity)
             BallVerticalVelocity -= Gravity * deltaTime;
             BallHeight += BallVerticalVelocity * deltaTime;
@@ -821,6 +839,40 @@ namespace NoPasaranFC.Gameplay
             // which is correct behavior for football
         }
         
+        private void CheckGoalNetCollision()
+        {
+            // Calculate goal area boundaries
+            float leftGoalLine = StadiumMargin;
+            float rightGoalLine = StadiumMargin + FieldWidth;
+            float leftNetBack = leftGoalLine - GoalDepth; // Back of left net
+            float rightNetBack = rightGoalLine + GoalDepth; // Back of right net
+            float goalTop = StadiumMargin + (FieldHeight - GoalWidth) / 2;
+            float goalBottom = goalTop + GoalWidth;
+            
+            // Check if ball is inside goal area (within goal width)
+            bool inGoalWidth = BallPosition.Y >= goalTop && BallPosition.Y <= goalBottom;
+            
+            if (inGoalWidth && BallHeight <= GoalPostHeight)
+            {
+                // Check left goal net back collision
+                if (BallPosition.X < leftNetBack && BallVelocity.X < 0)
+                {
+                    // Ball hit back of left net - bounce back lightly
+                    BallPosition = new Vector2(leftNetBack, BallPosition.Y);
+                    BallVelocity = new Vector2(-BallVelocity.X * 0.3f, BallVelocity.Y * 0.8f); // Soft bounce
+                    AudioManager.Instance.PlaySoundEffect("kick_ball", 0.3f, allowRetrigger: false);
+                }
+                // Check right goal net back collision
+                else if (BallPosition.X > rightNetBack && BallVelocity.X > 0)
+                {
+                    // Ball hit back of right net - bounce back lightly
+                    BallPosition = new Vector2(rightNetBack, BallPosition.Y);
+                    BallVelocity = new Vector2(-BallVelocity.X * 0.3f, BallVelocity.Y * 0.8f); // Soft bounce
+                    AudioManager.Instance.PlaySoundEffect("kick_ball", 0.3f, allowRetrigger: false);
+                }
+            }
+        }
+        
         private void CheckGoal()
         {
             float goalTop = StadiumMargin + (FieldHeight - GoalWidth) / 2;
@@ -873,19 +925,25 @@ namespace NoPasaranFC.Gameplay
             // Left goal (home team defends) - Ball must cross the goal line
             if (BallPosition.X < leftGoalLine && 
                 BallPosition.Y >= goalTop && BallPosition.Y <= goalBottom &&
-                ballBelowGoalHeight)
+                ballBelowGoalHeight && !_goalScored)
             {
                 AwayScore++;
-                TriggerGoalCelebration();
+                _goalScored = true;
+                _goalCelebrationDelay = 0f;
+                AudioManager.Instance.PlaySoundEffect("goal");
+                // Don't trigger celebration yet - let ball continue for visual effect
                 return;
             }
             // Right goal (away team defends) - Ball must cross the goal line
             else if (BallPosition.X > rightGoalLine && 
                      BallPosition.Y >= goalTop && BallPosition.Y <= goalBottom &&
-                     ballBelowGoalHeight)
+                     ballBelowGoalHeight && !_goalScored)
             {
                 HomeScore++;
-                TriggerGoalCelebration();
+                _goalScored = true;
+                _goalCelebrationDelay = 0f;
+                AudioManager.Instance.PlaySoundEffect("goal");
+                // Don't trigger celebration yet - let ball continue for visual effect
                 return;
             }
             
@@ -1026,8 +1084,7 @@ namespace NoPasaranFC.Gameplay
         {
             CurrentState = MatchState.GoalCelebration;
             
-            // Play goal sound effects
-            AudioManager.Instance.PlaySoundEffect("goal");
+            // Goal sound already played when goal was detected, just play crowd cheer
             AudioManager.Instance.PlaySoundEffect("crowd_cheer", 1.2f);
             
             // Start celebration with font rendering
