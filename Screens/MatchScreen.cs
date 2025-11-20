@@ -20,7 +20,7 @@ namespace NoPasaranFC.Screens
         private Championship _championship;
         private DatabaseManager _database;
         private ScreenManager _screenManager;
-        private KeyboardState _previousKeyState;
+        private InputHelper _input;
         private Texture2D _pixel;
         private bool _graphicsInitialized;
         private Minimap _minimap;
@@ -56,6 +56,7 @@ namespace NoPasaranFC.Screens
             _championship = championship;
             _database = database;
             _screenManager = screenManager;
+            _input = new Gameplay.InputHelper();
             _matchEngine = new MatchEngine(homeTeam, awayTeam, Game1.ScreenWidth, Game1.ScreenHeight);
             _graphicsInitialized = false;
             _minimap = new Minimap(Game1.ScreenWidth, Game1.ScreenHeight, 150, 100); // Minimap 150x100 pixels
@@ -142,27 +143,26 @@ namespace NoPasaranFC.Screens
                 return;
             }
             
-            var keyState = Keyboard.GetState();
-            Vector2 moveDirection = Vector2.Zero;
+            _input.Update();
             
-            // Movement controls (arrows)
-            if (keyState.IsKeyDown(Keys.Up)) moveDirection.Y -= 1;
-            if (keyState.IsKeyDown(Keys.Down)) moveDirection.Y += 1;
-            if (keyState.IsKeyDown(Keys.Left)) moveDirection.X -= 1;
-            if (keyState.IsKeyDown(Keys.Right)) moveDirection.X += 1;
+            // Get movement direction (supports keyboard arrows/WASD and gamepad left stick/D-pad)
+            Vector2 moveDirection = _input.GetMovementDirection();
             
-            if (moveDirection != Vector2.Zero)
-                moveDirection.Normalize();
-            
-            // Shoot/Tackle with X - now supports holding for power
-            bool isShootKeyDown = keyState.IsKeyDown(Keys.X);
+            // Shoot/Tackle (X key or A button)
+            bool isShootKeyDown = _input.IsShootButtonDown();
             
             _matchEngine.Update(gameTime, moveDirection, isShootKeyDown);
             
-            // Switch player with Space
-            if (keyState.IsKeyDown(Keys.Space) && !_previousKeyState.IsKeyDown(Keys.Space))
+            // Switch player (Space or X button)
+            if (_input.IsSwitchPlayerPressed())
             {
                 _matchEngine.SwitchControlledPlayer();
+            }
+            
+            // Back to menu (Escape or B button)
+            if (_input.IsBackPressed())
+            {
+                IsFinished = true;
             }
             
             // Update player animations
@@ -170,8 +170,6 @@ namespace NoPasaranFC.Screens
             
             // Update ball animation
             UpdateBallAnimation(gameTime);
-            
-            _previousKeyState = keyState;
         }
         
         private void UpdatePlayerAnimations(GameTime gameTime)

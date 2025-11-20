@@ -16,7 +16,8 @@ namespace NoPasaranFC.Screens
         private ScreenManager _screenManager;
         private ContentManager  _contentManager;
         private GraphicsDevice _graphicsDevice;
-        private KeyboardState _previousKeyState;
+        private Gameplay.InputHelper _input;
+        private KeyboardState _previousKeyState; // Still needed for some menu controls
         private int _selectedOption;
         private readonly string[] _menuOptions = { "ΠΡΟΒΟΛΗ ΑΠΟΤΕΛΕΣΜΑΤΩΝ", "ΕΠΟΜΕΝΟΣ ΑΓΩΝΑΣ", "ΝΕΟ ΠΡΩΤΑΘΛΗΜΑ", "ΕΠΙΛΟΓΕΣ", "ΕΞΟΔΟΣ" };
         private bool _inOptionsMenu = false;
@@ -38,6 +39,7 @@ namespace NoPasaranFC.Screens
             _graphicsDevice = graphicsDevice;
             _selectedOption = 0;
             ShouldExit = false;
+            _input = new Gameplay.InputHelper();
             
             // Load logo
             _logo = content.Load<Texture2D>("Sprites/no_pasaran_fc_logo");
@@ -65,7 +67,8 @@ namespace NoPasaranFC.Screens
         
         public override void Update(GameTime gameTime)
         {
-            var keyState = Keyboard.GetState();
+            _input.Update();
+            var keyState = Keyboard.GetState(); // Still needed for some menu controls
             
             // Update grass scroll
             _grassScrollOffset += 50f * (float)gameTime.ElapsedGameTime.TotalSeconds;
@@ -76,40 +79,49 @@ namespace NoPasaranFC.Screens
             
             if (!_inOptionsMenu)
             {
-                // Main menu navigation
-                if (keyState.IsKeyDown(Keys.Down) && !_previousKeyState.IsKeyDown(Keys.Down))
+                // Main menu navigation (keyboard or gamepad)
+                if (_input.IsMenuDownPressed())
                 {
                     _selectedOption = (_selectedOption + 1) % _menuOptions.Length;
                     Gameplay.AudioManager.Instance.PlaySoundEffect("menu_move");
                 }
                 
-                if (keyState.IsKeyDown(Keys.Up) && !_previousKeyState.IsKeyDown(Keys.Up))
+                if (_input.IsMenuUpPressed())
                 {
                     _selectedOption = (_selectedOption - 1 + _menuOptions.Length) % _menuOptions.Length;
                     Gameplay.AudioManager.Instance.PlaySoundEffect("menu_move");
                 }
                 
-                if (keyState.IsKeyDown(Keys.Enter) && !_previousKeyState.IsKeyDown(Keys.Enter))
+                // Confirm selection (Enter or A button)
+                if (_input.IsConfirmPressed())
                 {
                     Gameplay.AudioManager.Instance.PlaySoundEffect("menu_select");
                     HandleSelection();
                 }
+                
+                // Exit (Escape or B button)
+                if (_input.IsBackPressed())
+                {
+                    Gameplay.AudioManager.Instance.PlaySoundEffect("menu_back");
+                    ShouldExit = true;
+                }
             }
             else
             {
-                // Options menu navigation
-                if (keyState.IsKeyDown(Keys.Up) && !_previousKeyState.IsKeyDown(Keys.Up))
+                // Options menu navigation (keyboard or gamepad)
+                if (_input.IsMenuUpPressed())
                 {
                     _optionsSelectedItem = (_optionsSelectedItem - 1 + 5) % 5;
                     Gameplay.AudioManager.Instance.PlaySoundEffect("menu_move");
                 }
                 
-                if (keyState.IsKeyDown(Keys.Down) && !_previousKeyState.IsKeyDown(Keys.Down))
+                if (_input.IsMenuDownPressed())
                 {
                     _optionsSelectedItem = (_optionsSelectedItem + 1) % 5;
                     Gameplay.AudioManager.Instance.PlaySoundEffect("menu_move");
                 }
                 
+                // Left/Right still use keyboard for now (TODO: add gamepad support)
                 if (keyState.IsKeyDown(Keys.Left) && !_previousKeyState.IsKeyDown(Keys.Left))
                 {
                     HandleOptionsChange(-1);
@@ -128,7 +140,8 @@ namespace NoPasaranFC.Screens
                     Gameplay.AudioManager.Instance.PlaySoundEffect("menu_move");
                 }
                 
-                if (keyState.IsKeyDown(Keys.Enter) && !_previousKeyState.IsKeyDown(Keys.Enter))
+                // Confirm (Enter or A button)
+                if (_input.IsConfirmPressed())
                 {
                     Gameplay.AudioManager.Instance.PlaySoundEffect("menu_select");
                     if (_optionsSelectedItem == 4)
@@ -145,7 +158,8 @@ namespace NoPasaranFC.Screens
                     }
                 }
                 
-                if (keyState.IsKeyDown(Keys.Escape) && !_previousKeyState.IsKeyDown(Keys.Escape))
+                // Back (Escape or B button)
+                if (_input.IsBackPressed())
                 {
                     Gameplay.AudioManager.Instance.PlaySoundEffect("menu_back");
                     _inOptionsMenu = false;

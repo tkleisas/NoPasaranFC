@@ -108,33 +108,42 @@ dotnet run
 
 ## 🎮 Controls
 
+**Supports both Keyboard and Xbox-compatible GamePads!**
+
 ### Menu Navigation
-- **Up/Down Arrows**: Navigate menu options
-- **Enter**: Select/confirm
-- **Escape**: Back/exit
+| Action | Keyboard | GamePad |
+|--------|----------|---------|
+| Navigate | Up/Down Arrows | D-Pad / Left Stick |
+| Confirm | Enter | A Button / Start |
+| Back/Exit | Escape | B Button |
 
 ### Lineup Selection
-- **Up/Down Arrows**: Navigate player list
-- **Space**: Toggle player starter/bench status
-- **Page Up/Down**: Quick scroll through roster
-- **Enter**: Confirm lineup (requires 11 starters)
-- **Escape**: Cancel and return to menu
+| Action | Keyboard | GamePad |
+|--------|----------|---------|
+| Navigate | Up/Down Arrows | D-Pad / Left Stick |
+| Toggle Starter | Space | X Button |
+| Quick Scroll | Page Up/Down | — |
+| Confirm Lineup | Enter | A Button |
+| Cancel | Escape | B Button |
 
 ### During Match
-- **Arrow Keys**: Move controlled player
-- **Space**: Switch to nearest visible teammate
-- **X**: 
-  - Tap to pass/shoot quickly
-  - Hold to charge shot (power bar)
-  - Tackle when near opponent with ball
-- **Escape**: Pause/return to menu
+| Action | Keyboard | GamePad |
+|--------|----------|---------|
+| Move Player | Arrow Keys / WASD | Left Stick / D-Pad |
+| Shoot/Pass | X (tap/hold) | A Button (tap/hold) |
+| Switch Player | Space | X Button |
+| Pause/Exit | Escape | B Button |
 
 ### Settings Screen
-- **Up/Down Arrows**: Navigate settings
-- **Left/Right Arrows**: Adjust values
-- **Page Up/Down**: Quick scroll
-- **Enter**: Save and exit
-- **Escape**: Cancel changes
+| Action | Keyboard | GamePad |
+|--------|----------|---------|
+| Navigate | Up/Down Arrows | D-Pad / Left Stick |
+| Adjust Values | Left/Right Arrows | — |
+| Quick Scroll | Page Up/Down | — |
+| Save | Enter | A Button |
+| Cancel | Escape | B Button |
+
+See **GAMEPAD_SUPPORT.md** for detailed controller information.
 
 ## 📁 Game Structure
 
