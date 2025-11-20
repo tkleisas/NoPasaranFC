@@ -130,7 +130,9 @@ namespace NoPasaranFC.Gameplay
         
         private void SetupTeamPositions(Team team, bool isHome)
         {
-            if (team.Players.Count < 11) return;
+            // Get only starting players
+            var startingPlayers = team.Players.Where(p => p.IsStarting).ToList();
+            if (startingPlayers.Count < 11) return;
             
             float xOffset = StadiumMargin;
             float yOffset = StadiumMargin;
@@ -144,30 +146,30 @@ namespace NoPasaranFC.Gameplay
             float goalX = isHome ? xOffset + 50f : xOffset + FieldWidth - 50f;
             
             // Goalkeeper
-            team.Players[0].FieldPosition = new Vector2(goalX, centerY);
-            team.Players[0].HomePosition = new Vector2(goalX, centerY);
+            startingPlayers[0].FieldPosition = new Vector2(goalX, centerY);
+            startingPlayers[0].HomePosition = new Vector2(goalX, centerY);
             
             // Defenders (4) - spread vertically
             float[] defenderY = { 0.2f, 0.4f, 0.6f, 0.8f };
             for (int i = 0; i < 4; i++)
             {
-                team.Players[1 + i].FieldPosition = new Vector2(defenseX, yOffset + FieldHeight * defenderY[i]);
-                team.Players[1 + i].HomePosition = new Vector2(defenseX, yOffset + FieldHeight * defenderY[i]);
+                startingPlayers[1 + i].FieldPosition = new Vector2(defenseX, yOffset + FieldHeight * defenderY[i]);
+                startingPlayers[1 + i].HomePosition = new Vector2(defenseX, yOffset + FieldHeight * defenderY[i]);
             }
             
             // Midfielders (4)
             float[] midfielderY = { 0.2f, 0.4f, 0.6f, 0.8f };
             for (int i = 0; i < 4; i++)
             {
-                team.Players[5 + i].FieldPosition = new Vector2(midfieldX, yOffset + FieldHeight * midfielderY[i]);
-                team.Players[5 + i].HomePosition = new Vector2(midfieldX, yOffset + FieldHeight * midfielderY[i]);
+                startingPlayers[5 + i].FieldPosition = new Vector2(midfieldX, yOffset + FieldHeight * midfielderY[i]);
+                startingPlayers[5 + i].HomePosition = new Vector2(midfieldX, yOffset + FieldHeight * midfielderY[i]);
             }
             
             // Forwards (2)
-            team.Players[9].FieldPosition = new Vector2(attackX, yOffset + FieldHeight * 0.33f);
-            team.Players[9].HomePosition = new Vector2(attackX, yOffset + FieldHeight * 0.33f);
-            team.Players[10].FieldPosition = new Vector2(attackX, yOffset + FieldHeight * 0.67f);
-            team.Players[10].HomePosition = new Vector2(attackX, yOffset + FieldHeight * 0.67f);
+            startingPlayers[9].FieldPosition = new Vector2(attackX, yOffset + FieldHeight * 0.33f);
+            startingPlayers[9].HomePosition = new Vector2(attackX, yOffset + FieldHeight * 0.33f);
+            startingPlayers[10].FieldPosition = new Vector2(attackX, yOffset + FieldHeight * 0.67f);
+            startingPlayers[10].HomePosition = new Vector2(attackX, yOffset + FieldHeight * 0.67f);
         }
         
         public void Update(GameTime gameTime, Vector2 moveDirection, bool isShootKeyDown)

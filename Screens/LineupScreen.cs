@@ -112,16 +112,13 @@ namespace NoPasaranFC.Screens
                 
                 if (player.IsStarting)
                 {
-                    // Can remove from starting lineup if more than 11
-                    if (currentStartingCount > 11)
-                    {
-                        player.IsStarting = false;
-                        Gameplay.AudioManager.Instance.PlaySoundEffect("menu_select");
-                    }
+                    // Always allow removal (user might be swapping players)
+                    player.IsStarting = false;
+                    Gameplay.AudioManager.Instance.PlaySoundEffect("menu_select");
                 }
                 else
                 {
-                    // Can add to starting lineup if less than 11
+                    // Can add to starting lineup only if less than 11
                     if (currentStartingCount < 11)
                     {
                         player.IsStarting = true;
