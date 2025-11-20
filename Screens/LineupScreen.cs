@@ -208,9 +208,9 @@ namespace NoPasaranFC.Screens
             
             // Column headers
             spriteBatch.DrawString(font, "#", new Vector2(xPos, startY - 30), Color.Gray);
-            spriteBatch.DrawString(font, "NAME", new Vector2(xPos + 40, startY - 30), Color.Gray);
-            spriteBatch.DrawString(font, "POS", new Vector2(xPos + 250, startY - 30), Color.Gray);
-            spriteBatch.DrawString(font, "STATUS", new Vector2(xPos + 330, startY - 30), Color.Gray);
+            spriteBatch.DrawString(font, "NAME", new Vector2(xPos + 60, startY - 30), Color.Gray);
+            spriteBatch.DrawString(font, "POS", new Vector2(xPos + 270, startY - 30), Color.Gray);
+            spriteBatch.DrawString(font, "STATUS", new Vector2(xPos + 360, startY - 30), Color.Gray);
             
             // Scroll indicators
             if (_scrollOffset > 0)
@@ -226,7 +226,7 @@ namespace NoPasaranFC.Screens
                 int yPos = startY + (i - _scrollOffset) * lineHeight;
                 
                 Color bgColor = i == _selectedIndex ? new Color(80, 120, 80, 200) : new Color(40, 60, 40, 100);
-                spriteBatch.Draw(_pixel, new Rectangle(xPos - 5, yPos - 5, 450, lineHeight), bgColor);
+                spriteBatch.Draw(_pixel, new Rectangle(xPos - 5, yPos - 5, 550, lineHeight), bgColor);
                 
                 Color textColor = i == _selectedIndex ? Color.Yellow : Color.White;
                 
@@ -235,17 +235,17 @@ namespace NoPasaranFC.Screens
                 
                 // Name (truncated if too long)
                 string displayName = player.Name.Length > 15 ? player.Name.Substring(0, 15) : player.Name;
-                spriteBatch.DrawString(font, displayName, new Vector2(xPos + 40, yPos), textColor);
+                spriteBatch.DrawString(font, displayName, new Vector2(xPos + 60, yPos), textColor);
                 
                 // Position
                 string posText = GetPositionAbbreviation(player.Position);
-                spriteBatch.DrawString(font, posText, new Vector2(xPos + 250, yPos), textColor);
+                spriteBatch.DrawString(font, posText, new Vector2(xPos + 270, yPos), textColor);
                 
                 // Starting status
                 string statusText = player.IsStarting ? "[STARTER]" : "[BENCH]";
                 Color statusColor = player.IsStarting ? Color.LightGreen : Color.Gray;
                 if (i == _selectedIndex) statusColor = Color.Yellow;
-                spriteBatch.DrawString(font, statusText, new Vector2(xPos + 330, yPos), statusColor);
+                spriteBatch.DrawString(font, statusText, new Vector2(xPos + 360, yPos), statusColor);
             }
             
             if (endIndex < _allPlayers.Count)
