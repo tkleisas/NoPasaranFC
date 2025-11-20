@@ -8,7 +8,6 @@ namespace NoPasaranFC.Gameplay
         public float Zoom { get; set; }
         
         private Vector2 _targetPosition;
-        private float _smoothSpeed;
         
         public int ViewportWidth { get; set; }
         public int ViewportHeight { get; set; }
@@ -19,15 +18,15 @@ namespace NoPasaranFC.Gameplay
             ViewportHeight = viewportHeight;
             Zoom = zoom;
             Position = Vector2.Zero;
-            _smoothSpeed = 5f;
         }
         
         public void Follow(Vector2 targetPosition, float deltaTime)
         {
             _targetPosition = targetPosition;
             
-            // Smooth camera movement
-            Position = Vector2.Lerp(Position, _targetPosition, _smoothSpeed * deltaTime);
+            // Smooth camera movement using settings
+            float smoothSpeed = Models.GameSettings.Instance.CameraSpeed * 50f; // Scale to reasonable range
+            Position = Vector2.Lerp(Position, _targetPosition, smoothSpeed * deltaTime);
         }
         
         public Matrix GetTransformMatrix()

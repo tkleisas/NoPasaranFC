@@ -519,15 +519,15 @@ namespace NoPasaranFC.Screens
             // Center line
             spriteBatch.Draw(_pixel, new Rectangle((int)centerX - 2, (int)margin, lineThickness, (int)MatchEngine.FieldHeight), lineColor);
             
-            // Center circle (radius 200)
-            DrawCircle(spriteBatch, new Vector2(centerX, centerY), 200f, lineColor, lineThickness);
+            // Center circle (FIFA: 9.15m radius = 668px @ 73px/m)
+            DrawCircle(spriteBatch, new Vector2(centerX, centerY), 668f, lineColor, lineThickness);
             
             // Center spot
-            DrawCircle(spriteBatch, new Vector2(centerX, centerY), 8f, lineColor, 8);
+            DrawCircle(spriteBatch, new Vector2(centerX, centerY), 10f, lineColor, 10);
             
-            // Penalty areas
-            float penaltyWidth = 800f;   // Width of penalty area
-            float penaltyDepth = 300f;   // Depth into field
+            // Penalty areas (FIFA: 40.3m wide × 16.5m deep)
+            float penaltyWidth = 2942f;   // 40.3m × 73px/m
+            float penaltyDepth = 1205f;   // 16.5m × 73px/m
             float penaltyTop = centerY - penaltyWidth / 2;
             
             // Left penalty area
@@ -535,22 +535,22 @@ namespace NoPasaranFC.Screens
                 new Rectangle((int)margin, (int)penaltyTop, (int)penaltyDepth, (int)penaltyWidth),
                 lineColor, lineThickness);
             
-            // Left penalty spot
-            Vector2 leftPenaltySpot = new Vector2(margin + 180f, centerY);
-            DrawCircle(spriteBatch, leftPenaltySpot, 8f, lineColor, 8);
+            // Left penalty spot (11m from goal line = 803px)
+            Vector2 leftPenaltySpot = new Vector2(margin + 803f, centerY);
+            DrawCircle(spriteBatch, leftPenaltySpot, 10f, lineColor, 10);
             
             // Right penalty area
             DrawRectangleOutline(spriteBatch, _pixel,
                 new Rectangle((int)(margin + MatchEngine.FieldWidth - penaltyDepth), (int)penaltyTop, (int)penaltyDepth, (int)penaltyWidth),
                 lineColor, lineThickness);
             
-            // Right penalty spot
-            Vector2 rightPenaltySpot = new Vector2(margin + MatchEngine.FieldWidth - 180f, centerY);
-            DrawCircle(spriteBatch, rightPenaltySpot, 8f, lineColor, 8);
+            // Right penalty spot (11m from goal line = 803px)
+            Vector2 rightPenaltySpot = new Vector2(margin + MatchEngine.FieldWidth - 803f, centerY);
+            DrawCircle(spriteBatch, rightPenaltySpot, 10f, lineColor, 10);
             
-            // Goal areas (6-yard box)
-            float goalAreaWidth = 400f;
-            float goalAreaDepth = 150f;
+            // Goal areas / 6-yard box (FIFA: 18.3m wide × 5.5m deep)
+            float goalAreaWidth = 1336f;  // 18.3m × 73px/m
+            float goalAreaDepth = 402f;   // 5.5m × 73px/m
             float goalAreaTop = centerY - goalAreaWidth / 2;
             
             // Left goal area
@@ -563,8 +563,8 @@ namespace NoPasaranFC.Screens
                 new Rectangle((int)(margin + MatchEngine.FieldWidth - goalAreaDepth), (int)goalAreaTop, (int)goalAreaDepth, (int)goalAreaWidth),
                 lineColor, lineThickness);
             
-            // Corner arcs
-            float cornerRadius = 80f;
+            // Corner arcs (FIFA: 1m radius = 73px)
+            float cornerRadius = 73f;
             
             // Top-left corner
             DrawArc(spriteBatch, new Vector2(margin, margin), cornerRadius, 0, MathHelper.PiOver2, lineColor, lineThickness);
@@ -610,9 +610,11 @@ namespace NoPasaranFC.Screens
         {
             float margin = MatchEngine.StadiumMargin;
             float centerY = margin + MatchEngine.FieldHeight / 2;
-            float goalWidth = 400f;
-            float goalDepth = 60f;
-            float goalHeight = 200f; // Height of goal posts
+            
+            // Use properly scaled goal dimensions from MatchEngine
+            float goalWidth = MatchEngine.GoalWidth;   // 534px (7.32m)
+            float goalDepth = MatchEngine.GoalDepth;   // 60px (visual depth)
+            float goalHeight = MatchEngine.GoalPostHeight; // 200px (2.44m)
             
             // === LEFT GOAL ===
             DrawGoalStructure(spriteBatch, margin - goalDepth, centerY - goalWidth / 2, 
@@ -630,31 +632,27 @@ namespace NoPasaranFC.Screens
             DrawGoalNet(spriteBatch, x, y, depth, width, height, facingRight);
             
             // Draw goal posts and crossbar (in front of net)
+            // Real goalposts: ~12cm diameter = ~9px at our scale
             Color postColor = Color.White;
-            int postThickness = 8;
+            int postThickness = 10;
             
             float goalLineX = facingRight ? x + depth : x;
             
-            // Left/Top post (vertical)
-            spriteBatch.Draw(_pixel, new Rectangle(
-                (int)goalLineX - postThickness / 2, 
-                (int)y - postThickness / 2, 
-                postThickness, 
-                postThickness), postColor);
+            // In top-down view, we only see the crossbar (horizontal line connecting the two posts)
+            // The "posts" are represented as circles at each end
             
-            // Right/Bottom post (vertical)
-            spriteBatch.Draw(_pixel, new Rectangle(
-                (int)goalLineX - postThickness / 2, 
-                (int)(y + width) - postThickness / 2, 
-                postThickness, 
-                postThickness), postColor);
+            // Left/Top post (circle at top of goal)
+            DrawCircle(spriteBatch, new Vector2(goalLineX, y), postThickness / 2f, postColor, postThickness);
             
-            // Crossbar (horizontal) - at the top
+            // Right/Bottom post (circle at bottom of goal)
+            DrawCircle(spriteBatch, new Vector2(goalLineX, y + width), postThickness / 2f, postColor, postThickness);
+            
+            // Crossbar (horizontal line connecting posts)
             spriteBatch.Draw(_pixel, new Rectangle(
                 (int)goalLineX - postThickness / 2, 
-                (int)y - postThickness / 2, 
+                (int)y, 
                 postThickness, 
-                (int)width + postThickness), postColor);
+                (int)width), postColor);
         }
         
         private void DrawGoalNet(SpriteBatch spriteBatch, float x, float y, 

@@ -37,16 +37,19 @@ namespace NoPasaranFC.Gameplay
         public bool IsMatchOver => MatchTime >= 90f;
         public Camera Camera { get; private set; }
         
-        // Larger field with stadium area (scaled up for 64x64 sprites)
-        public const float FieldWidth = 6400f;  // 2x larger than before
-        public const float FieldHeight = 4800f; // 2x larger than before
-        public const float StadiumMargin = 400f; // Space for stadium stands (2x larger)
+        // Field dimensions scaled to player size
+        // Player sprite (128px rendered) ≈ 1.75m tall → 73 pixels per meter
+        // FIFA standard pitch: 105m × 68m
+        public const float FieldWidth = 7665f;  // 105m × 73px/m
+        public const float FieldHeight = 4964f; // 68m × 73px/m
+        public const float StadiumMargin = 400f; // Space for stadium stands
         public const float TotalWidth = FieldWidth + (StadiumMargin * 2);
         public const float TotalHeight = FieldHeight + (StadiumMargin * 2);
         
-        // Goal dimensions
-        private const float GoalWidth = 400f; // 2x larger
-        private const float GoalDepth = 60f;  // 2x larger
+        // Goal dimensions (FIFA standard: 7.32m wide)
+        public const float GoalWidth = 534f; // 7.32m × 73px/m
+        public const float GoalDepth = 60f;  // Visual depth for goal net
+        public const float GoalPostHeight = 200f; // Height of goal posts (2.44m in real life)
         
         // Ball physics
         private const float BallFriction = 0.95f;
@@ -56,8 +59,6 @@ namespace NoPasaranFC.Gameplay
         private const float TackleSuccessBase = 40f; // Base tackle success %
         private const float Gravity = 1200f; // Gravity for ball vertical movement
         private const float MaxShootHoldTime = 1.5f; // Maximum time to hold shoot button
-        private const float GoalPostHeight = 200f; // Height of goal posts
-        
         // Viewport zoom (adjust to show desired portion of field)
         public const float ZoomLevel = 0.8f; // Higher value = more zoomed in, shows smaller area
         
@@ -80,8 +81,9 @@ namespace NoPasaranFC.Gameplay
             BallHeight = 0f;
             BallVerticalVelocity = 0f;
             
-            // Initialize camera
-            Camera = new Camera(viewportWidth, viewportHeight, ZoomLevel);
+            // Initialize camera with settings
+            float zoom = GameSettings.Instance.CameraZoom * ZoomLevel; // Apply both base zoom and user zoom
+            Camera = new Camera(viewportWidth, viewportHeight, zoom);
             
             // Initialize referee position (center of field)
             RefereePosition = new Vector2(StadiumMargin + FieldWidth / 2, StadiumMargin + FieldHeight / 2);
@@ -276,6 +278,8 @@ namespace NoPasaranFC.Gameplay
             UpdateReferee(deltaTime);
             
             // Update camera to follow ball smoothly
+            // Also update zoom in case settings changed
+            Camera.Zoom = GameSettings.Instance.CameraZoom * ZoomLevel;
             Camera.Follow(BallPosition, deltaTime);
             
             // Check for goals
@@ -806,41 +810,12 @@ namespace NoPasaranFC.Gameplay
         
         private void ClampBallToField()
         {
-            float goalTop = StadiumMargin + (FieldHeight - GoalWidth) / 2;
-            float goalBottom = goalTop + GoalWidth;
+            // Don't clamp - let the ball go out of bounds!
+            // CheckGoal() will handle out-of-bounds detection and restarts
+            // This allows proper throw-ins, corners, and goal kicks
             
-            // Check if ball is in goal area (horizontally)
-            bool inLeftGoalArea = BallPosition.X < StadiumMargin && 
-                                  BallPosition.Y >= goalTop && BallPosition.Y <= goalBottom;
-            bool inRightGoalArea = BallPosition.X > StadiumMargin + FieldWidth && 
-                                   BallPosition.Y >= goalTop && BallPosition.Y <= goalBottom;
-            
-            // Only clamp X if NOT in goal area (allow goals to happen)
-            if (!inLeftGoalArea && !inRightGoalArea)
-            {
-                if (BallPosition.X < StadiumMargin)
-                {
-                    BallPosition = new Vector2(StadiumMargin, BallPosition.Y);
-                    BallVelocity = new Vector2(-BallVelocity.X * 0.5f, BallVelocity.Y);
-                }
-                else if (BallPosition.X > StadiumMargin + FieldWidth)
-                {
-                    BallPosition = new Vector2(StadiumMargin + FieldWidth, BallPosition.Y);
-                    BallVelocity = new Vector2(-BallVelocity.X * 0.5f, BallVelocity.Y);
-                }
-            }
-            
-            // Always clamp Y (top/bottom boundaries)
-            if (BallPosition.Y < StadiumMargin)
-            {
-                BallPosition = new Vector2(BallPosition.X, StadiumMargin);
-                BallVelocity = new Vector2(BallVelocity.X, -BallVelocity.Y * 0.5f);
-            }
-            else if (BallPosition.Y > StadiumMargin + FieldHeight)
-            {
-                BallPosition = new Vector2(BallPosition.X, StadiumMargin + FieldHeight);
-                BallVelocity = new Vector2(BallVelocity.X, -BallVelocity.Y * 0.5f);
-            }
+            // Note: The ball can now travel beyond the field boundaries
+            // which is correct behavior for football
         }
         
         private void CheckGoal()
