@@ -28,7 +28,7 @@ namespace NoPasaranFC.Models
         public int Defending { get; set; }
         public int Agility { get; set; }
         public int Technique { get; set; }
-        public int Stamina { get; set; }
+        public float Stamina { get; set; }
         
         // In-game state
         public bool IsControlled { get; set; }
@@ -37,6 +37,9 @@ namespace NoPasaranFC.Models
         // Collision and knockdown state
         public bool IsKnockedDown { get; set; }
         public float KnockdownTimer { get; set; }
+        
+        // Ball control cooldown
+        public float LastKickTime { get; set; }
         
         // Animation state (NEW SYSTEM)
         public PlayerAnimationSystem AnimationSystem { get; set; }
@@ -76,6 +79,7 @@ namespace NoPasaranFC.Models
             CurrentAnimationState = "walk";
             IsStarting = false;
             ShirtNumber = 0;
+            LastKickTime = 0f;
         }
         
         public Player() { }

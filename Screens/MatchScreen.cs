@@ -320,8 +320,7 @@ namespace NoPasaranFC.Screens
             // Save to database
             _database.SaveChampionship(_championship);
             
-            // Play end whistle and return to menu music
-            Gameplay.AudioManager.Instance.PlaySoundEffect("whistle_end");
+            // Return to menu music (whistle already played in MatchEngine)
             Gameplay.AudioManager.Instance.PlayMusic("menu_music");
             
             // Return to menu - pop back to MenuScreen (skipping LineupScreen if present)
@@ -891,6 +890,40 @@ namespace NoPasaranFC.Screens
                     // If name rendering fails (e.g., unsupported characters), skip it
                     System.Diagnostics.Debug.WriteLine($"Failed to render name: {player.Name}");
                 }
+            }
+            
+            // Draw stamina bar below player (if ShowStamina is enabled)
+            if (GameSettings.Instance.ShowStamina && !player.IsKnockedDown)
+            {
+                int staminaBarWidth = 50;
+                int staminaBarHeight = 6; // Increased from 4 to 6 for better visibility
+                int staminaBarX = (int)(pos.X - staminaBarWidth / 2);
+                int staminaBarY = (int)(pos.Y + renderSize / 2 + 8); // Below player
+                
+                float staminaPercent = player.Stamina / 100f;
+                
+                // Background (dark gray)
+                spriteBatch.Draw(_pixel, new Rectangle(staminaBarX, staminaBarY, staminaBarWidth, staminaBarHeight), 
+                    new Color(40, 40, 40, 200));
+                
+                // Stamina fill (color based on stamina level)
+                Color staminaColor;
+                if (staminaPercent > 0.6f)
+                    staminaColor = new Color(0, 255, 0); // Green
+                else if (staminaPercent > 0.3f)
+                    staminaColor = new Color(255, 200, 0); // Yellow/Orange
+                else
+                    staminaColor = new Color(255, 0, 0); // Red (low stamina)
+                
+                int fillWidth = (int)(staminaBarWidth * staminaPercent);
+                if (fillWidth > 0)
+                {
+                    spriteBatch.Draw(_pixel, new Rectangle(staminaBarX, staminaBarY, fillWidth, staminaBarHeight), staminaColor);
+                }
+                
+                // Border
+                DrawRectangleOutline(spriteBatch, _pixel, new Rectangle(staminaBarX, staminaBarY, staminaBarWidth, staminaBarHeight), 
+                    Color.White, 1);
             }
         }
         

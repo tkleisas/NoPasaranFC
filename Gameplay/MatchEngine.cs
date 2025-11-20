@@ -35,6 +35,7 @@ namespace NoPasaranFC.Gameplay
         private bool _goalScored = false;
         private float _goalCelebrationDelay = 0f;
         private const float GoalCelebrationDelayTime = 0.5f; // Half second delay to see ball in goal
+        private const float AutoKickCooldown = 0.3f; // Cooldown between automatic kicks (300ms)
         public int HomeScore { get; private set; }
         public int AwayScore { get; private set; }
         public float MatchTime { get; private set; }
@@ -58,11 +59,19 @@ namespace NoPasaranFC.Gameplay
         // Ball physics
         private const float BallFriction = 0.95f;
         private const float BallPossessionDistance = 80f; // Scaled for larger sprites
-        private const float BallKickDistance = 50f; // Scaled for larger sprites
+        private const float BallKickDistance = 35f; // Reduced from 50f for tighter control
         private const float TackleDistance = 70f; // Scaled for larger sprites
         private const float TackleSuccessBase = 40f; // Base tackle success %
         private const float Gravity = 1200f; // Gravity for ball vertical movement
+        private const float PlayerPersonalSpace = 80f; // Minimum distance between AI players
         private const float MaxShootHoldTime = 0.8f; // Maximum time to hold shoot button (faster charging)
+        
+        // Stamina system
+        private const float StaminaDecreasePerSecondRunning = 3f; // Stamina lost per second while running
+        private const float StaminaDecreasePerShot = 5f; // Stamina lost per shot/tackle
+        private const float StaminaRecoveryPerSecond = 2f; // Stamina recovered per second when idle
+        private const float LowStaminaThreshold = 30f; // Below this, player is affected
+        
         // Viewport zoom (adjust to show desired portion of field)
         public const float ZoomLevel = 0.8f; // Higher value = more zoomed in, shows smaller area
         
@@ -119,6 +128,12 @@ namespace NoPasaranFC.Gameplay
             
             // Ball at center
             BallPosition = new Vector2(StadiumMargin + FieldWidth / 2, StadiumMargin + FieldHeight / 2);
+            
+            // Clear all IsControlled flags first (ensure only one player is controlled)
+            foreach (var player in _homeTeam.Players)
+                player.IsControlled = false;
+            foreach (var player in _awayTeam.Players)
+                player.IsControlled = false;
             
             // Find the first starting player from controlled team
             var controlledTeamPlayers = _homeTeam.IsPlayerControlled ? 
@@ -284,6 +299,12 @@ namespace NoPasaranFC.Gameplay
             // Update all players
             UpdatePlayers(deltaTime, moveDirection, isShootKeyDown);
             
+            // Ensure only the controlled player has IsControlled = true (safeguard)
+            foreach (var player in _homeTeam.Players.Concat(_awayTeam.Players))
+            {
+                player.IsControlled = (player == _controlledPlayer);
+            }
+            
             // Check for collisions between players
             CheckPlayerCollisions(deltaTime);
             
@@ -368,25 +389,39 @@ namespace NoPasaranFC.Gameplay
                     // Normal movement (only if not knocked down)
                     if (moveDirection.Length() > 0)
                     {
-                        float moveSpeed = _controlledPlayer.Speed * 3f * GameSettings.Instance.PlayerSpeedMultiplier;
+                        // Apply stamina speed multiplier
+                        float staminaMultiplier = GetStaminaSpeedMultiplier(_controlledPlayer);
+                        float moveSpeed = _controlledPlayer.Speed * 3f * GameSettings.Instance.PlayerSpeedMultiplier * staminaMultiplier;
                         var newPosition = _controlledPlayer.FieldPosition + moveDirection * moveSpeed * deltaTime;
                         _controlledPlayer.Velocity = moveDirection * moveSpeed;
                         ClampToField(ref newPosition);
                         _controlledPlayer.FieldPosition = newPosition;
                         
-                        // If controlled player is near ball and moving, kick it
-                        float distToBallForKick = Vector2.Distance(_controlledPlayer.FieldPosition, BallPosition);
-                        if (distToBallForKick < BallKickDistance && moveDirection.Length() > 0.1f)
+                        // Decrease stamina while running
+                        _controlledPlayer.Stamina = Math.Max(0, _controlledPlayer.Stamina - StaminaDecreasePerSecondRunning * deltaTime);
+                        
+                        // If controlled player is near ball and moving, kick it (with angle check and cooldown)
+                        // Don't kick if ball is in the air (prevents headbutting glitch)
+                        if (moveDirection.Length() > 0.1f && BallHeight < 50f && CanPlayerKickBall(_controlledPlayer, moveDirection, BallKickDistance))
                         {
-                            // Kick ball in movement direction
-                            float kickPower = _controlledPlayer.Shooting / 10f + 5f;
-                            BallVelocity = moveDirection * kickPower * _controlledPlayer.Speed;
-                            AudioManager.Instance.PlaySoundEffect("kick_ball", 0.6f, allowRetrigger: false);
+                            // Check cooldown to prevent continuous juggling
+                            float timeSinceLastKick = (float)MatchTime - _controlledPlayer.LastKickTime;
+                            if (timeSinceLastKick >= AutoKickCooldown)
+                            {
+                                // Kick ball in movement direction with stamina effect
+                                float staminaStatMultiplier = GetStaminaStatMultiplier(_controlledPlayer);
+                                float kickPower = (_controlledPlayer.Shooting / 8f + 6f) * staminaStatMultiplier;
+                                BallVelocity = moveDirection * kickPower * _controlledPlayer.Speed * 1.2f;
+                                AudioManager.Instance.PlaySoundEffect("kick_ball", 0.6f, allowRetrigger: false);
+                                _controlledPlayer.LastKickTime = (float)MatchTime;
+                            }
                         }
                     }
                     else
                     {
                         _controlledPlayer.Velocity = Vector2.Zero;
+                        // Recover stamina when idle
+                        _controlledPlayer.Stamina = Math.Min(100, _controlledPlayer.Stamina + StaminaRecoveryPerSecond * deltaTime);
                     }
                 }
             }
@@ -424,6 +459,9 @@ namespace NoPasaranFC.Gameplay
             
             float distanceToBall = Vector2.Distance(player.FieldPosition, BallPosition);
             
+            // Determine if this player should chase the ball (anti-clustering logic)
+            bool shouldChaseBall = ShouldPlayerChaseBall(player);
+            
             Vector2 targetPosition;
             float urgency;
             
@@ -439,13 +477,75 @@ namespace NoPasaranFC.Gameplay
             else switch (player.Position)
             {
                 case PlayerPosition.Goalkeeper:
-                    if (distanceToBall < 150f)
+                    // Smart goalkeeper positioning
+                    bool isHomeGK = player.TeamId == _homeTeam.Id;
+                    float penaltyDepth = 1205f; // 16.5m × 73px/m
+                    float penaltyWidth = 2942f; // 40.3m × 73px/m
+                    float centerY = StadiumMargin + FieldHeight / 2;
+                    float penaltyTop = centerY - penaltyWidth / 2;
+                    float penaltyBottom = centerY + penaltyWidth / 2;
+                    
+                    // Define penalty area boundaries for this goalkeeper
+                    float penaltyLeft, penaltyRight;
+                    if (isHomeGK)
                     {
+                        penaltyLeft = StadiumMargin;
+                        penaltyRight = StadiumMargin + penaltyDepth;
+                    }
+                    else
+                    {
+                        penaltyLeft = StadiumMargin + FieldWidth - penaltyDepth;
+                        penaltyRight = StadiumMargin + FieldWidth;
+                    }
+                    
+                    // Check if any opponent has the ball in penalty area
+                    var opponentTeam = isHomeGK ? _awayTeam : _homeTeam;
+                    Player closestOpponentInBox = null;
+                    float closestOpponentDist = float.MaxValue;
+                    
+                    foreach (var opponent in opponentTeam.Players.Where(p => p.IsStarting && !p.IsKnockedDown))
+                    {
+                        float distToBallFromOpponent = Vector2.Distance(opponent.FieldPosition, BallPosition);
+                        
+                        // Check if opponent is close to ball and in penalty area
+                        if (distToBallFromOpponent < 100f && 
+                            opponent.FieldPosition.X >= penaltyLeft && 
+                            opponent.FieldPosition.X <= penaltyRight &&
+                            opponent.FieldPosition.Y >= penaltyTop && 
+                            opponent.FieldPosition.Y <= penaltyBottom)
+                        {
+                            float distToGK = Vector2.Distance(player.FieldPosition, opponent.FieldPosition);
+                            if (distToGK < closestOpponentDist)
+                            {
+                                closestOpponentDist = distToGK;
+                                closestOpponentInBox = opponent;
+                            }
+                        }
+                    }
+                    
+                    if (closestOpponentInBox != null)
+                    {
+                        // Opponent with ball in penalty area - move vertically to intercept
+                        // Stay on goal line but adjust Y position to match opponent
+                        float goalLineX = isHomeGK ? StadiumMargin + 50f : StadiumMargin + FieldWidth - 50f;
+                        targetPosition = new Vector2(goalLineX, closestOpponentInBox.FieldPosition.Y);
+                        
+                        // Clamp to goal width (don't go outside the posts)
+                        float goalTop = StadiumMargin + (FieldHeight - GoalWidth) / 2;
+                        float goalBottom = goalTop + GoalWidth;
+                        targetPosition.Y = Math.Clamp(targetPosition.Y, goalTop + 64f, goalBottom - 64f);
+                        
+                        urgency = 1.0f;
+                    }
+                    else if (distanceToBall < 150f)
+                    {
+                        // Ball is close but no opponent in box - chase it
                         targetPosition = BallPosition;
                         urgency = 1.0f;
                     }
                     else
                     {
+                        // Default: stay at home position
                         targetPosition = player.HomePosition;
                         urgency = 0.3f;
                     }
@@ -453,7 +553,7 @@ namespace NoPasaranFC.Gameplay
                 
                 case PlayerPosition.Defender:
                     bool ballInDefHalf = IsBallInHalf(player.TeamId);
-                    if (ballInDefHalf || distanceToBall < 200f)
+                    if (shouldChaseBall && (ballInDefHalf || distanceToBall < 200f))
                     {
                         targetPosition = BallPosition;
                         urgency = 0.8f;
@@ -466,7 +566,7 @@ namespace NoPasaranFC.Gameplay
                     break;
                 
                 case PlayerPosition.Midfielder:
-                    if (distanceToBall < 300f)
+                    if (shouldChaseBall && distanceToBall < 300f)
                     {
                         targetPosition = BallPosition;
                         urgency = 0.9f;
@@ -479,7 +579,7 @@ namespace NoPasaranFC.Gameplay
                     break;
                 
                 case PlayerPosition.Forward:
-                    if (distanceToBall < 250f)
+                    if (shouldChaseBall && distanceToBall < 250f)
                     {
                         targetPosition = BallPosition;
                         urgency = 1.0f;
@@ -507,19 +607,40 @@ namespace NoPasaranFC.Gameplay
             Vector2 direction = targetPosition - player.FieldPosition;
             float distance = direction.Length();
             
-            if (distance > 15f)
+            // Stop closer to target for tighter control (reduced from 15f to 10f)
+            if (distance > 10f)
             {
                 direction.Normalize();
-                float moveSpeed = player.Speed * 2.5f * urgency * GameSettings.Instance.PlayerSpeedMultiplier;
+                
+                // Apply teammate avoidance to prevent overlapping players chasing same target
+                direction = ApplyTeammateAvoidance(player, direction);
+                
+                // Apply stamina and difficulty modifiers
+                float staminaMultiplier = GetStaminaSpeedMultiplier(player);
+                float difficultyMultiplier = GetAIDifficultyModifier();
+                float reactionMultiplier = GetAIReactionTimeMultiplier();
+                
+                // AI is affected by difficulty and stamina
+                float moveSpeed = player.Speed * 2.5f * urgency * GameSettings.Instance.PlayerSpeedMultiplier * 
+                                staminaMultiplier * difficultyMultiplier;
+                
                 var newPosition = player.FieldPosition + direction * moveSpeed * deltaTime;
                 player.Velocity = direction * moveSpeed; // Store velocity for collision
                 ClampToField(ref newPosition);
                 player.FieldPosition = newPosition;
                 
-                // If AI player is near ball and moving toward it, kick it (only if ball is on ground)
-                if (distanceToBall < BallKickDistance && urgency > 0.7f && BallHeight < 50f)
+                // Decrease stamina while running (AI also gets tired)
+                player.Stamina = Math.Max(0, player.Stamina - StaminaDecreasePerSecondRunning * deltaTime);
+                
+                // If AI player is near ball and moving toward it, kick it (with angle check and cooldown)
+                // Don't kick if ball is in the air (prevents headbutting glitch)
+                if (urgency > 0.7f && BallHeight < 50f && CanPlayerKickBall(player, direction, BallKickDistance))
                 {
-                    // Kick ball toward opponent goal (aim AT the goal, not before it)
+                    // Check cooldown to prevent continuous juggling
+                    float timeSinceLastKick = (float)MatchTime - player.LastKickTime;
+                    if (timeSinceLastKick >= AutoKickCooldown)
+                    {
+                        // Kick ball toward opponent goal (aim AT the goal, not before it)
                     bool isHomeTeam = player.TeamId == _homeTeam.Id;
                     
                     // Aim at the goal center, with slight variation for realism
@@ -539,9 +660,16 @@ namespace NoPasaranFC.Gameplay
                     if (goalDirection.Length() > 0)
                     {
                         goalDirection.Normalize();
-                        float kickPower = player.Shooting / 15f + 3f;
-                        BallVelocity = goalDirection * kickPower * player.Speed * 0.7f;
+                        
+                        // Apply stamina and difficulty to AI shooting
+                        float staminaStatMultiplier = GetStaminaStatMultiplier(player);
+                        float aiDifficultyModifier = GetAIDifficultyModifier();
+                        float kickPower = (player.Shooting / 8f + 6f) * staminaStatMultiplier * aiDifficultyModifier;
+                        BallVelocity = goalDirection * kickPower * player.Speed;
                         _lastPlayerTouchedBall = player;
+                        
+                        // Decrease stamina for shooting
+                        player.Stamina = Math.Max(0, player.Stamina - StaminaDecreasePerShot);
                         
                         // AI can do varied shots based on shooting skill and distance to goal
                         float distToGoal = Vector2.Distance(BallPosition, new Vector2(targetGoalX, targetGoalY));
@@ -569,6 +697,10 @@ namespace NoPasaranFC.Gameplay
                         
                         // Play kick sound
                         AudioManager.Instance.PlaySoundEffect("kick_ball", 0.5f, allowRetrigger: false);
+                        
+                        // Update last kick time
+                        player.LastKickTime = (float)MatchTime;
+                    }
                     }
                 }
             }
@@ -576,6 +708,8 @@ namespace NoPasaranFC.Gameplay
             {
                 // Player reached target, stop moving
                 player.Velocity = Vector2.Zero;
+                // Recover stamina when idle
+                player.Stamina = Math.Min(100, player.Stamina + StaminaRecoveryPerSecond * deltaTime);
             }
         }
         
@@ -809,15 +943,19 @@ namespace NoPasaranFC.Gameplay
                 shootDirection.Normalize();
             }
             
-            // Calculate horizontal and vertical velocity
-            float basePower = _controlledPlayer.Shooting / 10f + 5f;
+            // Calculate horizontal and vertical velocity with stamina effect
+            float staminaMultiplier = GetStaminaStatMultiplier(_controlledPlayer);
+            float basePower = (_controlledPlayer.Shooting / 10f + 5f) * staminaMultiplier;
             float horizontalPower = basePower * (1f + power * 2f); // More power = faster
             BallVelocity = shootDirection * horizontalPower * _controlledPlayer.Speed;
             _lastPlayerTouchedBall = _controlledPlayer;
             
             // Calculate vertical velocity (height)
             // More hold time = higher shot
-            BallVerticalVelocity = power * 800f; // Max height with max hold
+            BallVerticalVelocity = power * 800f * staminaMultiplier; // Max height with max hold
+            
+            // Decrease stamina for shooting
+            _controlledPlayer.Stamina = Math.Max(0, _controlledPlayer.Stamina - StaminaDecreasePerShot);
             
             // Play kick sound (louder for shooting)
             AudioManager.Instance.PlaySoundEffect("kick_ball", 0.8f + power * 0.4f, allowRetrigger: false);
@@ -1103,6 +1241,112 @@ namespace NoPasaranFC.Gameplay
             BallVerticalVelocity = 0f;
         }
         
+        private bool ShouldPlayerChaseBall(Player player)
+        {
+            // Prevent clustering: only allow closest player per team to actively chase the ball
+            // The 2nd closest should support but not rush directly to ball
+            
+            var team = player.TeamId == _homeTeam.Id ? _homeTeam : _awayTeam;
+            
+            // Get all non-knocked-down, non-goalkeeper teammates
+            var activeTeammates = team.Players
+                .Where(p => p.IsStarting && !p.IsKnockedDown && p.Position != PlayerPosition.Goalkeeper)
+                .ToList();
+            
+            // Get distances to ball for all teammates
+            var teamDistances = activeTeammates
+                .Select(p => new { Player = p, Distance = Vector2.Distance(p.FieldPosition, BallPosition) })
+                .OrderBy(x => x.Distance)
+                .ToList();
+            
+            // Find current player's rank
+            int playerRank = teamDistances.FindIndex(x => x.Player == player);
+            
+            // Goalkeeper can always chase if ball is close
+            if (player.Position == PlayerPosition.Goalkeeper)
+            {
+                return true; // Goalkeeper logic already has its own distance check
+            }
+            
+            // Only the closest non-goalkeeper player should actively chase
+            // The 2nd closest will support but with different positioning (handled elsewhere)
+            return playerRank == 0;
+        }
+        
+        private Vector2 ApplyTeammateAvoidance(Player player, Vector2 desiredDirection)
+        {
+            // Apply separation force to avoid clustering with teammates
+            var team = player.TeamId == _homeTeam.Id ? _homeTeam : _awayTeam;
+            Vector2 separationForce = Vector2.Zero;
+            int nearbyCount = 0;
+            
+            foreach (var teammate in team.Players.Where(p => p.IsStarting && p != player && !p.IsKnockedDown))
+            {
+                float distanceToTeammate = Vector2.Distance(player.FieldPosition, teammate.FieldPosition);
+                
+                if (distanceToTeammate < PlayerPersonalSpace && distanceToTeammate > 0.1f)
+                {
+                    // Push away from nearby teammates
+                    Vector2 awayFromTeammate = player.FieldPosition - teammate.FieldPosition;
+                    awayFromTeammate.Normalize();
+                    
+                    // Stronger force when closer
+                    float strength = 1f - (distanceToTeammate / PlayerPersonalSpace);
+                    separationForce += awayFromTeammate * strength;
+                    nearbyCount++;
+                }
+            }
+            
+            if (nearbyCount > 0)
+            {
+                separationForce /= nearbyCount; // Average the force
+                
+                // Blend desired direction with separation force (70% desired, 30% separation)
+                Vector2 blendedDirection = desiredDirection * 0.7f + separationForce * 0.3f;
+                if (blendedDirection.Length() > 0.01f)
+                {
+                    blendedDirection.Normalize();
+                    return blendedDirection;
+                }
+            }
+            
+            return desiredDirection;
+        }
+        
+        private bool CanPlayerKickBall(Player player, Vector2 playerDirection, float maxDistance)
+        {
+            // Check if ball is within kick distance
+            float distanceToBall = Vector2.Distance(player.FieldPosition, BallPosition);
+            if (distanceToBall > maxDistance)
+                return false;
+            
+            // Check if ball is on ground
+            if (BallHeight > 50f)
+                return false;
+            
+            // Check if ball is in front of player (within 120 degree cone)
+            // This prevents kicking ball that's behind or too far to the side
+            if (playerDirection.Length() > 0.01f)
+            {
+                Vector2 toBall = BallPosition - player.FieldPosition;
+                if (toBall.Length() > 0.01f)
+                {
+                    toBall.Normalize();
+                    Vector2 normalizedDirection = Vector2.Normalize(playerDirection);
+                    
+                    // Dot product gives us the angle (1 = same direction, -1 = opposite)
+                    float dotProduct = Vector2.Dot(normalizedDirection, toBall);
+                    
+                    // Allow kick if ball is within ~120 degree cone in front (dot > -0.5)
+                    // 0.5 = 60 degrees each side, -0.5 = 120 degrees each side
+                    if (dotProduct < -0.2f) // ~102 degree cone (51 degrees each side)
+                        return false;
+                }
+            }
+            
+            return true;
+        }
+        
         private void ResetAfterOut()
         {
             // Simple reset for now - could be improved with throw-ins, corners, etc.
@@ -1198,9 +1442,10 @@ namespace NoPasaranFC.Gameplay
             
             if (nearestOpponent != null)
             {
-                // Calculate tackle success based on attributes
-                float tacklerDefending = _controlledPlayer.Defending;
-                float tacklerAgility = _controlledPlayer.Agility;
+                // Calculate tackle success based on attributes with stamina effect
+                float staminaMultiplier = GetStaminaStatMultiplier(_controlledPlayer);
+                float tacklerDefending = _controlledPlayer.Defending * staminaMultiplier;
+                float tacklerAgility = _controlledPlayer.Agility * staminaMultiplier;
                 float opponentTechnique = nearestOpponent.Technique;
                 float opponentAgility = nearestOpponent.Agility;
                 
@@ -1210,6 +1455,9 @@ namespace NoPasaranFC.Gameplay
                     (tacklerAgility * 0.2f) - 
                     (opponentTechnique * 0.2f) - 
                     (opponentAgility * 0.1f);
+                
+                // Decrease stamina for tackle attempt
+                _controlledPlayer.Stamina = Math.Max(0, _controlledPlayer.Stamina - StaminaDecreasePerShot);
                 
                 // Random element
                 float roll = (float)_random.NextDouble() * 100f;
@@ -1270,6 +1518,54 @@ namespace NoPasaranFC.Gameplay
                     team.Players[i].IsStarting = true;
                 }
             }
+        }
+        
+        // Difficulty modifiers for AI
+        private float GetAIDifficultyModifier()
+        {
+            int difficulty = GameSettings.Instance.Difficulty;
+            return difficulty switch
+            {
+                0 => 0.7f,  // Easy: AI 30% worse
+                1 => 1.0f,  // Normal: No change
+                2 => 1.3f,  // Hard: AI 30% better
+                _ => 1.0f
+            };
+        }
+        
+        private float GetAIReactionTimeMultiplier()
+        {
+            int difficulty = GameSettings.Instance.Difficulty;
+            return difficulty switch
+            {
+                0 => 1.5f,  // Easy: AI reacts 50% slower
+                1 => 1.0f,  // Normal: Normal reactions
+                2 => 0.7f,  // Hard: AI reacts 30% faster
+                _ => 1.0f
+            };
+        }
+        
+        // Stamina effects
+        private float GetStaminaSpeedMultiplier(Player player)
+        {
+            if (player.Stamina < LowStaminaThreshold)
+            {
+                // Speed reduced by up to 30% when stamina is very low
+                float staminaRatio = player.Stamina / LowStaminaThreshold;
+                return 0.7f + (staminaRatio * 0.3f); // Range: 0.7 to 1.0
+            }
+            return 1.0f;
+        }
+        
+        private float GetStaminaStatMultiplier(Player player)
+        {
+            if (player.Stamina < LowStaminaThreshold)
+            {
+                // All stats reduced by up to 40% when stamina is very low
+                float staminaRatio = player.Stamina / LowStaminaThreshold;
+                return 0.6f + (staminaRatio * 0.4f); // Range: 0.6 to 1.0
+            }
+            return 1.0f;
         }
     }
 }
