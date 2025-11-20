@@ -43,7 +43,25 @@ namespace NoPasaranFC.Screens
             
             if (_screens.Count > 0)
             {
-                _screens.Peek().IsActive = true;
+                var screen = _screens.Peek();
+                screen.IsActive = true;
+                screen.OnActivated();
+            }
+        }
+        
+        public void PopToScreen<T>() where T : Screen
+        {
+            // Pop screens until we find the target type
+            while (_screens.Count > 0 && !(_screens.Peek() is T))
+            {
+                _screens.Pop();
+            }
+            
+            if (_screens.Count > 0)
+            {
+                var screen = _screens.Peek();
+                screen.IsActive = true;
+                screen.OnActivated();
             }
         }
         
@@ -53,8 +71,8 @@ namespace NoPasaranFC.Screens
         {
             CurrentScreen?.Update(gameTime);
             
-            // Pop finished screens
-            if (CurrentScreen != null && CurrentScreen.IsFinished)
+            // Pop finished screens (check multiple times in case of chain)
+            while (CurrentScreen != null && CurrentScreen.IsFinished)
             {
                 PopScreen();
             }

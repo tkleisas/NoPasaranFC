@@ -324,8 +324,8 @@ namespace NoPasaranFC.Screens
             Gameplay.AudioManager.Instance.PlaySoundEffect("whistle_end");
             Gameplay.AudioManager.Instance.PlayMusic("menu_music");
             
-            // Return to menu
-            _screenManager.PopScreen();
+            // Return to menu - pop back to MenuScreen (skipping LineupScreen if present)
+            _screenManager.PopToScreen<MenuScreen>();
         }
         
         public override void Draw(SpriteBatch spriteBatch, SpriteFont font)

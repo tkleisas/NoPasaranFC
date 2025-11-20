@@ -647,6 +647,9 @@ namespace NoPasaranFC.Gameplay
                     // Skip if either player is already knocked down
                     if (p1.IsKnockedDown || p2.IsKnockedDown) continue;
                     
+                    // Check if players are on the same team
+                    bool sameTeam = p1.TeamId == p2.TeamId;
+                    
                     float distance = Vector2.Distance(p1.FieldPosition, p2.FieldPosition);
                     float collisionDistance = 70f; // Collision radius for 64x64 sprites
                     
@@ -663,43 +666,59 @@ namespace NoPasaranFC.Gameplay
                         // Only check knockdown if at least one player is moving fast enough
                         if (speed1 > 50f || speed2 > 50f)
                         {
-                            // Calculate knockdown probability based on:
-                            // - Speed difference
-                            // - Strength (defending stat)
-                            // - Agility (helps avoid knockdown)
-                            // - Randomness
-                            
-                            float p1Force = speed1 * (p1.Defending / 100f) * (1.0f - (p1.Agility / 100f) * 0.3f);
-                            float p2Force = speed2 * (p2.Defending / 100f) * (1.0f - (p2.Agility / 100f) * 0.3f);
-                            
-                            // Boost collision intensity if near ball
-                            if (nearBall)
+                            // Teammates rarely knock each other down (only 1-2% chance)
+                            if (sameTeam && _random.NextDouble() > 0.02f)
                             {
-                                p1Force *= 1.5f;
-                                p2Force *= 1.5f;
+                                // Skip knockdown for teammates (98% of the time)
+                                // Just do separation below
                             }
-                            
-                            // Random factor
-                            float randomFactor = (float)_random.NextDouble();
-                            
-                            // Determine if anyone gets knocked down
-                            float knockdownThreshold = 40f; // Base threshold
-                            
-                            if (p1Force > knockdownThreshold && randomFactor > 0.6f)
+                            else
                             {
-                                // P2 gets knocked down by P1
-                                KnockDownPlayer(p2, p1.Velocity);
-                            }
-                            else if (p2Force > knockdownThreshold && randomFactor < 0.4f)
-                            {
-                                // P1 gets knocked down by P2
-                                KnockDownPlayer(p1, p2.Velocity);
-                            }
-                            else if (nearBall && (p1Force + p2Force) > 60f && randomFactor > 0.7f)
-                            {
-                                // Both get knocked down in intense collision near ball
-                                KnockDownPlayer(p1, p2.Velocity * 0.5f);
-                                KnockDownPlayer(p2, p1.Velocity * 0.5f);
+                                // Calculate knockdown probability based on:
+                                // - Speed difference
+                                // - Strength (defending stat)
+                                // - Agility (helps avoid knockdown)
+                                // - Randomness
+                                
+                                float p1Force = speed1 * (p1.Defending / 100f) * (1.0f - (p1.Agility / 100f) * 0.3f);
+                                float p2Force = speed2 * (p2.Defending / 100f) * (1.0f - (p2.Agility / 100f) * 0.3f);
+                                
+                                // Reduce force for friendly collisions (if they do happen)
+                                if (sameTeam)
+                                {
+                                    p1Force *= 0.3f;
+                                    p2Force *= 0.3f;
+                                }
+                                
+                                // Boost collision intensity if near ball (only for opposing teams)
+                                if (nearBall && !sameTeam)
+                                {
+                                    p1Force *= 1.5f;
+                                    p2Force *= 1.5f;
+                                }
+                                
+                                // Random factor
+                                float randomFactor = (float)_random.NextDouble();
+                                
+                                // Determine if anyone gets knocked down
+                                float knockdownThreshold = 40f; // Base threshold
+                                
+                                if (p1Force > knockdownThreshold && randomFactor > 0.6f)
+                                {
+                                    // P2 gets knocked down by P1
+                                    KnockDownPlayer(p2, p1.Velocity);
+                                }
+                                else if (p2Force > knockdownThreshold && randomFactor < 0.4f)
+                                {
+                                    // P1 gets knocked down by P2
+                                    KnockDownPlayer(p1, p2.Velocity);
+                                }
+                                else if (nearBall && !sameTeam && (p1Force + p2Force) > 60f && randomFactor > 0.7f)
+                                {
+                                    // Both get knocked down in intense collision near ball (only opposing teams)
+                                    KnockDownPlayer(p1, p2.Velocity * 0.5f);
+                                    KnockDownPlayer(p2, p1.Velocity * 0.5f);
+                                }
                             }
                         }
                         

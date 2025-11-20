@@ -22,6 +22,11 @@ namespace NoPasaranFC.Screens
             GraphicsDevice = graphicsDevice;
         }
         
+        public virtual void OnActivated()
+        {
+            // Override in derived classes to handle screen activation
+        }
+        
         public abstract void Update(GameTime gameTime);
         public abstract void Draw(SpriteBatch spriteBatch, SpriteFont font);
     }

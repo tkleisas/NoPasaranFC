@@ -24,7 +24,7 @@ namespace NoPasaranFC.Screens
         private int _scrollOffset = 0;
         private const int MaxVisiblePlayers = 15;
         
-        private KeyboardState _previousKeyState;
+        private Gameplay.InputHelper _input;
         private Texture2D _pixel;
         
         // Formation positions for preview (simple 4-4-2)
@@ -50,10 +50,16 @@ namespace NoPasaranFC.Screens
             // Get all players sorted by shirt number
             _allPlayers = _team.Players.OrderBy(p => p.ShirtNumber).ToList();
             
-            // Initialize previous key state to current state to prevent immediate triggering
-            _previousKeyState = Keyboard.GetState();
+            // Initialize input helper
+            _input = new Gameplay.InputHelper();
             
             CreatePixelTexture();
+        }
+        
+        public override void OnActivated()
+        {
+            // Reset input state when screen becomes active to prevent key bleed-through
+            _input = new Gameplay.InputHelper();
         }
 
         private void CreatePixelTexture()
@@ -64,10 +70,10 @@ namespace NoPasaranFC.Screens
 
         public override void Update(GameTime gameTime)
         {
-            var keyState = Keyboard.GetState();
+            _input.Update();
             
             // Navigation
-            if (keyState.IsKeyDown(Keys.Down) && !_previousKeyState.IsKeyDown(Keys.Down))
+            if (_input.IsMenuDownPressed())
             {
                 _selectedIndex = (_selectedIndex + 1) % _allPlayers.Count;
                 
@@ -79,7 +85,7 @@ namespace NoPasaranFC.Screens
                 
                 Gameplay.AudioManager.Instance.PlaySoundEffect("menu_move");
             }
-            else if (keyState.IsKeyDown(Keys.Up) && !_previousKeyState.IsKeyDown(Keys.Up))
+            else if (_input.IsMenuUpPressed())
             {
                 _selectedIndex = (_selectedIndex - 1 + _allPlayers.Count) % _allPlayers.Count;
                 
@@ -91,21 +97,25 @@ namespace NoPasaranFC.Screens
                 
                 Gameplay.AudioManager.Instance.PlaySoundEffect("menu_move");
             }
-            else if (keyState.IsKeyDown(Keys.PageDown) && !_previousKeyState.IsKeyDown(Keys.PageDown))
+            
+            // PageUp/PageDown still use raw keyboard (TODO: add to InputHelper)
+            var keyState = Keyboard.GetState();
+            
+            if (keyState.IsKeyDown(Keys.PageDown))
             {
-                _selectedIndex = Math.Min(_selectedIndex + MaxVisiblePlayers, _allPlayers.Count - 1);
-                _scrollOffset = Math.Max(0, _selectedIndex - MaxVisiblePlayers + 1);
+                _selectedIndex = Math.Min(_allPlayers.Count - 1, _selectedIndex + 15);
+                _scrollOffset = Math.Max(0, Math.Min(_scrollOffset + 15, _allPlayers.Count - MaxVisiblePlayers));
                 Gameplay.AudioManager.Instance.PlaySoundEffect("menu_move");
             }
-            else if (keyState.IsKeyDown(Keys.PageUp) && !_previousKeyState.IsKeyDown(Keys.PageUp))
+            else if (keyState.IsKeyDown(Keys.PageUp))
             {
-                _selectedIndex = Math.Max(_selectedIndex - MaxVisiblePlayers, 0);
-                _scrollOffset = Math.Max(0, _selectedIndex);
+                _selectedIndex = Math.Max(0, _selectedIndex - 15);
+                _scrollOffset = Math.Max(0, _scrollOffset - 15);
                 Gameplay.AudioManager.Instance.PlaySoundEffect("menu_move");
             }
             
-            // Toggle starting status
-            else if (keyState.IsKeyDown(Keys.Space) && !_previousKeyState.IsKeyDown(Keys.Space))
+            // Toggle starting status (Space or X button)
+            if (_input.IsSwitchPlayerPressed())
             {
                 var player = _allPlayers[_selectedIndex];
                 int currentStartingCount = _allPlayers.Count(p => p.IsStarting);
@@ -127,8 +137,8 @@ namespace NoPasaranFC.Screens
                 }
             }
             
-            // Confirm and start match
-            else if (keyState.IsKeyDown(Keys.Enter) && !_previousKeyState.IsKeyDown(Keys.Enter))
+            // Confirm lineup and start match (Enter or A button)
+            if (_input.IsConfirmPressed())
             {
                 int startingCount = _allPlayers.Count(p => p.IsStarting);
                 
@@ -152,14 +162,12 @@ namespace NoPasaranFC.Screens
                 }
             }
             
-            // Cancel
-            else if (keyState.IsKeyDown(Keys.Escape) && !_previousKeyState.IsKeyDown(Keys.Escape))
+            // Cancel (Escape or B button)
+            if (_input.IsBackPressed())
             {
                 Gameplay.AudioManager.Instance.PlaySoundEffect("menu_back");
                 IsFinished = true;
             }
-            
-            _previousKeyState = keyState;
         }
 
         public override void Draw(SpriteBatch spriteBatch, SpriteFont font)

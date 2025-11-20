@@ -59,6 +59,12 @@ namespace NoPasaranFC.Screens
             }
         }
         
+        public override void OnActivated()
+        {
+            // Reset input state when returning to menu to prevent key bleed-through
+            _input = new Gameplay.InputHelper();
+        }
+        
         public void SetGraphicsDevice(GraphicsDevice graphicsDevice)
         {
             _graphicsDevice = graphicsDevice;
