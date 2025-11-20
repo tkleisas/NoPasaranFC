@@ -30,6 +30,20 @@
           "technique": 55,
           "stamina": 95
         },
+
+        {
+          "name": "petropoulost",
+          "position": "Forward",
+          "shirtNumber": 3,
+          "isStarting": false,
+          "speed": 51,
+          "shooting": 60,
+          "passing": 62,
+          "defending": 74,
+          "agility": 54,
+          "technique": 58,
+          "stamina": 82
+        },
         {
           "name": "Lamougio",
           "position": "Forward",
@@ -265,6 +279,19 @@
           "stamina": 74
         },
         {
+          "name": "em.io",
+          "position": "Forward",
+          "shirtNumber": 31,
+          "isStarting": true,
+          "speed": 74,
+          "shooting": 78,
+          "passing": 66,
+          "defending": 38,
+          "agility": 74,
+          "technique": 76,
+          "stamina": 74
+        },
+        {
           "name": "ΜΑΣΤΡΟΛΩΝΗΣ",
           "position": "Forward",
           "shirtNumber": 34,
@@ -359,6 +386,19 @@
           "name": "Ko Sti Minh",
           "position": "Defender",
           "shirtNumber": 44,
+          "isStarting": false,
+          "speed": 51,
+          "shooting": 36,
+          "passing": 62,
+          "defending": 74,
+          "agility": 54,
+          "technique": 58,
+          "stamina": 82
+        },
+        {
+          "name": "lordakis",
+          "position": "Forward",
+          "shirtNumber": 77,
           "isStarting": false,
           "speed": 51,
           "shooting": 36,

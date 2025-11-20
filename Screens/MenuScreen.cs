@@ -19,7 +19,18 @@ namespace NoPasaranFC.Screens
         private Gameplay.InputHelper _input;
         private KeyboardState _previousKeyState; // Still needed for some menu controls
         private int _selectedOption;
-        private readonly string[] _menuOptions = { "ΠΡΟΒΟΛΗ ΑΠΟΤΕΛΕΣΜΑΤΩΝ", "ΕΠΟΜΕΝΟΣ ΑΓΩΝΑΣ", "ΝΕΟ ΠΡΩΤΑΘΛΗΜΑ", "ΕΠΙΛΟΓΕΣ", "ΕΞΟΔΟΣ" };
+        private string[] GetMenuOptions()
+        {
+            var loc = Models.Localization.Instance;
+            return new string[]
+            {
+                loc.Get("menu.standings"),
+                loc.Get("menu.nextMatch"),
+                loc.Get("menu.newSeason"),
+                loc.Get("menu.settings"),
+                loc.Get("menu.exit")
+            };
+        }
         private bool _inOptionsMenu = false;
         private int _selectedResolution = 2; // Default to 1280x720
         private bool _tempFullscreen = false;
@@ -86,15 +97,16 @@ namespace NoPasaranFC.Screens
             if (!_inOptionsMenu)
             {
                 // Main menu navigation (keyboard or gamepad)
+                var menuOptions = GetMenuOptions();
                 if (_input.IsMenuDownPressed())
                 {
-                    _selectedOption = (_selectedOption + 1) % _menuOptions.Length;
+                    _selectedOption = (_selectedOption + 1) % menuOptions.Length;
                     Gameplay.AudioManager.Instance.PlaySoundEffect("menu_move");
                 }
                 
                 if (_input.IsMenuUpPressed())
                 {
-                    _selectedOption = (_selectedOption - 1 + _menuOptions.Length) % _menuOptions.Length;
+                    _selectedOption = (_selectedOption - 1 + menuOptions.Length) % menuOptions.Length;
                     Gameplay.AudioManager.Instance.PlaySoundEffect("menu_move");
                 }
                 
@@ -398,11 +410,12 @@ namespace NoPasaranFC.Screens
                 }
                 
                 // Draw menu options centered
+                var menuOptions = GetMenuOptions();
                 float menuStartY = screenHeight * 0.62f;
-                for (int i = 0; i < _menuOptions.Length; i++)
+                for (int i = 0; i < menuOptions.Length; i++)
                 {
                     var prefix = i == _selectedOption ? "> " : "  ";
-                    var text = prefix + _menuOptions[i] + (i == _selectedOption ? " <" : "  ");
+                    var text = prefix + menuOptions[i] + (i == _selectedOption ? " <" : "  ");
                     
                     // Dim "Play Next Match" if season is complete
                     var color = i == _selectedOption ? Color.Yellow : Color.White;

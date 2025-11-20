@@ -18,26 +18,30 @@ namespace NoPasaranFC.Screens
         private int _scrollOffset = 0;
         private const int MaxVisibleOptions = 11;
         
-        private readonly string[] _menuOptions = new[]
+        private string[] GetMenuOptions()
         {
-            "Resolution",
-            "Fullscreen",
-            "VSync",
-            "Master Volume",
-            "Music Volume",
-            "SFX Volume",
-            "Mute All",
-            "Difficulty",
-            "Match Duration",
-            "Player Speed",
-            "Show Minimap",
-            "Show Player Names",
-            "Show Stamina",
-            "Camera Zoom",
-            "Camera Speed",
-            "Language",
-            "Back"
-        };
+            var loc = Models.Localization.Instance;
+            return new[]
+            {
+                loc.Get("settings.resolution"),
+                loc.Get("settings.fullscreen"),
+                loc.Get("settings.vsync"),
+                loc.Get("settings.masterVolume"),
+                loc.Get("settings.musicVolume"),
+                loc.Get("settings.sfxVolume"),
+                loc.Get("settings.muteAll"),
+                loc.Get("settings.difficulty"),
+                loc.Get("settings.matchDuration"),
+                loc.Get("settings.playerSpeed"),
+                loc.Get("settings.showMinimap"),
+                loc.Get("settings.showNames"),
+                loc.Get("settings.showStamina"),
+                loc.Get("settings.cameraZoom"),
+                loc.Get("settings.cameraSpeed"),
+                loc.Get("settings.languageSelect"),
+                "Back" // Keep Back in English for now
+            };
+        }
         
         private KeyboardState _previousKeyState;
         private int _resolutionIndex;
@@ -78,7 +82,8 @@ namespace NoPasaranFC.Screens
             
             if (keyState.IsKeyDown(Keys.Down) && !_previousKeyState.IsKeyDown(Keys.Down))
             {
-                _selectedOption = (_selectedOption + 1) % _menuOptions.Length;
+                int menuLength = GetMenuOptions().Length;
+                _selectedOption = (_selectedOption + 1) % menuLength;
                 
                 // Auto-scroll
                 if (_selectedOption - _scrollOffset >= MaxVisibleOptions)
@@ -88,7 +93,8 @@ namespace NoPasaranFC.Screens
             }
             else if (keyState.IsKeyDown(Keys.Up) && !_previousKeyState.IsKeyDown(Keys.Up))
             {
-                _selectedOption = (_selectedOption - 1 + _menuOptions.Length) % _menuOptions.Length;
+                int menuLength = GetMenuOptions().Length;
+                _selectedOption = (_selectedOption - 1 + menuLength) % menuLength;
                 
                 // Auto-scroll
                 if (_selectedOption < _scrollOffset)
@@ -111,7 +117,8 @@ namespace NoPasaranFC.Screens
             else if (keyState.IsKeyDown(Keys.PageDown) && !_previousKeyState.IsKeyDown(Keys.PageDown))
             {
                 // Jump down by visible amount
-                _selectedOption = Math.Min(_selectedOption + MaxVisibleOptions, _menuOptions.Length - 1);
+                int menuLength = GetMenuOptions().Length;
+                _selectedOption = Math.Min(_selectedOption + MaxVisibleOptions, menuLength - 1);
                 _scrollOffset = Math.Max(0, _selectedOption - MaxVisibleOptions + 1);
             }
             else if (keyState.IsKeyDown(Keys.PageUp) && !_previousKeyState.IsKeyDown(Keys.PageUp))
@@ -180,6 +187,7 @@ namespace NoPasaranFC.Screens
                     _languageIndex = (_languageIndex + direction + _languages.Length) % _languages.Length;
                     _settings.Language = _languages[_languageIndex];
                     _database.SaveSettings(_settings);
+                    Models.Localization.ReloadLanguage(); // Reload strings for new language
                     break;
             }
         }
@@ -231,7 +239,7 @@ namespace NoPasaranFC.Screens
             var screenCenter = new Vector2(Game1.ScreenWidth / 2, Game1.ScreenHeight / 2);
             
             // Draw title
-            var title = "SETTINGS";
+            var title = Models.Localization.Instance.Get("settings.title");
             System.Diagnostics.Debug.WriteLine("SettingsScreen: About to MeasureString");
             var titleSize = font.MeasureString(title);
             System.Diagnostics.Debug.WriteLine("SettingsScreen: MeasureString complete");
@@ -239,8 +247,9 @@ namespace NoPasaranFC.Screens
                 new Vector2(screenCenter.X - titleSize.X / 2, 50), Color.Yellow);
             
             // Calculate visible range
+            var menuOptions = GetMenuOptions();
             int startIndex = _scrollOffset;
-            int endIndex = Math.Min(startIndex + MaxVisibleOptions, _menuOptions.Length);
+            int endIndex = Math.Min(startIndex + MaxVisibleOptions, menuOptions.Length);
             
             // Draw scroll indicators
             if (startIndex > 0)
@@ -257,7 +266,7 @@ namespace NoPasaranFC.Screens
                 var yPos = 150 + (i - startIndex) * 40;
                 var color = i == _selectedOption ? Color.Yellow : Color.White;
                 
-                string optionText = _menuOptions[i];
+                string optionText = menuOptions[i];
                 string valueText = GetValueText(i);
                 
                 // Draw option name
@@ -273,7 +282,7 @@ namespace NoPasaranFC.Screens
             }
             
             // Draw down scroll indicator
-            if (endIndex < _menuOptions.Length)
+            if (endIndex < menuOptions.Length)
             {
                 var downArrow = "▼ MORE";
                 var downSize = font.MeasureString(downArrow);
@@ -290,21 +299,31 @@ namespace NoPasaranFC.Screens
 
         private string GetValueText(int optionIndex)
         {
+            var loc = Models.Localization.Instance;
+            string on = loc.Get("settings.on");
+            string off = loc.Get("settings.off");
+            
             return optionIndex switch
             {
                 0 => $"{_settings.ResolutionWidth}x{_settings.ResolutionHeight}",
-                1 => _settings.IsFullscreen ? "ON" : "OFF",
-                2 => _settings.VSync ? "ON" : "OFF",
+                1 => _settings.IsFullscreen ? on : off,
+                2 => _settings.VSync ? on : off,
                 3 => $"{_settings.MasterVolume:P0}",
                 4 => $"{_settings.MusicVolume:P0}",
                 5 => $"{_settings.SfxVolume:P0}",
-                6 => _settings.MuteAll ? "ON" : "OFF",
-                7 => _settings.Difficulty switch { 0 => "Easy", 1 => "Normal", 2 => "Hard", _ => "Normal" },
+                6 => _settings.MuteAll ? on : off,
+                7 => _settings.Difficulty switch 
+                { 
+                    0 => loc.Get("settings.difficulty.easy"), 
+                    1 => loc.Get("settings.difficulty.normal"), 
+                    2 => loc.Get("settings.difficulty.hard"), 
+                    _ => loc.Get("settings.difficulty.normal") 
+                },
                 8 => $"{_settings.MatchDurationMinutes:F1} min",
                 9 => $"{_settings.PlayerSpeedMultiplier:F1}x",
-                10 => _settings.ShowMinimap ? "ON" : "OFF",
-                11 => _settings.ShowPlayerNames ? "ON" : "OFF",
-                12 => _settings.ShowStamina ? "ON" : "OFF",
+                10 => _settings.ShowMinimap ? on : off,
+                11 => _settings.ShowPlayerNames ? on : off,
+                12 => _settings.ShowStamina ? on : off,
                 13 => $"{_settings.CameraZoom:F1}x",
                 14 => $"{_settings.CameraSpeed:F2}",
                 15 => _settings.Language.ToUpper(),

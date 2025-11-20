@@ -420,7 +420,7 @@ namespace NoPasaranFC.Screens
             // Draw "GOAL!" text
             if (_matchEngine.GoalCelebration.ShouldDrawGoalText())
             {
-                string goalText = "GOAL!";
+                string goalText = Models.Localization.Instance.Get("match.goal");
                 float scale = _matchEngine.GoalCelebration.GetGoalTextScale();
                 Vector2 textSize = font.MeasureString(goalText);
                 Vector2 position = new Vector2(
@@ -442,8 +442,8 @@ namespace NoPasaranFC.Screens
             spriteBatch.Draw(_pixel, new Rectangle(0, 0, Game1.ScreenWidth, Game1.ScreenHeight), 
                 Color.Black * 0.7f);
             
-            // Title: "ΤΕΛΙΚΟ ΣΚΟΡ" (Final Score in Greek)
-            string titleText = "ΤΕΛΙΚΟ ΣΚΟΡ";
+            // Title: Final Score
+            string titleText = Models.Localization.Instance.Get("match.finalScore");
             float titleScale = 2.5f;
             Vector2 titleSize = font.MeasureString(titleText);
             Vector2 titlePos = new Vector2(
@@ -509,7 +509,7 @@ namespace NoPasaranFC.Screens
             float centerX = margin + MatchEngine.FieldWidth / 2;
             float centerY = margin + MatchEngine.FieldHeight / 2;
             Color lineColor = Color.White;
-            int lineThickness = 4;
+            int lineThickness = 9; // FIFA regulation: 12cm = ~9px at 73px/m scale
             
             // Outer boundary
             DrawRectangleOutline(spriteBatch, _pixel, 

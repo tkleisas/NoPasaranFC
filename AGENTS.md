@@ -224,7 +224,19 @@ Use UTF8 encoding for all text data as there is multilingual support.
   * Visual indicator when all matches are complete
   * Automatic detection of unplayed matches
 
-15. ✅ **Complete Audio System**:
+15. ✅ **Localization System**:
+   - Created Localization singleton class for multi-language support
+   - English (en) and Greek (el) languages implemented
+   - All menu text, match text, and settings localized
+   - Language setting in Settings menu with immediate effect
+   - Persists to database
+   - Falls back to English if translation missing
+   - Optional JSON file support for external translations
+   - Created LOCALIZATION.md documentation
+   - Keys organized by category (menu, match, lineup, settings, standings)
+   - UTF-8 support for Greek characters
+
+16. ✅ **Complete Audio System**:
    - **AudioManager singleton**: Manages all music and SFX
    - **Music system**: Menu music, match music, victory music (looping)
    - **Sound effects**: Menu navigation, ball kicks, tackles, goals, whistles, crowd

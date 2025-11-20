@@ -11,6 +11,7 @@ namespace NoPasaranFC.Gameplay
         private Team _homeTeam;
         private Team _awayTeam;
         private Player _controlledPlayer;
+        private Player _lastPlayerTouchedBall;
         private Random _random;
         
         // Referee
@@ -46,10 +47,10 @@ namespace NoPasaranFC.Gameplay
         public const float TotalWidth = FieldWidth + (StadiumMargin * 2);
         public const float TotalHeight = FieldHeight + (StadiumMargin * 2);
         
-        // Goal dimensions (FIFA standard: 7.32m wide)
+        // Goal dimensions (FIFA standard: 7.32m wide × 2.44m high × 2m deep)
         public const float GoalWidth = 534f; // 7.32m × 73px/m
-        public const float GoalDepth = 60f;  // Visual depth for goal net
-        public const float GoalPostHeight = 200f; // Height of goal posts (2.44m in real life)
+        public const float GoalDepth = 146f;  // 2m × 73px/m (actual goal depth)
+        public const float GoalPostHeight = 178f; // 2.44m × 73px/m (crossbar height)
         
         // Ball physics
         private const float BallFriction = 0.95f;
@@ -525,6 +526,7 @@ namespace NoPasaranFC.Gameplay
                         goalDirection.Normalize();
                         float kickPower = player.Shooting / 15f + 3f;
                         BallVelocity = goalDirection * kickPower * player.Speed * 0.7f;
+                        _lastPlayerTouchedBall = player;
                         
                         // AI can do varied shots based on shooting skill and distance to goal
                         float distToGoal = Vector2.Distance(BallPosition, new Vector2(targetGoalX, targetGoalY));
@@ -793,6 +795,7 @@ namespace NoPasaranFC.Gameplay
             float basePower = _controlledPlayer.Shooting / 10f + 5f;
             float horizontalPower = basePower * (1f + power * 2f); // More power = faster
             BallVelocity = shootDirection * horizontalPower * _controlledPlayer.Speed;
+            _lastPlayerTouchedBall = _controlledPlayer;
             
             // Calculate vertical velocity (height)
             // More hold time = higher shot
@@ -831,8 +834,40 @@ namespace NoPasaranFC.Gameplay
             float topOutBound = StadiumMargin - 20;
             float bottomOutBound = StadiumMargin + FieldHeight + 20;
             
-            // Check if ball is below goal post height (not too high)
+            // Check if ball is near crossbar height (with tolerance for ricochet)
+            bool ballAtCrossbarHeight = BallHeight >= GoalPostHeight - 20 && BallHeight <= GoalPostHeight + 20;
             bool ballBelowGoalHeight = BallHeight <= GoalPostHeight;
+            
+            // === CROSSBAR RICOCHET ===
+            // Check if ball hits the crossbar (within goal area, at crossbar height)
+            if (((BallPosition.X >= leftGoalLine - 30 && BallPosition.X <= leftGoalLine + 30) ||
+                 (BallPosition.X >= rightGoalLine - 30 && BallPosition.X <= rightGoalLine + 30)) &&
+                BallPosition.Y >= goalTop && BallPosition.Y <= goalBottom &&
+                ballAtCrossbarHeight && BallVerticalVelocity < 0)
+            {
+                // Ball hit crossbar - bounce back down and reverse horizontal direction
+                BallVerticalVelocity = -BallVerticalVelocity * 0.6f; // Bounce down with energy loss
+                BallVelocity = new Vector2(-BallVelocity.X * 0.7f, BallVelocity.Y * 0.7f); // Bounce back
+                AudioManager.Instance.PlaySoundEffect("kick_ball", 0.4f, allowRetrigger: false);
+                return;
+            }
+            
+            // === SIDE POST RICOCHET ===
+            // Check if ball hits the left or right goalpost (vertical posts)
+            float postTolerance = 30f; // Collision detection tolerance
+            bool nearLeftGoalLine = BallPosition.X >= leftGoalLine - 30 && BallPosition.X <= leftGoalLine + 30;
+            bool nearRightGoalLine = BallPosition.X >= rightGoalLine - 30 && BallPosition.X <= rightGoalLine + 30;
+            bool nearTopPost = Math.Abs(BallPosition.Y - goalTop) < postTolerance;
+            bool nearBottomPost = Math.Abs(BallPosition.Y - goalBottom) < postTolerance;
+            
+            if ((nearLeftGoalLine || nearRightGoalLine) && (nearTopPost || nearBottomPost) && ballBelowGoalHeight)
+            {
+                // Ball hit side post - bounce sideways and reverse horizontal direction
+                BallVelocity = new Vector2(-BallVelocity.X * 0.7f, -BallVelocity.Y * 0.7f); // Bounce both directions
+                BallVerticalVelocity *= 0.6f; // Reduce vertical velocity
+                AudioManager.Instance.PlaySoundEffect("kick_ball", 0.4f, allowRetrigger: false);
+                return;
+            }
             
             // === GOAL DETECTION ===
             // Left goal (home team defends) - Ball must cross the goal line
@@ -906,10 +941,42 @@ namespace NoPasaranFC.Gameplay
         
         private void HandleBallOutGoalLine(bool leftSide, float yPosition)
         {
-            // Place ball for corner kick or goal kick
-            float xPos = leftSide ? StadiumMargin + 30 : StadiumMargin + FieldWidth - 30;
-            float yPos = yPosition < StadiumMargin + FieldHeight / 2 ? 
-                StadiumMargin + 30 : StadiumMargin + FieldHeight - 30;
+            // Determine if corner kick or goal kick based on who touched the ball last
+            bool isCornerKick = false;
+            
+            if (_lastPlayerTouchedBall != null)
+            {
+                // Check if last touch was from defending team
+                bool lastTouchWasHomeTeam = _homeTeam.Players.Contains(_lastPlayerTouchedBall);
+                
+                // Home team defends left goal, away team defends right goal
+                // If ball went out on left side and home team touched it last -> goal kick for home
+                // If ball went out on left side and away team touched it last -> corner kick for away
+                if (leftSide)
+                {
+                    isCornerKick = !lastTouchWasHomeTeam; // Away team gets corner
+                }
+                else // right side
+                {
+                    isCornerKick = lastTouchWasHomeTeam; // Home team gets corner
+                }
+            }
+            
+            float xPos, yPos;
+            
+            if (isCornerKick)
+            {
+                // Corner kick - place near corner
+                xPos = leftSide ? StadiumMargin + 30 : StadiumMargin + FieldWidth - 30;
+                yPos = yPosition < StadiumMargin + FieldHeight / 2 ? 
+                    StadiumMargin + 30 : StadiumMargin + FieldHeight - 30;
+            }
+            else
+            {
+                // Goal kick - place in goal area, centered
+                xPos = leftSide ? StadiumMargin + 200 : StadiumMargin + FieldWidth - 200;
+                yPos = StadiumMargin + FieldHeight / 2;
+            }
             
             PlaceBallForRestart(new Vector2(xPos, yPos));
         }
@@ -966,7 +1033,8 @@ namespace NoPasaranFC.Gameplay
             // Start celebration with font rendering
             if (_font != null && _graphicsDevice != null)
             {
-                GoalCelebration.Start("ΓΚΟΛ!", _font, _graphicsDevice);
+                string goalText = Models.Localization.Instance.Get("match.goal");
+                GoalCelebration.Start(goalText, _font, _graphicsDevice);
             }
             else
             {
@@ -1100,6 +1168,7 @@ namespace NoPasaranFC.Gameplay
                         tackleDirection = Vector2.Transform(tackleDirection, 
                             Matrix.CreateRotationZ((_random.Next(2) == 0 ? 1 : -1) * MathHelper.PiOver4));
                         BallVelocity = tackleDirection * 150f;
+                        _lastPlayerTouchedBall = _controlledPlayer;
                     }
                 }
                 else
@@ -1110,6 +1179,7 @@ namespace NoPasaranFC.Gameplay
                     {
                         escapeDirection.Normalize();
                         BallVelocity = escapeDirection * 100f;
+                        _lastPlayerTouchedBall = nearestOpponent;
                     }
                 }
             }
