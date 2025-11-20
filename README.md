@@ -4,7 +4,7 @@ A top-down 2D soccer game built with C# .NET and MonoGame, inspired by classic g
 
 ## 🎥 Gameplay Video
 
-[![No Pasaran FC v1.0.4 Gameplay](https://img.youtube.com/vi/0NB9AkLI7O0/0.jpg)](https://www.youtube.com/watch?v=https://youtu.be/0NB9AkLI7O0)
+[![No Pasaran FC v1.0.4 Gameplay](https://img.youtube.com/vi/0NB9AkLI7O0/0.jpg)](https://www.youtube.com/watch?v=0NB9AkLI7O0)
 
 *Watch gameplay footage from version 1.0.4 - Replace YOUR_VIDEO_ID with actual YouTube video ID*
 
