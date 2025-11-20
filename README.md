@@ -31,15 +31,15 @@ Manage and play as **NO PASARAN!** in an 8-team championship. Control one player
 - **Match Duration**: Configurable 1-10 minutes (default: 90 seconds game time)
 
 ### 👥 Team & Player Management
-- **22-Player Rosters**: Full squads with starting XI and substitutes
+- **Flexible Rosters**: Full squads with any number of players (minimum 11, default 25)
 - **Lineup Selection**: Pre-match screen to choose your starting 11
   - Interactive formation preview (4-4-2)
   - Real-time validation
   - Scrollable player list with stats
 - **Player Attributes**: Speed, Shooting, Passing, Defending, Agility, Technique, Stamina
 - **Position System**: Goalkeeper, Defender, Midfielder, Forward
-- **Shirt Numbers**: Each player has unique number (1-22)
-- **JSON Seeding**: Load teams from `teams_seed.json` with UTF-8 support
+- **Shirt Numbers**: Each player has unique sequential number
+- **JSON Seeding**: Load teams from `teams_seed.json` with UTF-8 support (any roster size)
 - **Auto-Generation**: Teams without JSON data get procedurally generated players
 
 ### 🎨 Graphics & Animation
@@ -72,7 +72,7 @@ Manage and play as **NO PASARAN!** in an 8-team championship. Control one player
 
 ### 💾 Data Management
 - **SQLite Database**: Automatic save/load for all game data
-- **Persistent Rosters**: Teams and full 22-player squads saved
+- **Persistent Rosters**: Teams with unlimited roster sizes saved
 - **Match Results**: Complete match history and statistics
 - **Championship Progress**: Current matchweek, standings, fixtures
 - **Settings Persistence**: All configuration saved across sessions
@@ -164,7 +164,7 @@ dotnet run
 - **File**: `nopasaran.db` (SQLite)
 - **Tables**: Teams, Players, Matches, Championship, Settings
 - **Features**: Auto-save/load, UTF-8 encoding, foreign key constraints
-- **Schema**: Supports 22-player rosters, starting lineups, shirt numbers
+- **Schema**: Supports flexible roster sizes, starting lineups, shirt numbers
 
 ## Project Structure
 
@@ -248,7 +248,7 @@ NoPasaranFC/
 **Fully Playable!** All core features implemented:
 - ✅ Championship mode with 8 teams
 - ✅ Match gameplay with physics and AI
-- ✅ 22-player rosters with lineup selection
+- ✅ Flexible rosters (11+) with lineup selection
 - ✅ Database persistence
 - ✅ Audio system (music + SFX)
 - ✅ Animated sprites

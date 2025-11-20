@@ -1,12 +1,12 @@
 # Lineup Selection Screen Documentation
 
 ## Overview
-Before each match, players can now select their starting XI from the full 22-player roster. The lineup screen provides an interactive interface for managing the team composition.
+Before each match, players can now select their starting XI from their full roster (11+ players). The lineup screen provides an interactive interface for managing the team composition.
 
 ## Features
 
 ### Player List (Left Side)
-- **All 22 players displayed** sorted by shirt number
+- **All squad players displayed** sorted by shirt number (scrollable)
 - **Scrollable list** with PageUp/PageDown support
 - Shows for each player:
   - Shirt number (#1-22)
@@ -94,7 +94,7 @@ Default 4-4-2 formation with fixed positions:
 │  4  Nikos     DEF[START] │      ●2  ●3  ●4  ●5         │
 │  5  Michalis  DEF[START] │            ●1                │
 │  ...                     │                              │
-│  22 Fotis     DEF[BENCH] │         4-4-2                │
+│  25 Fotis     DEF[BENCH] │         4-4-2                │
 │                          │                              │
 └──────────────────────────┴──────────────────────────────┘
      ↑↓: Navigate | SPACE: Toggle | ENTER: Confirm

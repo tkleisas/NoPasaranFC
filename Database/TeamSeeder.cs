@@ -98,12 +98,18 @@ namespace NoPasaranFC.Database
             };
         }
         
-        private static void GenerateDefaultRoster(Team team)
+        private static void GenerateDefaultRoster(Team team, int rosterSize = 25)
         {
             var random = new Random(team.Name.GetHashCode()); // Consistent generation per team
             
-            // Generate 22 players with varied positions
-            int[] positionCounts = { 2, 8, 8, 4 }; // GK, DEF, MID, FWD
+            // Generate players with varied positions (default 25)
+            // Distribute positions: ~2 GK, ~8 DEF, ~10 MID, ~5 FWD (for 25 players)
+            int gkCount = Math.Max(2, rosterSize / 12);
+            int defCount = Math.Max(4, rosterSize / 3);
+            int midCount = Math.Max(4, rosterSize / 2 - defCount);
+            int fwdCount = Math.Max(2, rosterSize - gkCount - defCount - midCount);
+            
+            int[] positionCounts = { gkCount, defCount, midCount, fwdCount };
             int shirtNumber = 1;
             int startingCount = 0;
             
