@@ -52,7 +52,10 @@
     </Exec>
     <PropertyGroup>
       <GitCommitHash Condition="'$(GitCommitHash)' == ''">unknown</GitCommitHash>
-      <DefineConstants>$(DefineConstants);GITCOMMITHASH=$(GitCommitHash)</DefineConstants>
     </PropertyGroup>
+    <WriteLinesToFile File="$(IntermediateOutputPath)GitCommitHash.cs" Overwrite="true" Lines="namespace NoPasaranFC.Models%0A{%0A    public static partial class Version%0A    {%0A        public const string COMMIT_HASH = &quot;$(GitCommitHash)&quot;%3B%0A    }%0A}" />
+    <ItemGroup>
+      <Compile Include="$(IntermediateOutputPath)GitCommitHash.cs" />
+    </ItemGroup>
   </Target>
 </Project>
