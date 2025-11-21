@@ -351,9 +351,11 @@ namespace NoPasaranFC.Gameplay
                         // Near ball - shoot!
                         PerformShoot(moveDirection);
                     }
-                    else
+                    else if (_shootButtonHoldTime < 0.1f && _lastPlayerTouchedBall != _controlledPlayer)
                     {
-                        // Not near ball - try to tackle
+                        // Not near ball, quick tap, and controlled player doesn't have possession - try to tackle
+                        // Only tackle if button was pressed very briefly (not a shot attempt)
+                        // and the controlled player is NOT the one who last touched the ball
                         Tackle();
                     }
                     _wasShootButtonDown = false;
@@ -408,6 +410,9 @@ namespace NoPasaranFC.Gameplay
                             float timeSinceLastKick = (float)MatchTime - _controlledPlayer.LastKickTime;
                             if (timeSinceLastKick >= AutoKickCooldown)
                             {
+                                // Trigger shoot animation
+                                _controlledPlayer.CurrentAnimationState = "shoot";
+                                
                                 // Kick ball in movement direction with stamina effect
                                 float staminaStatMultiplier = GetStaminaStatMultiplier(_controlledPlayer);
                                 float kickPower = (_controlledPlayer.Shooting / 8f + 6f) * staminaStatMultiplier;
@@ -640,6 +645,9 @@ namespace NoPasaranFC.Gameplay
                     float timeSinceLastKick = (float)MatchTime - player.LastKickTime;
                     if (timeSinceLastKick >= AutoKickCooldown)
                     {
+                        // Trigger shoot animation for AI
+                        player.CurrentAnimationState = "shoot";
+                        
                         // Kick ball toward opponent goal (aim AT the goal, not before it)
                     bool isHomeTeam = player.TeamId == _homeTeam.Id;
                     
@@ -942,6 +950,9 @@ namespace NoPasaranFC.Gameplay
             {
                 shootDirection.Normalize();
             }
+            
+            // Trigger shoot animation
+            _controlledPlayer.CurrentAnimationState = "shoot";
             
             // Calculate horizontal and vertical velocity with stamina effect
             float staminaMultiplier = GetStaminaStatMultiplier(_controlledPlayer);
@@ -1419,6 +1430,15 @@ namespace NoPasaranFC.Gameplay
         public void Tackle()
         {
             if (_controlledPlayer == null) return;
+            
+            // Don't tackle if the controlled player has the ball
+            if (_lastPlayerTouchedBall == _controlledPlayer)
+            {
+                return;
+            }
+            
+            // Trigger tackle animation
+            _controlledPlayer.CurrentAnimationState = "tackle";
             
             // Find nearest opponent with the ball
             var opposingTeam = _controlledPlayer.TeamId == _homeTeam.Id ? _awayTeam : _homeTeam;

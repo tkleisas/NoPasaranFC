@@ -181,57 +181,78 @@ namespace NoPasaranFC.Screens
                 // Update new animation system
                 if (player.AnimationSystem != null)
                 {
-                    // Determine animation state
-                    string newState = "idle";
-                    
-                    if (player.IsKnockedDown)
+                    // Check if shoot/tackle animation is playing
+                    if (player.CurrentAnimationState == "shoot" || player.CurrentAnimationState == "tackle")
                     {
-                        newState = "fall";
-                    }
-                    else if (player.Velocity.LengthSquared() > 0.1f)
-                    {
-                        newState = "walk";
+                        // Play the animation
+                        player.AnimationSystem.PlayAnimation(player.CurrentAnimationState);
+                        
+                        // Update animation
+                        player.AnimationSystem.Update(deltaTime);
+                        
+                        // Check if animation finished
+                        if (player.AnimationSystem.IsAnimationFinished())
+                        {
+                            // Reset to walk/idle
+                            player.CurrentAnimationState = "walk";
+                        }
                     }
                     else
                     {
-                        newState = "idle";
+                        // Determine animation state based on movement
+                        string newState = "idle";
+                        
+                        if (player.IsKnockedDown)
+                        {
+                            newState = "fall";
+                        }
+                        else if (player.Velocity.LengthSquared() > 0.1f)
+                        {
+                            newState = "walk";
+                        }
+                        else
+                        {
+                            newState = "idle";
+                        }
+                        
+                        player.CurrentAnimationState = newState;
+                        
+                        // Play the appropriate animation
+                        player.AnimationSystem.PlayAnimation(newState);
+                        
+                        // Calculate rotation based on velocity direction
+                        if (player.Velocity.LengthSquared() > 0.1f)
+                        {
+                            // Get angle from velocity 
+                            // Atan2 gives: right=0°, down=90°, left=180°/-180°, up=-90°
+                            float angle = (float)Math.Atan2(player.Velocity.Y, player.Velocity.X);
+                            
+                            // Our sprite rotation mapping:
+                            // 0 = up, 1 = up-right, 2 = right, 3 = down-right,
+                            // 4 = down, 5 = down-left, 6 = left, 7 = up-left
+                            
+                            // To map correctly:
+                            // velocity up (angle=-90°) should give rotation 0
+                            // velocity right (angle=0°) should give rotation 2
+                            // velocity down (angle=90°) should give rotation 4
+                            // velocity left (angle=180°) should give rotation 6
+                            
+                            // Add 90 degrees (PiOver2) to shift: up becomes 0°, right becomes 90°, etc.
+                            float adjustedAngle = angle + MathHelper.PiOver2;
+                            
+                            // Normalize to 0-2π range
+                            if (adjustedAngle < 0) adjustedAngle += MathHelper.TwoPi;
+                            
+                            // Convert to 0-7 steps (each step is 45°)
+                            // Divide by Pi/4 (45°) and round to nearest
+                            int rotation = (int)Math.Round(adjustedAngle / (MathHelper.Pi / 4f)) % 8;
+                            
+                            player.AnimationSystem.SetRotation(rotation);
+                        }
+                        
+                        // Update the animation
+                        player.AnimationSystem.Update(deltaTime);
                     }
-                    
-                    // Play the appropriate animation
-                    player.AnimationSystem.PlayAnimation(newState);
-                    
-                    // Calculate rotation based on velocity direction
-                    if (player.Velocity.LengthSquared() > 0.1f)
-                    {
-                        // Get angle from velocity 
-                        // Atan2 gives: right=0°, down=90°, left=180°/-180°, up=-90°
-                        float angle = (float)Math.Atan2(player.Velocity.Y, player.Velocity.X);
-                        
-                        // Our sprite rotation mapping:
-                        // 0 = up, 1 = up-right, 2 = right, 3 = down-right,
-                        // 4 = down, 5 = down-left, 6 = left, 7 = up-left
-                        
-                        // To map correctly:
-                        // velocity up (angle=-90°) should give rotation 0
-                        // velocity right (angle=0°) should give rotation 2
-                        // velocity down (angle=90°) should give rotation 4
-                        // velocity left (angle=180°) should give rotation 6
-                        
-                        // Add 90 degrees (PiOver2) to shift: up becomes 0°, right becomes 90°, etc.
-                        float adjustedAngle = angle + MathHelper.PiOver2;
-                        
-                        // Normalize to 0-2π range
-                        if (adjustedAngle < 0) adjustedAngle += MathHelper.TwoPi;
-                        
-                        // Convert to 0-7 steps (each step is 45°)
-                        // Divide by Pi/4 (45°) and round to nearest
-                        int rotation = (int)Math.Round(adjustedAngle / (MathHelper.Pi / 4f)) % 8;
-                        
-                        player.AnimationSystem.SetRotation(rotation);
-                    }
-                    
-                    // Update the animation
-                    player.AnimationSystem.Update(deltaTime);
                 }
                 
                 // OLD SYSTEM - Update animation based on movement (kept for fallback)
