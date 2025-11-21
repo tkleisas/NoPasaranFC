@@ -433,7 +433,7 @@ namespace NoPasaranFC.Screens
                 string versionText = Models.Version.GetFullVersion();
                 Vector2 versionSize = font.MeasureString(versionText);
                 Vector2 versionPos = new Vector2(10, screenHeight - versionSize.Y - 10);
-                spriteBatch.DrawString(font, versionText, versionPos, Color.Gray);
+                spriteBatch.DrawString(font, versionText, versionPos, Color.Red);
             }
             else
             {
