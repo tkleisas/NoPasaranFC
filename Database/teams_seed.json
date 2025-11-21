@@ -385,7 +385,7 @@
         {
           "name": "Ko Sti Minh",
           "position": "Defender",
-          "shirtNumber": 44,
+          "shirtNumber": 79,
           "isStarting": false,
           "speed": 51,
           "shooting": 36,
@@ -397,6 +397,19 @@
         },
         {
           "name": "lordakis",
+          "position": "Forward",
+          "shirtNumber": 79,
+          "isStarting": false,
+          "speed": 51,
+          "shooting": 36,
+          "passing": 62,
+          "defending": 74,
+          "agility": 54,
+          "technique": 58,
+          "stamina": 82
+        },
+        {
+          "name": "goken",
           "position": "Forward",
           "shirtNumber": 77,
           "isStarting": false,
