@@ -428,6 +428,12 @@ namespace NoPasaranFC.Screens
                     Vector2 textPos = new Vector2((screenWidth - textSize.X) / 2, menuStartY + i * 50);
                     spriteBatch.DrawString(font, text, textPos, color);
                 }
+                
+                // Draw version in bottom left corner
+                string versionText = Models.Version.GetFullVersion();
+                Vector2 versionSize = font.MeasureString(versionText);
+                Vector2 versionPos = new Vector2(10, screenHeight - versionSize.Y - 10);
+                spriteBatch.DrawString(font, versionText, versionPos, Color.Gray);
             }
             else
             {
