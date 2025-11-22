@@ -25,6 +25,10 @@ namespace NoPasaranFC.Screens
         private bool _graphicsInitialized;
         private Minimap _minimap;
         
+        // Debug overlay
+        private bool _debugOverlayEnabled = false;
+        private KeyboardState _previousKeyboardState;
+        
         // Goal nets
         private GoalNet _leftGoalNet;
         private GoalNet _rightGoalNet;
@@ -180,6 +184,14 @@ namespace NoPasaranFC.Screens
                 IsFinished = true;
             }
             
+            // Toggle debug overlay (F3 key)
+            KeyboardState currentKeyboardState = Keyboard.GetState();
+            if (currentKeyboardState.IsKeyDown(Keys.F3) && _previousKeyboardState.IsKeyUp(Keys.F3))
+            {
+                _debugOverlayEnabled = !_debugOverlayEnabled;
+            }
+            _previousKeyboardState = currentKeyboardState;
+            
             // Update player animations
             UpdatePlayerAnimations(gameTime);
             
@@ -290,17 +302,44 @@ namespace NoPasaranFC.Screens
                     if (player.AnimationFrame >= SpritesheetColumns)
                         player.AnimationFrame -= SpritesheetColumns; // Loop back
                     
-                    // Update direction based on velocity
+                    // Update direction based on velocity (with hysteresis to prevent oscillation)
                     Vector2 vel = player.Velocity;
+                    int newDirection;
+                    
+                    // Determine new direction
                     if (Math.Abs(vel.X) > Math.Abs(vel.Y))
                     {
                         // Horizontal movement dominant
-                        player.SpriteDirection = vel.X > 0 ? 3 : 2; // Right : Left
+                        newDirection = vel.X > 0 ? 3 : 2; // Right : Left
                     }
                     else
                     {
                         // Vertical movement dominant
-                        player.SpriteDirection = vel.Y > 0 ? 0 : 1; // Down : Up
+                        newDirection = vel.Y > 0 ? 0 : 1; // Down : Up
+                    }
+                    
+                    // Only change direction if significantly different (prevent flickering)
+                    // Check if new direction is opposite (2↔3 or 0↔1)
+                    bool isOppositeDirection = (player.SpriteDirection == 2 && newDirection == 3) ||
+                                               (player.SpriteDirection == 3 && newDirection == 2) ||
+                                               (player.SpriteDirection == 0 && newDirection == 1) ||
+                                               (player.SpriteDirection == 1 && newDirection == 0);
+                    
+                    // Only change to opposite direction if velocity is strong in that direction
+                    if (isOppositeDirection)
+                    {
+                        // Require stronger velocity to flip direction (hysteresis)
+                        float threshold = 20f; // Minimum velocity to change to opposite direction
+                        if (vel.LengthSquared() > threshold * threshold)
+                        {
+                            player.SpriteDirection = newDirection;
+                        }
+                        // Otherwise keep current direction
+                    }
+                    else
+                    {
+                        // Not opposite direction, change freely
+                        player.SpriteDirection = newDirection;
                     }
                 }
                 else
@@ -465,6 +504,12 @@ namespace NoPasaranFC.Screens
             if (!ballInsideGoal)
             {
                 DrawBall(spriteBatch, ballPos);
+            }
+            
+            // Draw debug overlay (with camera transform)
+            if (_debugOverlayEnabled)
+            {
+                DrawDebugOverlay(spriteBatch, font);
             }
             
             // End camera-transformed drawing
@@ -1103,6 +1148,96 @@ namespace NoPasaranFC.Screens
             // Draw text
             Color countdownColor = _matchEngine.CountdownNumber > 0 ? Color.Yellow : Color.LightGreen;
             spriteBatch.DrawString(font, countdownText, position, countdownColor, 0f, Vector2.Zero, scale, SpriteEffects.None, 0f);
+        }
+        
+        private void DrawDebugOverlay(SpriteBatch spriteBatch, SpriteFont font)
+        {
+            // Draw center line and zones
+            float centerX = MatchEngine.StadiumMargin + MatchEngine.FieldWidth / 2;
+            float centerZoneLeft = centerX - 200f;
+            float centerZoneRight = centerX + 200f;
+            
+            // Center line (red)
+            DrawLine(spriteBatch, new Vector2(centerX, MatchEngine.StadiumMargin), 
+                new Vector2(centerX, MatchEngine.StadiumMargin + MatchEngine.FieldHeight), 
+                Color.Red * 0.5f, 3f);
+            
+            // Center zone boundaries (yellow)
+            DrawLine(spriteBatch, new Vector2(centerZoneLeft, MatchEngine.StadiumMargin), 
+                new Vector2(centerZoneLeft, MatchEngine.StadiumMargin + MatchEngine.FieldHeight), 
+                Color.Yellow * 0.3f, 2f);
+            DrawLine(spriteBatch, new Vector2(centerZoneRight, MatchEngine.StadiumMargin), 
+                new Vector2(centerZoneRight, MatchEngine.StadiumMargin + MatchEngine.FieldHeight), 
+                Color.Yellow * 0.3f, 2f);
+            
+            // Draw player debug info
+            foreach (var player in _matchEngine.GetAllPlayers())
+            {
+                if (player.IsKnockedDown) continue;
+                
+                Vector2 pos = player.FieldPosition;
+                // Check if this is controlled player (home team player with highest ball proximity typically)
+                bool isControlled = player.TeamId == _homeTeam.Id && 
+                                   _matchEngine.GetAllPlayers().Where(p => p.TeamId == _homeTeam.Id)
+                                   .OrderBy(p => Vector2.Distance(p.FieldPosition, _matchEngine.BallPosition))
+                                   .FirstOrDefault() == player;
+                
+                // Player AI target position (green line)
+                if (player.AITargetPosition != Vector2.Zero)
+                {
+                    DrawLine(spriteBatch, pos, player.AITargetPosition, Color.Lime * 0.6f, 2f);
+                    
+                    // Target position circle
+                    DrawCircle(spriteBatch, player.AITargetPosition, 20f, Color.Lime * 0.8f, 3f);
+                }
+                
+                // Player velocity vector (blue line)
+                if (player.Velocity.Length() > 0.1f)
+                {
+                    Vector2 velocityEnd = pos + player.Velocity * 0.5f; // Scale for visibility
+                    DrawLine(spriteBatch, pos, velocityEnd, Color.Cyan * 0.8f, 3f);
+                }
+                
+                // Player position circle (color based on distance from center)
+                float distFromCenter = Math.Abs(pos.X - centerX);
+                bool inCenterZone = distFromCenter < 200f;
+                Color posColor = inCenterZone ? Color.Orange : Color.White;
+                DrawCircle(spriteBatch, pos, 70f, posColor * 0.5f, 2f);
+                
+                // Player state text
+                if (isControlled)
+                {
+                    string debugText = $"CTRL\nV:{player.Velocity.Length():F0}";
+                    spriteBatch.DrawString(font, debugText, pos + new Vector2(-30, -100), 
+                        Color.Yellow, 0f, Vector2.Zero, 0.6f, SpriteEffects.None, 0f);
+                }
+                else
+                {
+                    // AI state info
+                    string aiState = player.AIController != null ? 
+                        ((Gameplay.AIController)player.AIController).GetCurrentStateName() : "N/A";
+                    
+                    // Calculate actual threshold (base + ball distance bonus)
+                    float distToBall = Vector2.Distance(pos, _matchEngine.BallPosition);
+                    float baseThreshold = inCenterZone ? 100f : 50f;
+                    float ballBonus = distToBall > 800f ? 75f : 
+                                     distToBall > 500f ? 50f : 
+                                     distToBall > 300f ? 25f : 0f;
+                    int totalThreshold = (int)(baseThreshold + ballBonus);
+                    
+                    string debugText = $"{aiState}\nT:{totalThreshold}px\nD:{(int)distToBall}";
+                    spriteBatch.DrawString(font, debugText, pos + new Vector2(-40, -100), 
+                        Color.Cyan, 0f, Vector2.Zero, 0.5f, SpriteEffects.None, 0f);
+                }
+            }
+            
+            // Draw ball info
+            Vector2 ballPos = _matchEngine.BallPosition;
+            DrawCircle(spriteBatch, ballPos, 50f, Color.Red * 0.6f, 3f);
+            
+            string ballDebug = $"Ball\nV:{_matchEngine.BallVelocity.Length():F0}\nH:{_matchEngine.BallHeight:F0}";
+            spriteBatch.DrawString(font, ballDebug, ballPos + new Vector2(-30, -80), 
+                Color.White, 0f, Vector2.Zero, 0.6f, SpriteEffects.None, 0f);
         }
     }
 }

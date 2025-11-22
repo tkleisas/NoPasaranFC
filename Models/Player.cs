@@ -10,12 +10,41 @@ namespace NoPasaranFC.Models
         Forward
     }
     
+    public enum PlayerRole
+    {
+        // Goalkeeper
+        Goalkeeper,
+        
+        // Defenders
+        LeftBack,
+        RightBack,
+        CenterBack,
+        Sweeper,
+        
+        // Midfielders
+        DefensiveMidfielder,
+        CentralMidfielder,
+        AttackingMidfielder,
+        LeftMidfielder,
+        RightMidfielder,
+        LeftWinger,
+        RightWinger,
+        
+        // Forwards
+        Striker,
+        CenterForward,
+        
+        // Generic fallback
+        Generic
+    }
+    
     public class Player
     {
         public int Id { get; set; }
         public int TeamId { get; set; }
         public string Name { get; set; }
         public PlayerPosition Position { get; set; }
+        public PlayerRole Role { get; set; } // Specific tactical role
         
         // Field position
         public Vector2 FieldPosition { get; set; }
@@ -58,10 +87,31 @@ namespace NoPasaranFC.Models
         public bool IsStarting { get; set; } // Whether player is in starting lineup
         public int ShirtNumber { get; set; } // Player's shirt number
         
+        // AI Controller (not serialized to database)
+        [System.Text.Json.Serialization.JsonIgnore]
+        public object AIController { get; set; } // Using object to avoid circular dependency
+        
+        // AI target position tracking (prevents oscillation)
+        [System.Text.Json.Serialization.JsonIgnore]
+        public Vector2 AITargetPosition { get; set; }
+        
+        // AI target position set flag
+        [System.Text.Json.Serialization.JsonIgnore]
+        public bool AITargetPositionSet { get; set; }
+        
+        // AI cached ball half state (prevents oscillation from centerline crossing)
+        [System.Text.Json.Serialization.JsonIgnore]
+        public bool AICachedBallInDefensiveHalf { get; set; }
+        
+        // AI cache initialization flag
+        [System.Text.Json.Serialization.JsonIgnore]
+        public bool AICacheInitialized { get; set; }
+        
         public Player(string name, PlayerPosition position)
         {
             Name = name;
             Position = position;
+            Role = PlayerRole.Generic;
             Speed = 50;
             Shooting = 50;
             Passing = 50;

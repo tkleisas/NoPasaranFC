@@ -257,10 +257,71 @@ Use UTF8 encoding for all text data as there is multilingual support.
    - **Music transitions**: Menu ↔ Match music automatically
    - **Created AUDIO_SYSTEM.md**: Complete documentation with asset guidelines
 
-16. ✅ **Dynamic Goal Net System**:
+27. ✅ **Dynamic Goal Net System**:
    - Physics-based goal nets with realistic behavior
    - **Wind animation**: Subtle wave motion simulates natural wind effect
    - **Ball collision deformation**: Net deforms when ball enters, strength based on velocity
+   - **Back net collision**: Ball bounces off back of net, doesn't pass through
+   - **Depth rendering**: Players and ball render behind net when inside goal
+   
+28. ✅ **Position-Aware AI System with Dynamic Passing**:
+   - **Player roles**: Extended PlayerPosition with 15+ specific tactical roles
+     * Defenders: LeftBack, RightBack, CenterBack, Sweeper
+     * Midfielders: DefensiveMidfielder, CentralMidfielder, AttackingMidfielder, LeftMidfielder, RightMidfielder, LeftWinger, RightWinger
+     * Forwards: Striker, CenterForward
+   - **Role-specific AI states**: Each position has specialized behavior
+     * GoalkeeperState: Intelligent positioning on goal line, penalty area awareness
+     * DefenderState: Maintains defensive shape based on role (left/right/center)
+     * MidfielderState: Box-to-box movement, adapts to ball position, pushes forward when team has ball
+     * ForwardState: Aggressive attacking positioning, stays high (88% field depth), ready for passes
+   - **Simplified dribbling system**: Direct movement toward goal, no complex repositioning
+     * Ball physics handles natural ball control when player is close
+     * Maintains full speed (2.5x) while dribbling
+     * No "get behind ball" delays - immediate forward progress
+   - **Proactive passing system**: Position-based passing with role-specific behavior
+     * Defenders: 98% pass forward when teammate ahead (clear ball quickly)
+     * Midfielders: ALWAYS pass to forwards ahead (>500px), 95% any forward pass, 60% lateral/backward
+     * Forwards: 90% pass when teammate much closer to goal (>200px), 40% otherwise
+     * Pressure response: ALWAYS pass when opponent within 300px (unless in shooting range)
+
+29. ✅ **Aerial/Lofted Passing System**:
+   - **Intelligent pass type selection**: AI analyzes pass corridor and automatically chooses ground or aerial pass
+   - **Defender detection**: Counts opponents within 150px of pass line
+   - **Lofted pass triggers**:
+     * 2+ defenders blocking the pass corridor
+     * Long passes over 800 pixels (~1/4 field length)
+   - **Physics differences**:
+     * Ground Pass: 30f vertical velocity, full horizontal speed, 0.4 sound volume
+     * Lofted Pass: 200f+ vertical velocity (scales with distance), 85% horizontal speed, 0.6 sound volume
+   - **Ball height mechanics**:
+     * Players can only interact with balls below 100 pixels height
+     * Aerial passes arc high over defenders' heads
+     * Ball must land before players can intercept
+   - **Visual feedback**: Shadow grows/fades, ball appears larger when higher, Y position adjusted
+   - **Strategic benefits**: Bypass defensive lines, counter-attacks, pressure relief, space creation
+   - **Documentation**: See AI_AERIAL_PASSING.md for full details
+     * Pass power scales with distance (0.4-1.0 for up to 1500px)
+   - **Dynamic attacking movement**: Removed static center-line positioning
+     * Midfielders push to 85% (attacking) / 75% (normal) when team has ball
+     * Forwards stay at 88% depth regardless of ball position
+     * Team possession detection triggers aggressive forward movement
+     * No "dead zones" - continuous dynamic positioning
+   - **Context-aware decisions**: Comprehensive AIContext with:
+     * Ball state (position, velocity, height)
+     * Player relationships (nearest opponent/teammate, best pass target)
+     * Field positioning (defensive/attacking half)
+     * Game state (match time, possession, chase priority)
+     * Team possession tracking (TeamId-based)
+   - **State machine framework**: Fully integrated into MatchEngine
+     * AIController per player with role-specific positioning state
+     * Smooth state transitions based on game situation
+     * Callback system for passing and shooting actions
+     * Decision timer: 0.3s for responsive play
+   - **Formation management**: 4-4-2 formation with role assignments
+   - **Sideline avoidance**: AI redirects toward center near boundaries
+   - **Strategic behavior**: Different tactics in defensive vs attacking half
+   - **Debug overlay**: Toggle with D key to visualize AI state, targets, and velocities
+   - Created AI_PASSING_ATTACKING.md and POSITION_AWARE_AI.md documentation
    - **Spring physics**: Net returns to rest position with damping
    - **Grid system**: 8×12 dynamic point grid with fixed edges
    - **Player depth rendering**: Players behind net render under it correctly
@@ -269,7 +330,7 @@ Use UTF8 encoding for all text data as there is multilingual support.
    - **Created DYNAMIC_GOAL_NETS.md**: Technical documentation
 
 ## Next Steps (Future Enhancements):
-- Improve AI with formation awareness
+- Add alternative formations (4-3-3, 3-5-2, etc.)
 - Add more match events (fouls, corners, throw-ins, offsides)
 - Add player substitutions
 - Add detailed match statistics

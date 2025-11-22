@@ -174,7 +174,7 @@ namespace NoPasaranFC.Screens
                     break;
                     
                 case 13: // Camera Zoom
-                    _settings.CameraZoom = Math.Clamp(_settings.CameraZoom + direction * 0.1f, 0.5f, 2f);
+                    _settings.CameraZoom = Math.Clamp(_settings.CameraZoom + direction * 0.1f, 0.1f, 2f);
                     _database.SaveSettings(_settings);
                     break;
                     
