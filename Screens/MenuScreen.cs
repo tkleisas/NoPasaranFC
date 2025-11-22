@@ -400,12 +400,12 @@ namespace NoPasaranFC.Screens
                 {
                     string completeMsg = "*** ΤΟ ΠΡΩΤΑΘΛΗΜΑ ΕΧΕΙ ΟΛΟΚΛΗΡΩΘΕΙ! ***";
                     Vector2 msgSize = font.MeasureString(completeMsg);
-                    Vector2 msgPos = new Vector2((screenWidth - msgSize.X) / 2, screenHeight * 0.6f);
+                    Vector2 msgPos = new Vector2((screenWidth - msgSize.X) / 2, screenHeight * 0.5f);
                     spriteBatch.DrawString(font, completeMsg, msgPos, Color.LightGreen);
                     
                     string useNewSeason = "ΕΠΙΛΕΞΤΕ 'ΝΕΟ ΠΡΩΤΑΘΛΗΜΑ' ΓΙΑ ΝΕΟ ΞΕΚΙΝΗΜΑ";
                     Vector2 useSize = font.MeasureString(useNewSeason);
-                    Vector2 usePos = new Vector2((screenWidth - useSize.X) / 2, screenHeight * 0.6f + 30);
+                    Vector2 usePos = new Vector2((screenWidth - useSize.X) / 2, screenHeight * 0.5f + 30);
                     spriteBatch.DrawString(font, useNewSeason, usePos, Color.Gray);
                 }
                 

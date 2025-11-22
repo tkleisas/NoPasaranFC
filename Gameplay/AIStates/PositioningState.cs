@@ -17,11 +17,11 @@ namespace NoPasaranFC.Gameplay.AIStates
 
         public override AIStateType Update(Player player, AIContext context, float deltaTime)
         {
-            // At match start (first 5 seconds), all players rush to ball
-            bool matchJustStarted = context.MatchTime < 5f;
+            // At kickoff (first 5 seconds after kickoff), all players rush to ball
+            bool justAfterKickoff = context.TimeSinceKickoff < 5f;
             
             // Check if should chase ball
-            if (matchJustStarted || (context.ShouldChaseBall && context.DistanceToBall < 600f))
+            if (justAfterKickoff || (context.ShouldChaseBall && context.DistanceToBall < 600f))
             {
                 return AIStateType.ChasingBall;
             }

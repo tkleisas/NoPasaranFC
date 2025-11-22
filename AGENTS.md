@@ -329,6 +329,132 @@ Use UTF8 encoding for all text data as there is multilingual support.
    - **Performance optimized**: Minimal impact (< 1ms per frame for both nets)
    - **Created DYNAMIC_GOAL_NETS.md**: Technical documentation
 
+29. ✅ **AI Passing and Shooting Fix**:
+   - **Fixed dual AI system conflict**: Removed legacy `PerformAIKick()` that was overriding state machine
+   - **Prioritized passing over shooting**: Passing checks now occur BEFORE shooting checks
+   - **More liberal passing conditions**:
+     * Minimum pass distance lowered: 150px → 80px
+     * Defenders: 70% pass chance even lateral/backward (up from only forward passes)
+     * Midfielders: 70% pass chance for lateral passes (up from 60%)
+     * Forwards: 50% pass chance when not in ideal shooting position (up from 40%)
+   - **Reduced shooting aggression**:
+     * <300px: 90% shoot (down from 95%)
+     * <500px: 70% shoot (down from 85%)
+     * <700px: 40% shoot (down from 60%)
+     * <900px: 20% shoot (down from 30%)
+   - **Better goal scoring**: AI now builds up play with passes leading to better shooting opportunities
+   - **State machine now fully functional**: PassingState and ShootingState execute via callbacks
+   - **Created AI_PASSING_SHOOTING_FIX.md**: Detailed documentation of the fix
+
+30. ✅ **AI Dribbling and Passing Improvements**:
+   - **Automatic ball kicking during dribbling**: AI players now kick ball when moving close to it
+     * Distance check: Ball within 52.5px (1.5x kick distance)
+     * Direction check: Ball must be in front of player
+     * Cooldown system: Prevents continuous kicking/juggling
+     * Low trajectory: 15f vertical velocity for ground dribbling
+     * Stat-based power: Uses Shooting stat, stamina, and difficulty modifier
+   - **Simplified dribbling movement logic**:
+     * <60px: Move in desired direction (ball kicked automatically)
+     * 60-150px: Move toward ball first
+     * >150px: Chase ball directly
+   - **Predictive passing system**: Passes now aim at target's future position
+     * Calculates travel time based on distance and pass speed
+     * Predicts position: currentPos + (velocity × travelTime)
+     * Passes lead moving teammates correctly
+     * Realistic "through ball" behavior for forwards making runs
+   - **Created AI_DRIBBLING_PASSING_IMPROVEMENTS.md**: Technical documentation
+
+31. ✅ **AI Ball Kicking Positioning Fix**:
+   - **Proper positioning check**: Player must be behind ball to kick it in desired direction
+     * Dot product check: `dotProduct > 0.3f` ensures player within ~72° cone behind ball
+     * No more unrealistic backward/sideways kicks
+     * Player repositions if not in correct alignment
+   - **Enhanced auto-kick logic**: AI checks position relative to ball before kicking
+     * Verifies ball is in front of player (not behind or to side)
+     * Only kicks when properly aligned with desired direction
+   - **Updated state machine positioning**:
+     * DribblingState: Positions 50px behind ball, checks `dotProduct > 0.3f`
+     * PassingState: Positions 60px behind ball, executes when aligned
+     * ShootingState: Positions 60px behind ball, shoots when aligned
+   - **Smooth repositioning**: Players naturally move to ideal position before striking ball
+   - **Created AI_POSITIONING_FIX.md**: Detailed technical documentation
+
+32. ✅ **Kickoff After Goal Fix** (Enhanced):
+   - **Countdown state after goals**: Game now transitions to Countdown state after goal celebration
+     * 3.5 second countdown displayed (3, 2, 1)
+     * Consistent with game start behavior
+     * Whistle sounds when countdown ends
+   - **Player movement during countdown**: AI players move toward ball during countdown
+     * UpdatePlayers called with zero input (no kicks allowed)
+     * Players run positioning state machines naturally
+     * Ball forced stationary (velocity set to zero)
+   - **Kick prevention during countdown**: Both human and AI prevented from kicking
+     * Added `CurrentState == MatchState.Playing` checks to kick logic
+     * Human input disabled during countdown
+     * AI auto-kick disabled during countdown
+   - **TimeSinceKickoff tracking**: Added new timer that resets at each kickoff
+     * Replaces MatchTime check for kickoff behavior
+     * Resets to 0 when countdown ends and play begins
+     * AI states now check TimeSinceKickoff < 5f instead of MatchTime < 5f
+     * Works for both game start AND after goals
+   - **All AI states updated**: IdleState, DefenderState, MidfielderState, ForwardState, PositioningState
+   - **Smooth kickoff experience**: Identical feel to game start kickoff
+   - **Created AI_KICKOFF_FIX.md**: Complete technical documentation
+
+33. ✅ **Forward Positioning and Boundary Fixes**:
+   - **Fixed "player ahead of ball" issue**: Enhanced DribblingState to detect and handle this case
+     * Added `playerAheadOfBall` check (dotProduct < 0)
+     * Special repositioning logic moves player 80px behind ball when ahead
+     * Prevents forwards from trying to kick ball from wrong side
+   - **Reduced aggressive forward positioning**: Changed max position from 90% to 85% of field width
+     * Prevents forwards from getting too close to sidelines
+     * More realistic attacking positions
+   - **Added boundary clamping**: Target positions clamped to stay 150px inside field
+     * Prevents AI from targeting positions outside field boundaries
+     * Applied to all forward target position calculations
+   - **Boundary repulsion in ForwardState**: Added dynamic boundary avoidance
+     * Checks distance to all four boundaries (< 200px triggers repulsion)
+     * Blends movement direction with repulsion force (40% repulsion when near edge)
+     * Smooth turning away from boundaries while maintaining tactical positioning
+   - **AvoidingSidelineState enhancement**: Already handles extreme boundary cases when dribbling
+
+34. ✅ **Shooting and Defending Behavior Fixes**:
+   - **Much more aggressive shooting**: Attackers now shoot instead of dribbling into goal
+     * <200px: ALWAYS shoot (100% - inside penalty box)
+     * <400px: 95% shoot (close range)
+     * <600px: 80% shoot (medium range)
+     * <800px: 50% shoot (long range)
+     * <1000px: 20% shoot (very long range)
+     * Prevents forwards from trying to carry ball into net
+   - **Aggressive defender response**: Defenders now actively defend against goal threats
+     * Emergency defense mode when opponent within 800px of goal
+     * Chase ball when opponent within 500px of goal (not just 150px)
+     * All defenders track ball position when danger is close (70% lerp factor)
+     * Increased defensive coverage from 300px to 500px chase distance
+   - **Threat-based positioning**: Defenders use higher lerp factors when under threat
+     * 70% ball influence when opponent within 500px of goal
+     * 50% ball influence when opponent within 800px of goal
+     * Normal positioning otherwise
+   - **Better goal protection**: Multiple defenders now converge on attackers near goal
+
+35. ✅ **Sideline and Goalline Repositioning Fix**:
+   - **Reduced sideline avoidance trigger**: Changed from 300px to 150px in DribblingState
+     * Players can get much closer to sidelines before forced repositioning
+     * Allows better positioning along touchlines
+   - **Reduced goalline redirection margins**: Changed from 200px to 100px in DribblingState
+     * Players can get much closer to goallines before being forced toward center
+     * Essential for shooting from tight angles
+     * Reduced center pull strength from 60% to 30%
+   - **Less aggressive boundary avoidance**: AvoidingSidelineState improvements
+     * Reduced trigger distance from 400px to 250px
+     * Exit threshold reduced from 400px to 250px (earlier exit)
+     * Avoidance force reduced from 80% to 60% (more flexible movement)
+     * Increased repositioning speed from 0.9x to 1.5x for quicker recovery
+   - **Players can move beyond field boundaries**: ClampToField allows 100px margin
+     * Players without ball can position outside field for repositioning
+     * Only ball is restricted to stay in play (handled separately)
+   - **Better tactical positioning**: Players can now use full field near all boundaries
+
 ## Next Steps (Future Enhancements):
 - Add alternative formations (4-3-3, 3-5-2, etc.)
 - Add more match events (fouls, corners, throw-ins, offsides)

@@ -22,14 +22,29 @@ namespace NoPasaranFC.Gameplay.AIStates
                 return AIStateType.Dribbling;
             }
             
-            // At match start (first 5 seconds), only closest players rush to ball
-            bool matchJustStarted = context.MatchTime < 5f;
+            // At kickoff (first 5 seconds after kickoff), only closest players rush to ball
+            bool justAfterKickoff = context.TimeSinceKickoff < 5f;
+            
+            bool teamHasBall = context.ClosestToBall != null && context.ClosestToBall.TeamId == player.TeamId;
+            bool ballInOpponentHalf = context.IsHomeTeam ? 
+                (context.BallPosition.X > MatchEngine.StadiumMargin + MatchEngine.FieldWidth * 0.5f) :
+                (context.BallPosition.X < MatchEngine.StadiumMargin + MatchEngine.FieldWidth * 0.5f);
+            
+            bool isAttackingMidfielder = player.Role == PlayerRole.AttackingMidfielder ||
+                                        player.Role == PlayerRole.LeftWinger ||
+                                        player.Role == PlayerRole.RightWinger;
+            
+            // Attacking midfielders are aggressive when team has ball in opponent half
+            if (isAttackingMidfielder && teamHasBall && ballInOpponentHalf && context.DistanceToBall < 600f)
+            {
+                return AIStateType.ChasingBall;
+            }
             
             // Midfielders are box-to-box players - moderate aggression
-            bool ballInDefensiveHalf = context.IsDefensiveHalf && context.DistanceToBall < 250f; // Reduced from 300f
-            bool ballVeryClose = context.DistanceToBall < 200f; // Reduced from 250f
+            bool ballInDefensiveHalf = context.IsDefensiveHalf && context.DistanceToBall < 250f;
+            bool ballVeryClose = context.DistanceToBall < 200f;
             
-            if ((matchJustStarted && context.DistanceToBall < 500f) || (context.ShouldChaseBall && (ballInDefensiveHalf || ballVeryClose)))
+            if ((justAfterKickoff && context.DistanceToBall < 500f) || (context.ShouldChaseBall && (ballInDefensiveHalf || ballVeryClose)))
             {
                 return AIStateType.ChasingBall;
             }
@@ -37,35 +52,46 @@ namespace NoPasaranFC.Gameplay.AIStates
             // Calculate distance to ball
             float distanceToBall = Vector2.Distance(player.FieldPosition, context.BallPosition);
             
-            // Calculate lerp factor based on distance
-            float lerpFactor;
-            if (distanceToBall > 800f) lerpFactor = 0.15f;
-            else if (distanceToBall > 500f) lerpFactor = 0.25f;
-            else if (distanceToBall > 300f) lerpFactor = 0.35f;
-            else lerpFactor = 0.50f;
-            
             // Midfielders balance between home position and supporting ball
-            // Team with ball should push forward more
-            bool teamHasBall = context.ClosestToBall != null && context.ClosestToBall.TeamId == player.TeamId;
-            bool isAttackingMidfielder = player.Role == PlayerRole.AttackingMidfielder ||
-                                        player.Role == PlayerRole.LeftWinger ||
-                                        player.Role == PlayerRole.RightWinger;
-            
             Vector2 basePosition;
-            if (teamHasBall)
+            float lerpFactor;
+            
+            if (teamHasBall && ballInOpponentHalf)
             {
-                // Team has ball - push toward enemy goal
-                // CRITICAL: Use context.IsHomeTeam (set once at match start) instead of calculating from position
-                // This prevents oscillation when crossing centerline
+                // Team attacking in opponent half - push forward aggressively
                 float forwardX = context.IsHomeTeam ?
-                    MatchEngine.StadiumMargin + MatchEngine.FieldWidth * (isAttackingMidfielder ? 0.75f : 0.65f) :
-                    MatchEngine.StadiumMargin + MatchEngine.FieldWidth * (isAttackingMidfielder ? 0.25f : 0.35f);
+                    MatchEngine.StadiumMargin + MatchEngine.FieldWidth * (isAttackingMidfielder ? 0.80f : 0.70f) :
+                    MatchEngine.StadiumMargin + MatchEngine.FieldWidth * (isAttackingMidfielder ? 0.20f : 0.30f);
                 basePosition = new Vector2(forwardX, player.HomePosition.Y);
+                
+                // Higher ball influence when attacking
+                if (distanceToBall > 800f) lerpFactor = 0.3f;
+                else if (distanceToBall > 500f) lerpFactor = 0.4f;
+                else if (distanceToBall > 300f) lerpFactor = 0.5f;
+                else lerpFactor = 0.6f;
+            }
+            else if (teamHasBall)
+            {
+                // Team has ball in own half - push forward moderately
+                float forwardX = context.IsHomeTeam ?
+                    MatchEngine.StadiumMargin + MatchEngine.FieldWidth * (isAttackingMidfielder ? 0.70f : 0.60f) :
+                    MatchEngine.StadiumMargin + MatchEngine.FieldWidth * (isAttackingMidfielder ? 0.30f : 0.40f);
+                basePosition = new Vector2(forwardX, player.HomePosition.Y);
+                
+                if (distanceToBall > 800f) lerpFactor = 0.2f;
+                else if (distanceToBall > 500f) lerpFactor = 0.3f;
+                else if (distanceToBall > 300f) lerpFactor = 0.4f;
+                else lerpFactor = 0.5f;
             }
             else
             {
-                // Opponent has ball - hold position
+                // Opponent has ball - hold defensive position
                 basePosition = player.HomePosition;
+                
+                if (distanceToBall > 800f) lerpFactor = 0.15f;
+                else if (distanceToBall > 500f) lerpFactor = 0.25f;
+                else if (distanceToBall > 300f) lerpFactor = 0.35f;
+                else lerpFactor = 0.50f;
             }
             
             Vector2 newTargetPosition = Vector2.Lerp(basePosition, context.BallPosition, lerpFactor);

@@ -1,9 +1,13 @@
-# AI Final Positioning Fix - Oscillation Eliminated
+# AI Final Positioning Fix - Oscillation Eliminated + Shooting Improvements
 
 ## Problem Summary
-Players were oscillating at the centerline, displaying two target positions simultaneously, creating a stuck behavior where they rapidly flip between directions without actually moving.
+1. Players were oscillating at the centerline, displaying two target positions simultaneously
+2. Players with ball showing inconsistent target positions (rapid flipping)
+3. AI players rarely attempting shots even in good positions
 
-## Root Cause
+## Root Causes
+
+### Oscillation at Centerline
 The AI positioning code had **conditional logic that created multiple different target positions** based on whether the ball was in defensive/attacking half. This created two execution paths:
 
 1. **Path A**: Ball in defensive half → Calculate target position A
@@ -11,7 +15,16 @@ The AI positioning code had **conditional logic that created multiple different 
 
 When the ball was near the centerline, the system would rapidly switch between these two paths, creating two completely different target positions (often 1/4 field apart in opposite directions), causing the oscillation.
 
-## Solution
+### Dribbling Target Position Flipping
+In DribblingState, the `AITargetPosition` was being set to different values within the same frame:
+- Sometimes to `idealPosition` (behind ball)
+- Sometimes to `player.FieldPosition + moveDirection * 400f` (far ahead)
+- This caused visual flipping in debug overlay
+
+### Low Shooting Frequency
+Only one distance check (< 400px) with 90% probability meant players rarely attempted shots from valid shooting ranges.
+
+## Solutions Implemented
 
 ### 1. Removed Dead Zone / Center Zone Logic
 - Eliminated all conditional logic that switched behavior based on ball position relative to centerline
@@ -88,5 +101,44 @@ This allows proper early-exit logic to avoid redundant calculations.
 - ✅ Better performance (fewer calculations far from ball)
 - ✅ More predictable and debuggable AI behavior
 
-## Key Principle
-**One formula, one target position, one path of execution** - eliminates oscillation caused by switching between multiple calculation methods.
+## Latest Changes (Dribbling & Shooting)
+
+### DribblingState.cs - Consistent Target Visualization
+**Problem**: Target position flipping between repositioning logic and dribbling logic
+
+**Fix**: Set `AITargetPosition` to `OpponentGoalCenter` ONCE at the start of movement logic
+- Provides consistent visual target in debug overlay
+- Movement logic still handles repositioning correctly
+- Eliminates dual-target visualization issue
+
+### DribblingState.cs - Graduated Shooting Ranges
+**Problem**: Only one shooting distance check meant missed opportunities
+
+**Fix**: Implemented 4-tier distance-based shooting system:
+```csharp
+if (distanceToGoal < 300f)  → 95% shoot (very close)
+if (distanceToGoal < 500f)  → 85% shoot (close)
+if (distanceToGoal < 700f)  → 60% shoot (medium)
+if (distanceToGoal < 900f)  → 30% shoot (long range)
+```
+
+### ShootingState.cs - Power and Visualization
+**Changes**:
+1. Added `AITargetPosition` setting for debug overlay
+2. Updated power formula: `0.6 + (1000 - distance) / 1000 * 0.4`
+   - Range: 0.6 to 1.0 (minimum 60% power)
+   - Closer shots = more power
+
+## Key Principles
+1. **One formula, one target position, one path of execution** - eliminates oscillation
+2. **Consistent visual targets** - debug overlay shows stable target positions
+3. **Distance-based decision making** - graduated probabilities for more realistic behavior
+
+## Testing Checklist
+- ✅ No more oscillation at centerline
+- ✅ No more dual target positions
+- ✅ Consistent target visualization when dribbling
+- ✅ Frequent shooting attempts in range (< 500px)
+- ✅ Occasional long-range shots (500-900px)
+- ✅ Stronger shot power (60-100%)
+- ✅ Players move smoothly to calculated targets

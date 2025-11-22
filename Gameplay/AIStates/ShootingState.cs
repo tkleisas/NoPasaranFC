@@ -34,6 +34,10 @@ namespace NoPasaranFC.Gameplay.AIStates
             Vector2 shotDirection = target - context.BallPosition;
             float distance = shotDirection.Length();
             
+            // Set AI target position to goal for debug visualization
+            player.AITargetPosition = target;
+            player.AITargetPositionSet = true;
+            
             if (distance > 0.01f)
             {
                 shotDirection.Normalize();
@@ -46,28 +50,29 @@ namespace NoPasaranFC.Gameplay.AIStates
                 {
                     playerToBall.Normalize();
                     
-                    // Calculate angle between player-to-ball and shot direction
+                    // Check if player is behind ball relative to shot direction
+                    // Dot product: 1 = player directly behind ball, -1 = player ahead
                     float dotProduct = Vector2.Dot(playerToBall, shotDirection);
-                    float angle = MathHelper.ToDegrees((float)System.Math.Acos(MathHelper.Clamp(dotProduct, -1f, 1f)));
                     
-                    // If within 60-degree cone and close enough, execute shot
-                    if (angle < 30f && distToBall < 80f)
+                    // Good shooting position: player behind ball (dot > 0.3) and close
+                    if (dotProduct > 0.3f && distToBall < 70f)
                     {
-                        float power = MathHelper.Clamp(0.5f + (800f - distance) / 800f * 0.5f, 0.5f, 1f);
+                        // Distance-based power: closer = more power
+                        float power = MathHelper.Clamp(0.6f + (1000f - distance) / 1000f * 0.4f, 0.6f, 1f);
                         OnShootBall?.Invoke(target, power);
                         _hasExecutedShot = true;
                         return AIStateType.Positioning;
                     }
                     else
                     {
-                        // Need to reposition - move to position behind ball
-                        Vector2 idealPosition = context.BallPosition - (shotDirection * 70f);
+                        // Need to reposition - move to position behind ball relative to shot direction
+                        Vector2 idealPosition = context.BallPosition - (shotDirection * 60f);
                         Vector2 toIdealPos = idealPosition - player.FieldPosition;
                         
-                        if (toIdealPos.LengthSquared() > 100f) // More than 10 units away
+                        if (toIdealPos.LengthSquared() > 50f) // More than ~7 units away
                         {
                             toIdealPos.Normalize();
-                            float repositionSpeed = player.Speed * 2.0f;
+                            float repositionSpeed = player.Speed * 2.5f;
                             player.Velocity = toIdealPos * repositionSpeed;
                             return AIStateType.Shooting; // Stay in shooting state while repositioning
                         }

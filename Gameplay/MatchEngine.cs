@@ -25,6 +25,7 @@ namespace NoPasaranFC.Gameplay
         public int CountdownNumber { get; private set; }
         public GoalCelebration GoalCelebration { get; private set; }
         public float FinalScoreTimer { get; private set; }
+        private float _timeSinceKickoff; // Tracks time since last kickoff
         
         public Vector2 BallPosition { get; set; }
         public Vector2 BallVelocity { get; set; }
@@ -252,7 +253,7 @@ namespace NoPasaranFC.Gameplay
                 {
                     AudioManager.Instance.PlaySoundEffect("whistle_start");
                     CurrentState = MatchState.Playing;
-                    
+                    _timeSinceKickoff = 0f; // Reset kickoff timer when play starts
                 }
                 else
                 {
@@ -260,7 +261,15 @@ namespace NoPasaranFC.Gameplay
                     CountdownNumber = (int)Math.Ceiling(CountdownTimer);
                 }
                 
-                // Don't update gameplay during countdown, but keep camera following ball
+                // Allow AI players to move into position during countdown
+                // Player can't kick the ball (moveDirection = Zero, isShootKeyDown = false)
+                UpdatePlayers(deltaTime, Vector2.Zero, false);
+                
+                // Keep ball stationary during countdown
+                BallVelocity = Vector2.Zero;
+                BallVerticalVelocity = 0f;
+                
+                // Keep camera following ball
                 Camera.Follow(BallPosition, deltaTime);
                 return;
             }
@@ -284,9 +293,11 @@ namespace NoPasaranFC.Gameplay
                 
                 if (!GoalCelebration.IsActive)
                 {
-                    // Celebration ended, reset for kickoff
-                    CurrentState = MatchState.Playing;
+                    // Celebration ended, reset for kickoff with countdown
                     ResetAfterGoal();
+                    CurrentState = MatchState.Countdown;
+                    CountdownTimer = 3.5f; // 3 seconds countdown + 0.5 for "GO!"
+                    CountdownNumber = 3;
                 }
                 
                 // Keep camera on ball during celebration
@@ -313,6 +324,7 @@ namespace NoPasaranFC.Gameplay
             float realTimeDuration = GameSettings.Instance.GetMatchDurationSeconds();
             float gameTimeIncrement = (90f / realTimeDuration) * deltaTime;
             MatchTime += gameTimeIncrement;
+            _timeSinceKickoff += deltaTime; // Update kickoff timer
             
             // Check if match should end
             if (MatchTime >= 90f)
@@ -431,7 +443,8 @@ namespace NoPasaranFC.Gameplay
                         
                         // If controlled player is near ball and moving, kick it (with angle check and cooldown)
                         // Don't kick if ball is in the air (prevents headbutting glitch)
-                        if (moveDirection.Length() > 0.1f && BallHeight < 100f && CanPlayerKickBall(_controlledPlayer, moveDirection, BallKickDistance))
+                        // Don't kick during countdown
+                        if (CurrentState == MatchState.Playing && moveDirection.Length() > 0.1f && BallHeight < 100f && CanPlayerKickBall(_controlledPlayer, moveDirection, BallKickDistance))
                         {
                             // Check cooldown to prevent continuous juggling
                             float timeSinceLastKick = (float)MatchTime - _controlledPlayer.LastKickTime;
@@ -519,14 +532,43 @@ namespace NoPasaranFC.Gameplay
                 ClampToField(ref pos);
                 player.FieldPosition = pos;
                 
-                // AI controller handles movement through states, but we need to handle ball kicking here
-                // Check if AI player is near ball and should kick
-                if (context.HasBallPossession && BallHeight < 100f && CanPlayerKickBall(player, player.Velocity.Length() > 0 ? Vector2.Normalize(player.Velocity) : Vector2.Zero, BallKickDistance))
+                // AI dribbling: Kick ball automatically when close and moving (similar to player control)
+                // Don't kick during countdown
+                if (CurrentState == MatchState.Playing && baseVelocity.LengthSquared() > 0.01f && BallHeight < 100f)
                 {
-                    float timeSinceLastKick = (float)MatchTime - player.LastKickTime;
-                    if (timeSinceLastKick >= AutoKickCooldown)
+                    float distToBall = Vector2.Distance(player.FieldPosition, BallPosition);
+                    if (distToBall < BallKickDistance * 1.5f)
                     {
-                        PerformAIKick(player);
+                        Vector2 moveDirection = Vector2.Normalize(baseVelocity);
+                        
+                        // Check if player is positioned to kick ball in desired direction
+                        // Player must be somewhat behind the ball relative to kick direction
+                        Vector2 playerToBall = BallPosition - player.FieldPosition;
+                        if (playerToBall.LengthSquared() > 0.01f)
+                        {
+                            playerToBall.Normalize();
+                            
+                            // Check if player is facing the ball and ball is ahead
+                            float dotProduct = Vector2.Dot(moveDirection, playerToBall);
+                            
+                            // Allow kick if:
+                            // 1. Ball is in front of player (dot > 0.3, ~72 degree cone)
+                            // 2. Player is moving toward/past the ball
+                            if (dotProduct > 0.3f)
+                            {
+                                float timeSinceLastKick = (float)MatchTime - player.LastKickTime;
+                                if (timeSinceLastKick >= AutoKickCooldown)
+                                {
+                                    // Kick ball in movement direction
+                                    float staminaStatMultiplier = GetStaminaStatMultiplier(player);
+                                    float kickPower = (player.Shooting / 8f + 6f) * staminaStatMultiplier * GetAIDifficultyModifier();
+                                    BallVelocity = moveDirection * kickPower * player.Speed * 1.0f;
+                                    BallVerticalVelocity = 15f; // Very low kick for dribbling
+                                    _lastPlayerTouchedBall = player;
+                                    player.LastKickTime = (float)MatchTime;
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -619,6 +661,7 @@ namespace NoPasaranFC.Gameplay
                 ClosestToBall = GetPlayerClosestToBall(),
                 ShouldChaseBall = shouldChaseBall,
                 MatchTime = MatchTime,
+                TimeSinceKickoff = _timeSinceKickoff,
                 IsDefensiveHalf = ballInDefensiveHalf,
                 IsAttackingHalf = ballInAttackingHalf,
                 Teammates = myTeam.Players.Where(p => p.IsStarting && !p.IsKnockedDown && p != player).ToList(),
@@ -1370,13 +1413,13 @@ namespace NoPasaranFC.Gameplay
                 {
                     // Left goal (defended by home team)
                     isCornerKick = lastTouchWasHomeTeam; // Home defender touched = corner for away
-                    giveToHomeTeam = !lastTouchWasHomeTeam; // Give to opposite of who touched
+                    giveToHomeTeam = isCornerKick ? false : true; // Corner: give to away, Goal kick: give to home
                 }
                 else // right side
                 {
                     // Right goal (defended by away team)
                     isCornerKick = !lastTouchWasHomeTeam; // Away defender touched = corner for home
-                    giveToHomeTeam = lastTouchWasHomeTeam; // Give to opposite of who touched
+                    giveToHomeTeam = isCornerKick ? true : false; // Corner: give to home, Goal kick: give to away
                 }
             }
             

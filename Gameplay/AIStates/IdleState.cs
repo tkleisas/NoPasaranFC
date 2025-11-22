@@ -21,11 +21,11 @@ namespace NoPasaranFC.Gameplay.AIStates
             player.Velocity = Vector2.Zero;
             player.Stamina = System.Math.Min(100, player.Stamina + 2f * deltaTime);
             
-            // At match start (first 5 seconds), all players rush to ball
-            bool matchJustStarted = context.MatchTime < 5f;
+            // At kickoff (first 5 seconds after kickoff), all players rush to ball
+            bool justAfterKickoff = context.TimeSinceKickoff < 5f;
             
             // Transition logic
-            if (matchJustStarted || (context.ShouldChaseBall && context.DistanceToBall < 800f))
+            if (justAfterKickoff || (context.ShouldChaseBall && context.DistanceToBall < 800f))
             {
                 return AIStateType.ChasingBall;
             }

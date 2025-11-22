@@ -29,11 +29,12 @@ namespace NoPasaranFC.Gameplay.AIStates
                 return AIStateType.ChasingBall;
             }
             
-            // Check if near sideline - CRITICAL CHECK (wider margin to prevent going out)
-            float leftMarginCheck = MatchEngine.StadiumMargin + 300f;
-            float rightMarginCheck = MatchEngine.TotalWidth - MatchEngine.StadiumMargin - 300f;
-            float topMarginCheck = MatchEngine.StadiumMargin + 300f;
-            float bottomMarginCheck = MatchEngine.TotalHeight - MatchEngine.StadiumMargin - 300f;
+            // Check if VERY close to sideline (reduced margin to allow repositioning)
+            // Only trigger avoidance when truly near the boundary (150px instead of 300px)
+            float leftMarginCheck = MatchEngine.StadiumMargin + 150f;
+            float rightMarginCheck = MatchEngine.TotalWidth - MatchEngine.StadiumMargin - 150f;
+            float topMarginCheck = MatchEngine.StadiumMargin + 150f;
+            float bottomMarginCheck = MatchEngine.TotalHeight - MatchEngine.StadiumMargin - 150f;
             
             bool nearSideline = player.FieldPosition.X < leftMarginCheck || player.FieldPosition.X > rightMarginCheck ||
                               player.FieldPosition.Y < topMarginCheck || player.FieldPosition.Y > bottomMarginCheck;
@@ -50,17 +51,7 @@ namespace NoPasaranFC.Gameplay.AIStates
                 
                 float distanceToGoal = Vector2.Distance(player.FieldPosition, context.OpponentGoalCenter);
                 
-                // Check if in shooting range (very close to goal) - FIRST PRIORITY
-                if (distanceToGoal < 400f)
-                {
-                    // 90% chance to shoot when very close to goal
-                    if (context.Random.NextDouble() < 0.9)
-                    {
-                        return AIStateType.Shooting;
-                    }
-                }
-                
-                // CRITICAL: Check for pass opportunities FIRST (before pressure checks)
+                // CRITICAL: Check for pass opportunities FIRST (prioritize teamwork)
                 if (context.BestPassTarget != null)
                 {
                     float distToTeammate = Vector2.Distance(player.FieldPosition, context.BestPassTarget.FieldPosition);
@@ -68,10 +59,10 @@ namespace NoPasaranFC.Gameplay.AIStates
                     float myDistToGoal = Vector2.Distance(player.FieldPosition, context.OpponentGoalCenter);
                     
                     // Is teammate ahead of me (closer to goal)?
-                    bool teammateAheadOfMe = teammateDistToGoal < myDistToGoal - 50f; // Reduced buffer
+                    bool teammateAheadOfMe = teammateDistToGoal < myDistToGoal - 30f;
                     
-                    // Valid pass range: 150 to 2500 pixels
-                    bool validPassRange = distToTeammate > 150f && distToTeammate < 2500f;
+                    // Valid pass range: 80 to 2500 pixels (lowered minimum for close passes)
+                    bool validPassRange = distToTeammate > 80f && distToTeammate < 2500f;
                     
                     // Check if under pressure from opponent
                     bool underPressure = false;
@@ -94,11 +85,19 @@ namespace NoPasaranFC.Gameplay.AIStates
                     }
                     
                     // DEFENDERS: Almost always pass forward
-                    if (isDefender && validPassRange && teammateAheadOfMe)
+                    if (isDefender && validPassRange)
                     {
-                        // 98% pass chance for defenders
-                        if (context.Random.NextDouble() < 0.98)
+                        if (teammateAheadOfMe)
                         {
+                            // 98% pass chance when teammate ahead
+                            if (context.Random.NextDouble() < 0.98)
+                            {
+                                return AIStateType.Passing;
+                            }
+                        }
+                        else if (context.Random.NextDouble() < 0.70)
+                        {
+                            // 70% pass chance even if not ahead (lateral/back pass)
                             return AIStateType.Passing;
                         }
                     }
@@ -107,7 +106,7 @@ namespace NoPasaranFC.Gameplay.AIStates
                     if (isMidfielder && validPassRange)
                     {
                         // Long ball to forward ahead of us: ALWAYS pass
-                        if (isTeammateForward && teammateAheadOfMe && distToTeammate > 500f)
+                        if (isTeammateForward && teammateAheadOfMe && distToTeammate > 400f)
                         {
                             return AIStateType.Passing;
                         }
@@ -119,29 +118,77 @@ namespace NoPasaranFC.Gameplay.AIStates
                                 return AIStateType.Passing;
                             }
                         }
-                        // Even lateral/backward passes: 60% chance
-                        else if (context.Random.NextDouble() < 0.60)
+                        // Even lateral/backward passes: 70% chance (increased from 60%)
+                        else if (context.Random.NextDouble() < 0.70)
                         {
                             return AIStateType.Passing;
                         }
                     }
                     
-                    // FORWARDS: Pass when teammate is in significantly better position
-                    if (isForward && validPassRange && distanceToGoal > 400f)
+                    // FORWARDS: Pass when teammate is in better position, but prioritize shooting at close range
+                    if (isForward && validPassRange)
                     {
+                        // Very close to goal: shoot instead of pass
+                        if (distanceToGoal < 350f)
+                        {
+                            if (context.Random.NextDouble() < 0.85)
+                            {
+                                return AIStateType.Shooting;
+                            }
+                        }
                         // If teammate is much closer to goal, pass 90% of the time
-                        if (teammateAheadOfMe && (myDistToGoal - teammateDistToGoal) > 200f)
+                        else if (teammateAheadOfMe && (myDistToGoal - teammateDistToGoal) > 150f)
                         {
                             if (context.Random.NextDouble() < 0.90)
                             {
                                 return AIStateType.Passing;
                             }
                         }
-                        // Otherwise, still pass 40% of the time
-                        else if (context.Random.NextDouble() < 0.40)
+                        // Otherwise, pass 50% of the time (increased from 40%)
+                        else if (context.Random.NextDouble() < 0.50)
                         {
                             return AIStateType.Passing;
                         }
+                    }
+                }
+                
+                // Check if in shooting range - SECOND PRIORITY (after passing)
+                // MUCH MORE AGGRESSIVE shooting to prevent dribbling into goal
+                if (distanceToGoal < 200f)
+                {
+                    // Very close - ALWAYS shoot (inside penalty box)
+                    return AIStateType.Shooting;
+                }
+                else if (distanceToGoal < 400f)
+                {
+                    // Close range - shoot 95%
+                    if (context.Random.NextDouble() < 0.95)
+                    {
+                        return AIStateType.Shooting;
+                    }
+                }
+                else if (distanceToGoal < 600f)
+                {
+                    // Medium range - shoot 80%
+                    if (context.Random.NextDouble() < 0.80)
+                    {
+                        return AIStateType.Shooting;
+                    }
+                }
+                else if (distanceToGoal < 800f)
+                {
+                    // Long range - shoot 50%
+                    if (context.Random.NextDouble() < 0.50)
+                    {
+                        return AIStateType.Shooting;
+                    }
+                }
+                else if (distanceToGoal < 1000f)
+                {
+                    // Very long range - shoot 20%
+                    if (context.Random.NextDouble() < 0.20)
+                    {
+                        return AIStateType.Shooting;
                     }
                 }
             }
@@ -150,11 +197,12 @@ namespace NoPasaranFC.Gameplay.AIStates
             // This creates attacking behavior - always advance the ball forward
             Vector2 desiredKickDirection = context.OpponentGoalCenter - context.BallPosition;
             
-            // Check if near sideline - adjust direction toward center
-            float leftMargin = MatchEngine.StadiumMargin + 200f;
-            float rightMargin = MatchEngine.TotalWidth - MatchEngine.StadiumMargin - 200f;
-            float topMargin = MatchEngine.StadiumMargin + 200f;
-            float bottomMargin = MatchEngine.TotalHeight - MatchEngine.StadiumMargin - 200f;
+            // Check if VERY near boundaries - adjust direction toward center
+            // Reduced margins to allow better positioning near goallines and sidelines
+            float leftMargin = MatchEngine.StadiumMargin + 100f;  // Reduced from 200f
+            float rightMargin = MatchEngine.TotalWidth - MatchEngine.StadiumMargin - 100f;
+            float topMargin = MatchEngine.StadiumMargin + 100f;  // Reduced from 200f
+            float bottomMargin = MatchEngine.TotalHeight - MatchEngine.StadiumMargin - 100f;
             
             bool nearLeftSideline = context.BallPosition.X < leftMargin;
             bool nearRightSideline = context.BallPosition.X > rightMargin;
@@ -163,21 +211,26 @@ namespace NoPasaranFC.Gameplay.AIStates
             
             if (nearLeftSideline || nearRightSideline || nearTopSideline || nearBottomSideline)
             {
-                // Redirect toward field center
+                // Slightly redirect toward field center (reduced strength for better repositioning)
                 Vector2 fieldCenter = new Vector2(
                     MatchEngine.StadiumMargin + MatchEngine.FieldWidth / 2,
                     MatchEngine.StadiumMargin + MatchEngine.FieldHeight / 2
                 );
                 Vector2 toCenter = fieldCenter - context.BallPosition;
-                // Blend target direction with center direction
-                desiredKickDirection = desiredKickDirection * 0.4f + toCenter * 0.6f;
+                // Blend target direction with center direction (reduced center influence)
+                desiredKickDirection = desiredKickDirection * 0.7f + toCenter * 0.3f;  // Was 0.4/0.6
             }
             
             if (desiredKickDirection.LengthSquared() > 0)
             {
                 desiredKickDirection.Normalize();
                 
-                // Check if player is in a good position to kick (within 60-degree cone behind ball)
+                // ALWAYS set the main target as the goal - this prevents target flipping
+                Vector2 finalTarget = context.OpponentGoalCenter;
+                player.AITargetPosition = finalTarget;
+                player.AITargetPositionSet = true;
+                
+                // Position player to kick ball in desired direction
                 Vector2 playerToBall = context.BallPosition - player.FieldPosition;
                 float distToBall = playerToBall.Length();
                 
@@ -185,37 +238,67 @@ namespace NoPasaranFC.Gameplay.AIStates
                 {
                     playerToBall.Normalize();
                     
-                    // Calculate angle between player-to-ball and desired kick direction
+                    // Calculate if player is behind ball relative to desired kick direction
+                    // Dot product: 1 = player directly behind ball, -1 = player ahead of ball
                     float dotProduct = Vector2.Dot(playerToBall, desiredKickDirection);
-                    float angle = MathHelper.ToDegrees((float)System.Math.Acos(MathHelper.Clamp(dotProduct, -1f, 1f)));
                     
-                    // If within 60-degree cone (30 degrees on each side) and close enough, just push forward
-                    if (angle < 30f && distToBall < 80f)
+                    // Check if player is AHEAD of ball (wrong side)
+                    bool playerAheadOfBall = dotProduct < 0f;
+                    
+                    // Check if player is in good position (behind ball, within 72 degree cone)
+                    bool isInGoodPosition = dotProduct > 0.3f && distToBall < 50f;
+                    
+                    if (isInGoodPosition)
                     {
-                        // Good position - just move toward goal
+                        // Good position - move in desired direction, ball will be kicked
                         Vector2 moveDirection = GetSafeDirection(player.FieldPosition, desiredKickDirection, context);
                         float dribbleSpeed = player.Speed * 2.5f;
                         player.Velocity = moveDirection * dribbleSpeed;
                     }
-                    else
+                    else if (playerAheadOfBall)
                     {
-                        // Need to reposition - move to a position behind the ball
-                        // Place player 70 units behind ball in opposite direction of desired kick
-                        Vector2 idealPosition = context.BallPosition - (desiredKickDirection * 70f);
-                        
+                        // Player is AHEAD of ball - need to go around it
+                        // Move to position behind ball (perpendicular approach to avoid collision)
+                        Vector2 idealPosition = context.BallPosition - (desiredKickDirection * 80f);
                         Vector2 toIdealPos = idealPosition - player.FieldPosition;
-                        float distToIdeal = toIdealPos.Length();
                         
-                        if (distToIdeal > 10f) // Only move if not close enough
+                        if (toIdealPos.Length() > 10f)
                         {
                             toIdealPos.Normalize();
                             Vector2 moveDirection = GetSafeDirection(player.FieldPosition, toIdealPos, context);
-                            float repositionSpeed = player.Speed * 2.0f; // Slightly slower when repositioning
+                            float repositionSpeed = player.Speed * 2.5f;
                             player.Velocity = moveDirection * repositionSpeed;
                         }
                         else
                         {
-                            // Close enough to ideal position, move toward goal
+                            // Reached position behind ball
+                            player.Velocity = Vector2.Zero;
+                        }
+                    }
+                    else if (distToBall > 150f)
+                    {
+                        // Far from ball - move directly toward it
+                        Vector2 moveDirection = GetSafeDirection(player.FieldPosition, playerToBall, context);
+                        float chaseSpeed = player.Speed * 2.5f;
+                        player.Velocity = moveDirection * chaseSpeed;
+                    }
+                    else
+                    {
+                        // Medium distance or bad angle - move to ideal position behind ball
+                        // Position: 60 pixels behind ball in opposite of desired kick direction
+                        Vector2 idealPosition = context.BallPosition - (desiredKickDirection * 60f);
+                        Vector2 toIdealPos = idealPosition - player.FieldPosition;
+                        
+                        if (toIdealPos.LengthSquared() > 25f) // More than 5 pixels away
+                        {
+                            toIdealPos.Normalize();
+                            Vector2 moveDirection = GetSafeDirection(player.FieldPosition, toIdealPos, context);
+                            float repositionSpeed = player.Speed * 2.5f;
+                            player.Velocity = moveDirection * repositionSpeed;
+                        }
+                        else
+                        {
+                            // Close to ideal position, move forward
                             Vector2 moveDirection = GetSafeDirection(player.FieldPosition, desiredKickDirection, context);
                             float dribbleSpeed = player.Speed * 2.5f;
                             player.Velocity = moveDirection * dribbleSpeed;

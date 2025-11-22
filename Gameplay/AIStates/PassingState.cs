@@ -32,8 +32,20 @@ namespace NoPasaranFC.Gameplay.AIStates
             
             if (passTarget != null)
             {
-                // Calculate desired pass direction
-                Vector2 passDirection = passTarget.FieldPosition - context.BallPosition;
+                // PREDICT target's future position based on their velocity
+                Vector2 targetCurrentPos = passTarget.FieldPosition;
+                Vector2 targetVelocity = passTarget.Velocity;
+                
+                // Calculate approximate travel time for the pass
+                float distanceToTarget = Vector2.Distance(context.BallPosition, targetCurrentPos);
+                float estimatedPassSpeed = 400f; // Rough estimate of pass speed
+                float travelTime = distanceToTarget / estimatedPassSpeed;
+                
+                // Predict where target will be
+                Vector2 predictedPosition = targetCurrentPos + (targetVelocity * travelTime);
+                
+                // Calculate desired pass direction to PREDICTED position
+                Vector2 passDirection = predictedPosition - context.BallPosition;
                 float distance = passDirection.Length();
                 
                 if (distance > 0.01f)
@@ -48,12 +60,12 @@ namespace NoPasaranFC.Gameplay.AIStates
                     {
                         playerToBall.Normalize();
                         
-                        // Calculate angle between player-to-ball and pass direction
+                        // Check if player is behind ball relative to pass direction
+                        // Dot product: 1 = player directly behind ball, -1 = player ahead
                         float dotProduct = Vector2.Dot(playerToBall, passDirection);
-                        float angle = MathHelper.ToDegrees((float)System.Math.Acos(MathHelper.Clamp(dotProduct, -1f, 1f)));
                         
-                        // VERY lenient passing: 120-degree cone (60 degrees each side) and much further distance
-                        if (angle < 60f && distToBall < 150f)
+                        // Good position: player behind ball (dot > 0.3) and close enough
+                        if (dotProduct > 0.3f && distToBall < 80f)
                         {
                             // DRAMATICALLY INCREASED power scaling: passes should travel far
                             // Field is 3200 wide, so 1/8 = 400, 1/4 = 800
@@ -71,20 +83,21 @@ namespace NoPasaranFC.Gameplay.AIStates
                                 power = MathHelper.Clamp(0.95f + ((distance - 800f) / 800f) * 0.05f, 0.95f, 1.0f); // 0.95 to 1.0
                             }
                             
-                            OnPassBall?.Invoke(passTarget.FieldPosition, power);
+                            // Pass to PREDICTED position, not current position
+                            OnPassBall?.Invoke(predictedPosition, power);
                             _hasExecutedPass = true;
                             return AIStateType.Positioning;
                         }
                         else
                         {
-                            // Need to reposition - move to position behind ball
-                            Vector2 idealPosition = context.BallPosition - (passDirection * 70f);
+                            // Need to reposition - move to position behind ball relative to pass direction
+                            Vector2 idealPosition = context.BallPosition - (passDirection * 60f);
                             Vector2 toIdealPos = idealPosition - player.FieldPosition;
                             
-                            if (toIdealPos.LengthSquared() > 100f) // More than 10 units away
+                            if (toIdealPos.LengthSquared() > 50f) // More than ~7 units away
                             {
                                 toIdealPos.Normalize();
-                                float repositionSpeed = player.Speed * 2.0f;
+                                float repositionSpeed = player.Speed * 2.5f;
                                 player.Velocity = toIdealPos * repositionSpeed;
                                 return AIStateType.Passing; // Stay in passing state while repositioning
                             }

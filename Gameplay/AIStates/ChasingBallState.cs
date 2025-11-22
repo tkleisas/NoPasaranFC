@@ -55,6 +55,10 @@ namespace NoPasaranFC.Gameplay.AIStates
                 toBall.Normalize();
                 float speed = player.Speed * 2.5f;
                 player.Velocity = toBall * speed; // Set velocity - MatchEngine will apply multipliers and update position
+                
+                // Set AI target position to ball for debug visualization
+                player.AITargetPosition = context.BallPosition;
+                player.AITargetPositionSet = true;
             }
             
             return AIStateType.ChasingBall;

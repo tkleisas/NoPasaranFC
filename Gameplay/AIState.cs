@@ -78,6 +78,7 @@ namespace NoPasaranFC.Gameplay
         // Additional context for role-based AI
         public float BallHeight { get; set; }
         public float MatchTime { get; set; }
+        public float TimeSinceKickoff { get; set; } // Time since last kickoff
         public bool IsDefensiveHalf { get; set; }
         public bool IsAttackingHalf { get; set; }
         public List<Player> Teammates { get; set; }

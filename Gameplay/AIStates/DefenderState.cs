@@ -22,14 +22,24 @@ namespace NoPasaranFC.Gameplay.AIStates
                 return AIStateType.Dribbling;
             }
             
-            // At match start (first 5 seconds), only closest players rush to ball
-            bool matchJustStarted = context.MatchTime < 5f;
+            // At kickoff (first 5 seconds after kickoff), only closest players rush to ball
+            bool justAfterKickoff = context.TimeSinceKickoff < 5f;
             
-            // Should chase ball? - Very conservative, only in defensive half
-            bool ballDangerous = context.IsDefensiveHalf && context.DistanceToBall < 150f; // Reduced from 200f
+            // AGGRESSIVE DEFENDING: Check if opponent has ball near goal
+            bool opponentHasBall = context.ClosestToBall != null && context.ClosestToBall.TeamId != player.TeamId;
+            float distanceBallToOwnGoal = Vector2.Distance(context.BallPosition, context.OwnGoalCenter);
+            bool ballNearOurGoal = distanceBallToOwnGoal < 800f; // Threat zone
             
-            // Only chase if at match start AND close, OR ball is truly dangerous in defensive zone
-            if ((matchJustStarted && context.DistanceToBall < 500f) || (context.ShouldChaseBall && ballDangerous))
+            // Defenders should ALWAYS chase when:
+            // 1. Ball is in defensive half AND close
+            // 2. Opponent has ball near our goal
+            // 3. We're the designated chaser
+            bool ballDangerous = context.IsDefensiveHalf && context.DistanceToBall < 300f;
+            bool emergencyDefense = opponentHasBall && ballNearOurGoal && context.DistanceToBall < 500f;
+            
+            if ((justAfterKickoff && context.DistanceToBall < 500f) || 
+                (context.ShouldChaseBall && ballDangerous) ||
+                emergencyDefense)
             {
                 return AIStateType.ChasingBall;
             }
@@ -37,8 +47,20 @@ namespace NoPasaranFC.Gameplay.AIStates
             // Calculate distance to ball for update decisions
             float distanceToBall = Vector2.Distance(player.FieldPosition, context.BallPosition);
             
+            // INCREASED ball tracking when opponent threatens our goal
             // Distance-based lerp: players far from ball use smaller lerp factor
             float lerpFactor;
+            
+            // If opponent has ball very close to our goal, ALL defenders track more aggressively
+            if (opponentHasBall && distanceBallToOwnGoal < 500f)
+            {
+                lerpFactor = 0.70f; // VERY high ball influence when defending goal
+            }
+            else if (opponentHasBall && distanceBallToOwnGoal < 800f)
+            {
+                lerpFactor = 0.50f; // High ball influence in danger zone
+            }
+            else
             if (distanceToBall > 800f)
             {
                 lerpFactor = 0.12f;  // Very far: minimal ball influence

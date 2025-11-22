@@ -40,13 +40,13 @@ namespace NoPasaranFC.Gameplay.AIStates
             float topDist = player.FieldPosition.Y - MatchEngine.StadiumMargin;
             float bottomDist = (MatchEngine.TotalHeight - MatchEngine.StadiumMargin) - player.FieldPosition.Y;
             
-            // Move STRONGLY away from nearest boundary
+            // Move away from nearest boundary (reduced trigger distance for better repositioning)
             Vector2 avoidDirection = Vector2.Zero;
             
-            if (leftDist < 400f) avoidDirection.X += 1f; // Move right
-            if (rightDist < 400f) avoidDirection.X -= 1f; // Move left
-            if (topDist < 400f) avoidDirection.Y += 1f; // Move down
-            if (bottomDist < 400f) avoidDirection.Y -= 1f; // Move up
+            if (leftDist < 250f) avoidDirection.X += 1f; // Move right
+            if (rightDist < 250f) avoidDirection.X -= 1f; // Move left
+            if (topDist < 250f) avoidDirection.Y += 1f; // Move down
+            if (bottomDist < 250f) avoidDirection.Y -= 1f; // Move up
             
             // Also add direction towards center
             Vector2 toCenter = fieldCenter - player.FieldPosition;
@@ -56,24 +56,30 @@ namespace NoPasaranFC.Gameplay.AIStates
             }
             
             // Combine avoidance (priority) with center direction
-            Vector2 targetDirection = avoidDirection * 0.8f + toCenter * 0.2f;
+            // Reduced avoidance strength to allow more flexible movement
+            Vector2 targetDirection = avoidDirection * 0.6f + toCenter * 0.4f;
             
             if (targetDirection.LengthSquared() > 0)
             {
                 targetDirection.Normalize();
-                float speed = player.Speed * 0.9f;
+                float speed = player.Speed * 1.5f; // Increased from 0.9f for quicker repositioning
                 player.Velocity = targetDirection * speed; // Set velocity - MatchEngine will apply multipliers and update position
+                
+                // Set AI target position for debug visualization (point toward center)
+                player.AITargetPosition = player.FieldPosition + (targetDirection * 300f);
+                player.AITargetPositionSet = true;
             }
             else
             {
                 player.Velocity = Vector2.Zero;
             }
             
-            // Check if safe now (need bigger safety margin)
-            float leftMargin = MatchEngine.StadiumMargin + 400f;
-            float rightMargin = MatchEngine.TotalWidth - MatchEngine.StadiumMargin - 400f;
-            float topMargin = MatchEngine.StadiumMargin + 400f;
-            float bottomMargin = MatchEngine.TotalHeight - MatchEngine.StadiumMargin - 400f;
+            // Check if safe now (reduced margin to allow repositioning near sideline)
+            // Exit earlier so player can reposition along the sideline
+            float leftMargin = MatchEngine.StadiumMargin + 250f;
+            float rightMargin = MatchEngine.TotalWidth - MatchEngine.StadiumMargin - 250f;
+            float topMargin = MatchEngine.StadiumMargin + 250f;
+            float bottomMargin = MatchEngine.TotalHeight - MatchEngine.StadiumMargin - 250f;
             
             bool isSafe = player.FieldPosition.X > leftMargin && player.FieldPosition.X < rightMargin &&
                          player.FieldPosition.Y > topMargin && player.FieldPosition.Y < bottomMargin;
