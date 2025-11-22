@@ -41,7 +41,8 @@ namespace NoPasaranFC.Models
     public class Player
     {
         public int Id { get; set; }
-        public int TeamId { get; set; }
+        public int TeamId { get; set; } // For database persistence
+        public Team Team { get; set; } // Runtime reference to team
         public string Name { get; set; }
         public PlayerPosition Position { get; set; }
         public PlayerRole Role { get; set; } // Specific tactical role

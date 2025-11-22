@@ -21,7 +21,8 @@ namespace NoPasaranFC.Models
             Matches.Clear();
             int teamCount = Teams.Count;
             
-            // Generate round-robin fixtures
+            // Generate round-robin fixtures with matchweek tracking
+            int matchweek = 1;
             for (int round = 0; round < (teamCount - 1) * 2; round++)
             {
                 for (int i = 0; i < teamCount / 2; i++)
@@ -30,11 +31,24 @@ namespace NoPasaranFC.Models
                     int away = (teamCount - 1 - i + round) % teamCount;
                     
                     if (round < teamCount - 1)
-                        Matches.Add(new Match(Teams[home].Id, Teams[away].Id));
+                        Matches.Add(new Match(Teams[home].Id, Teams[away].Id, matchweek));
                     else
-                        Matches.Add(new Match(Teams[away].Id, Teams[home].Id));
+                        Matches.Add(new Match(Teams[away].Id, Teams[home].Id, matchweek));
                 }
+                matchweek++;
             }
+        }
+        
+        public List<Match> GetMatchesForMatchweek(int matchweek)
+        {
+            return Matches.Where(m => m.Matchweek == matchweek).ToList();
+        }
+        
+        public int GetCurrentMatchweek()
+        {
+            // Find the matchweek of the first unplayed match
+            var unplayedMatch = Matches.FirstOrDefault(m => !m.IsPlayed);
+            return unplayedMatch?.Matchweek ?? CurrentMatchweek;
         }
         
         public List<Team> GetStandings()

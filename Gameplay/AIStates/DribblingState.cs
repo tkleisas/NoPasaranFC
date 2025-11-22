@@ -196,7 +196,12 @@ namespace NoPasaranFC.Gameplay.AIStates
             // CRITICAL: Dribble toward the opponent's goal
             // This creates attacking behavior - always advance the ball forward
             Vector2 desiredKickDirection = context.OpponentGoalCenter - context.BallPosition;
+            if (desiredKickDirection.LengthSquared() > 0)
+            {
+                desiredKickDirection.Normalize();
+            }
             
+
             // Check if VERY near boundaries - adjust direction toward center
             // Reduced margins to allow better positioning near goallines and sidelines
             float leftMargin = MatchEngine.StadiumMargin + 100f;  // Reduced from 200f
@@ -230,80 +235,27 @@ namespace NoPasaranFC.Gameplay.AIStates
                 player.AITargetPosition = finalTarget;
                 player.AITargetPositionSet = true;
                 
-                // Position player to kick ball in desired direction
-                Vector2 playerToBall = context.BallPosition - player.FieldPosition;
-                float distToBall = playerToBall.Length();
+                // SIMPLIFIED DRIBBLING: Just move toward goal!
+                // When we have possession, the ball moves with us due to auto-kick
+                // Trying to get "behind" the ball causes infinite loops since ball follows us
+                // The auto-kick system will handle kicking the ball in the right direction
                 
-                if (distToBall > 0.01f)
+                float distToBall = Vector2.Distance(player.FieldPosition, context.BallPosition);
+                
+                if (distToBall < 80f)
                 {
-                    playerToBall.Normalize();
-                    
-                    // Calculate if player is behind ball relative to desired kick direction
-                    // Dot product: 1 = player directly behind ball, -1 = player ahead of ball
-                    float dotProduct = Vector2.Dot(playerToBall, desiredKickDirection);
-                    
-                    // Check if player is AHEAD of ball (wrong side)
-                    bool playerAheadOfBall = dotProduct < 0f;
-                    
-                    // Check if player is in good position (behind ball, within 72 degree cone)
-                    bool isInGoodPosition = dotProduct > 0.3f && distToBall < 50f;
-                    
-                    if (isInGoodPosition)
-                    {
-                        // Good position - move in desired direction, ball will be kicked
-                        Vector2 moveDirection = GetSafeDirection(player.FieldPosition, desiredKickDirection, context);
-                        float dribbleSpeed = player.Speed * 2.5f;
-                        player.Velocity = moveDirection * dribbleSpeed;
-                    }
-                    else if (playerAheadOfBall)
-                    {
-                        // Player is AHEAD of ball - need to go around it
-                        // Move to position behind ball (perpendicular approach to avoid collision)
-                        Vector2 idealPosition = context.BallPosition - (desiredKickDirection * 80f);
-                        Vector2 toIdealPos = idealPosition - player.FieldPosition;
-                        
-                        if (toIdealPos.Length() > 10f)
-                        {
-                            toIdealPos.Normalize();
-                            Vector2 moveDirection = GetSafeDirection(player.FieldPosition, toIdealPos, context);
-                            float repositionSpeed = player.Speed * 2.5f;
-                            player.Velocity = moveDirection * repositionSpeed;
-                        }
-                        else
-                        {
-                            // Reached position behind ball
-                            player.Velocity = Vector2.Zero;
-                        }
-                    }
-                    else if (distToBall > 150f)
-                    {
-                        // Far from ball - move directly toward it
-                        Vector2 moveDirection = GetSafeDirection(player.FieldPosition, playerToBall, context);
-                        float chaseSpeed = player.Speed * 2.5f;
-                        player.Velocity = moveDirection * chaseSpeed;
-                    }
-                    else
-                    {
-                        // Medium distance or bad angle - move to ideal position behind ball
-                        // Position: 60 pixels behind ball in opposite of desired kick direction
-                        Vector2 idealPosition = context.BallPosition - (desiredKickDirection * 60f);
-                        Vector2 toIdealPos = idealPosition - player.FieldPosition;
-                        
-                        if (toIdealPos.LengthSquared() > 25f) // More than 5 pixels away
-                        {
-                            toIdealPos.Normalize();
-                            Vector2 moveDirection = GetSafeDirection(player.FieldPosition, toIdealPos, context);
-                            float repositionSpeed = player.Speed * 2.5f;
-                            player.Velocity = moveDirection * repositionSpeed;
-                        }
-                        else
-                        {
-                            // Close to ideal position, move forward
-                            Vector2 moveDirection = GetSafeDirection(player.FieldPosition, desiredKickDirection, context);
-                            float dribbleSpeed = player.Speed * 2.5f;
-                            player.Velocity = moveDirection * dribbleSpeed;
-                        }
-                    }
+                    // Close to ball - just move toward goal
+                    // Auto-kick will fire when appropriate
+                    float dribbleSpeed = player.Speed * 2.5f;
+                    player.Velocity = desiredKickDirection * dribbleSpeed;
+                }
+                else
+                {
+                    // Far from ball - chase it
+                    Vector2 toBall = context.BallPosition - player.FieldPosition;
+                    toBall.Normalize();
+                    float chaseSpeed = player.Speed * 2.5f;
+                    player.Velocity = toBall * chaseSpeed;
                 }
             }
             

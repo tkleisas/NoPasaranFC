@@ -8,14 +8,16 @@ namespace NoPasaranFC.Models
         public int HomeScore { get; set; }
         public int AwayScore { get; set; }
         public bool IsPlayed { get; set; }
+        public int Matchweek { get; set; } // Which round/matchweek this match belongs to
         
-        public Match(int homeTeamId, int awayTeamId)
+        public Match(int homeTeamId, int awayTeamId, int matchweek = 0)
         {
             HomeTeamId = homeTeamId;
             AwayTeamId = awayTeamId;
             HomeScore = 0;
             AwayScore = 0;
             IsPlayed = false;
+            Matchweek = matchweek;
         }
     }
 }

@@ -70,6 +70,7 @@ namespace NoPasaranFC.Database
                     HomeScore INTEGER DEFAULT 0,
                     AwayScore INTEGER DEFAULT 0,
                     IsPlayed INTEGER DEFAULT 0,
+                    Matchweek INTEGER DEFAULT 0,
                     FOREIGN KEY(HomeTeamId) REFERENCES Teams(Id),
                     FOREIGN KEY(AwayTeamId) REFERENCES Teams(Id)
                 );
@@ -280,8 +281,8 @@ namespace NoPasaranFC.Database
             {
                 // New match without ID
                 command.CommandText = @"
-                    INSERT INTO Matches (HomeTeamId, AwayTeamId, HomeScore, AwayScore, IsPlayed)
-                    VALUES (@homeTeamId, @awayTeamId, @homeScore, @awayScore, @isPlayed);
+                    INSERT INTO Matches (HomeTeamId, AwayTeamId, HomeScore, AwayScore, IsPlayed, Matchweek)
+                    VALUES (@homeTeamId, @awayTeamId, @homeScore, @awayScore, @isPlayed, @matchweek);
                     SELECT last_insert_rowid();
                 ";
                 command.Parameters.AddWithValue("@homeTeamId", match.HomeTeamId);
@@ -289,6 +290,7 @@ namespace NoPasaranFC.Database
                 command.Parameters.AddWithValue("@homeScore", match.HomeScore);
                 command.Parameters.AddWithValue("@awayScore", match.AwayScore);
                 command.Parameters.AddWithValue("@isPlayed", match.IsPlayed ? 1 : 0);
+                command.Parameters.AddWithValue("@matchweek", match.Matchweek);
                 
                 match.Id = Convert.ToInt32(command.ExecuteScalar());
             }
@@ -296,8 +298,8 @@ namespace NoPasaranFC.Database
             {
                 // Match with ID - use INSERT OR REPLACE
                 command.CommandText = @"
-                    INSERT OR REPLACE INTO Matches (Id, HomeTeamId, AwayTeamId, HomeScore, AwayScore, IsPlayed)
-                    VALUES (@id, @homeTeamId, @awayTeamId, @homeScore, @awayScore, @isPlayed);
+                    INSERT OR REPLACE INTO Matches (Id, HomeTeamId, AwayTeamId, HomeScore, AwayScore, IsPlayed, Matchweek)
+                    VALUES (@id, @homeTeamId, @awayTeamId, @homeScore, @awayScore, @isPlayed, @matchweek);
                 ";
                 command.Parameters.AddWithValue("@id", match.Id);
                 command.Parameters.AddWithValue("@homeTeamId", match.HomeTeamId);
@@ -305,6 +307,7 @@ namespace NoPasaranFC.Database
                 command.Parameters.AddWithValue("@homeScore", match.HomeScore);
                 command.Parameters.AddWithValue("@awayScore", match.AwayScore);
                 command.Parameters.AddWithValue("@isPlayed", match.IsPlayed ? 1 : 0);
+                command.Parameters.AddWithValue("@matchweek", match.Matchweek);
                 
                 command.ExecuteNonQuery();
             }
@@ -328,7 +331,8 @@ namespace NoPasaranFC.Database
                     Id = reader.GetInt32(0),
                     HomeScore = reader.GetInt32(3),
                     AwayScore = reader.GetInt32(4),
-                    IsPlayed = reader.GetInt32(5) == 1
+                    IsPlayed = reader.GetInt32(5) == 1,
+                    Matchweek = reader.GetInt32(6)
                 };
                 matches.Add(match);
             }

@@ -25,7 +25,7 @@ namespace NoPasaranFC.Gameplay.AIStates
             // At kickoff (first 5 seconds after kickoff), only closest players rush to ball
             bool justAfterKickoff = context.TimeSinceKickoff < 5f;
             
-            bool teamHasBall = context.ClosestToBall != null && context.ClosestToBall.TeamId == player.TeamId;
+            bool teamHasBall = context.ClosestToBall != null && context.ClosestToBall.Team == player.Team;
             bool ballInOpponentHalf = context.IsHomeTeam ? 
                 (context.BallPosition.X > MatchEngine.StadiumMargin + MatchEngine.FieldWidth * 0.5f) :
                 (context.BallPosition.X < MatchEngine.StadiumMargin + MatchEngine.FieldWidth * 0.5f);

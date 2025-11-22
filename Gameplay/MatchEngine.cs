@@ -88,6 +88,16 @@ namespace NoPasaranFC.Gameplay
             _awayTeam = awayTeam;
             _random = new Random();
             
+            // Set team references for all players
+            foreach (var player in homeTeam.Players)
+            {
+                player.Team = homeTeam;
+            }
+            foreach (var player in awayTeam.Players)
+            {
+                player.Team = awayTeam;
+            }
+            
             // Filter to only use starting players (if they exist, otherwise use first 11)
             EnsureStartingLineup(homeTeam);
             EnsureStartingLineup(awayTeam);
@@ -541,33 +551,19 @@ namespace NoPasaranFC.Gameplay
                     {
                         Vector2 moveDirection = Vector2.Normalize(baseVelocity);
                         
-                        // Check if player is positioned to kick ball in desired direction
-                        // Player must be somewhat behind the ball relative to kick direction
-                        Vector2 playerToBall = BallPosition - player.FieldPosition;
-                        if (playerToBall.LengthSquared() > 0.01f)
+                        // SIMPLIFIED: Just kick the ball in movement direction when close
+                        // No position checks - allows backheel kicks, side kicks, etc.
+                        // This eliminates oscillation caused by positioning requirements
+                        float timeSinceLastKick = (float)MatchTime - player.LastKickTime;
+                        if (timeSinceLastKick >= AutoKickCooldown)
                         {
-                            playerToBall.Normalize();
-                            
-                            // Check if player is facing the ball and ball is ahead
-                            float dotProduct = Vector2.Dot(moveDirection, playerToBall);
-                            
-                            // Allow kick if:
-                            // 1. Ball is in front of player (dot > 0.3, ~72 degree cone)
-                            // 2. Player is moving toward/past the ball
-                            if (dotProduct > 0.3f)
-                            {
-                                float timeSinceLastKick = (float)MatchTime - player.LastKickTime;
-                                if (timeSinceLastKick >= AutoKickCooldown)
-                                {
-                                    // Kick ball in movement direction
-                                    float staminaStatMultiplier = GetStaminaStatMultiplier(player);
-                                    float kickPower = (player.Shooting / 8f + 6f) * staminaStatMultiplier * GetAIDifficultyModifier();
-                                    BallVelocity = moveDirection * kickPower * player.Speed * 1.0f;
-                                    BallVerticalVelocity = 15f; // Very low kick for dribbling
-                                    _lastPlayerTouchedBall = player;
-                                    player.LastKickTime = (float)MatchTime;
-                                }
-                            }
+                            // Kick ball in movement direction
+                            float staminaStatMultiplier = GetStaminaStatMultiplier(player);
+                            float kickPower = (player.Shooting / 8f + 6f) * staminaStatMultiplier * GetAIDifficultyModifier();
+                            BallVelocity = moveDirection * kickPower * player.Speed * 1.0f;
+                            BallVerticalVelocity = 15f; // Very low kick for dribbling
+                            _lastPlayerTouchedBall = player;
+                            player.LastKickTime = (float)MatchTime;
                         }
                     }
                 }
@@ -583,8 +579,8 @@ namespace NoPasaranFC.Gameplay
         
         private AIContext BuildAIContext(Player player)
         {
-            bool isHomeTeam = player.TeamId == _homeTeam.Id;
-            var myTeam = isHomeTeam ? _homeTeam : _awayTeam;
+            bool isHomeTeam = player.Team == _homeTeam;
+            var myTeam = player.Team;
             var opponentTeam = isHomeTeam ? _awayTeam : _homeTeam;
             
             // Find nearest opponent and teammate
@@ -640,7 +636,7 @@ namespace NoPasaranFC.Gameplay
                 new Vector2(StadiumMargin + FieldWidth, StadiumMargin + FieldHeight / 2) :
                 new Vector2(StadiumMargin, StadiumMargin + FieldHeight / 2);
             
-            bool ballInDefensiveHalf = IsBallInHalf(player.TeamId);
+            bool ballInDefensiveHalf = IsBallInHalf(player.Team.Id);
             bool ballInAttackingHalf = !ballInDefensiveHalf;
             
             return new AIContext
@@ -672,7 +668,7 @@ namespace NoPasaranFC.Gameplay
         private void PerformAIKick(Player player)
         {
             player.CurrentAnimationState = "shoot";
-            bool isHomeTeam = player.TeamId == _homeTeam.Id;
+            bool isHomeTeam = player.Team == _homeTeam;
             
             Vector2 kickTarget;
             float kickPowerMultiplier = 1.0f;
@@ -973,7 +969,7 @@ namespace NoPasaranFC.Gameplay
                     if (p1.IsKnockedDown || p2.IsKnockedDown) continue;
                     
                     // Check if players are on the same team
-                    bool sameTeam = p1.TeamId == p2.TeamId;
+                    bool sameTeam = p1.Team == p2.Team;
                     
                     float distance = Vector2.Distance(p1.FieldPosition, p2.FieldPosition);
                     float collisionDistance = 70f; // Collision radius for 64x64 sprites
@@ -1534,7 +1530,7 @@ namespace NoPasaranFC.Gameplay
             // Prevent clustering: only allow closest player per team to actively chase the ball
             // The 2nd closest should support but not rush directly to ball
             
-            var team = player.TeamId == _homeTeam.Id ? _homeTeam : _awayTeam;
+            var team = player.Team;
             
             // Get all non-knocked-down, non-goalkeeper teammates
             var activeTeammates = team.Players
@@ -1583,7 +1579,7 @@ namespace NoPasaranFC.Gameplay
         private Vector2 ApplyTeammateAvoidance(Player player, Vector2 desiredDirection)
         {
             // Apply separation force to avoid clustering with teammates
-            var team = player.TeamId == _homeTeam.Id ? _homeTeam : _awayTeam;
+            var team = player.Team;
             Vector2 separationForce = Vector2.Zero;
             int nearbyCount = 0;
             
@@ -1737,7 +1733,7 @@ namespace NoPasaranFC.Gameplay
             _controlledPlayer.CurrentAnimationState = "tackle";
             
             // Find nearest opponent with the ball
-            var opposingTeam = _controlledPlayer.TeamId == _homeTeam.Id ? _awayTeam : _homeTeam;
+            var opposingTeam = _controlledPlayer.Team == _homeTeam ? _awayTeam : _homeTeam;
             
             Player nearestOpponent = null;
             float minDistance = float.MaxValue;

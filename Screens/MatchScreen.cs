@@ -20,6 +20,7 @@ namespace NoPasaranFC.Screens
         private Championship _championship;
         private DatabaseManager _database;
         private ScreenManager _screenManager;
+        private GraphicsDevice _graphicsDevice;
         private InputHelper _input;
         private Texture2D _pixel;
         private bool _graphicsInitialized;
@@ -76,6 +77,7 @@ namespace NoPasaranFC.Screens
         
         public void SetGraphicsDevice(GraphicsDevice graphicsDevice)
         {
+            _graphicsDevice = graphicsDevice;
             if (!_graphicsInitialized && graphicsDevice != null)
             {
                 try
@@ -406,11 +408,22 @@ namespace NoPasaranFC.Screens
             // Save to database
             _database.SaveChampionship(_championship);
             
+            // Simulate other matches in this matchweek
+            int currentMatchweek = _match.Matchweek;
+            System.Diagnostics.Debug.WriteLine($"EndMatch: Current matchweek is {currentMatchweek}, calling simulator");
+            MatchSimulator.SimulateMatchweek(_championship, currentMatchweek);
+            
+            // Save again after simulation
+            _database.SaveChampionship(_championship);
+            
             // Return to menu music (whistle already played in MatchEngine)
             Gameplay.AudioManager.Instance.PlayMusic("menu_music");
             
-            // Return to menu - pop back to MenuScreen (skipping LineupScreen if present)
-            _screenManager.PopToScreen<MenuScreen>();
+            // Show round results screen before returning to menu
+            var roundResultsScreen = new RoundResultsScreen(_championship, currentMatchweek, 
+                _database, _screenManager, _content, _graphicsDevice);
+            _screenManager.PopToScreen<MenuScreen>(); // Clear to menu
+            _screenManager.PushScreen(roundResultsScreen); // Show results
         }
         
         public override void Draw(SpriteBatch spriteBatch, SpriteFont font)

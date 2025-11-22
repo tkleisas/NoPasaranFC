@@ -158,6 +158,7 @@ namespace NoPasaranFC.Screens
                     
                     var matchScreen = new MatchScreen(homeTeam, awayTeam, _match, _championship, 
                         _database, _screenManager, _contentManager);
+                    matchScreen.SetGraphicsDevice(GraphicsDevice);
                     _screenManager.PushScreen(matchScreen);
                 }
             }

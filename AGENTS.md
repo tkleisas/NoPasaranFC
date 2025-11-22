@@ -437,6 +437,32 @@ Use UTF8 encoding for all text data as there is multilingual support.
      * Normal positioning otherwise
    - **Better goal protection**: Multiple defenders now converge on attackers near goal
 
+35. ✅ **Sideline and Goalline Repositioning Fix** (Extended):
+
+36. ✅ **Round Results and Match Simulation System**:
+   - **Matchweek tracking**: Added Matchweek field to Match model
+     * Each match knows which round it belongs to
+     * GenerateFixtures now assigns matchweek numbers (1-14 for 8 teams)
+   - **Match simulation system**: Created MatchSimulator class
+     * Simulates all other matches in the matchweek after player's match
+     * Team strength calculation based on player stats (Speed, Shooting, Passing, Defending)
+     * Realistic goal simulation using strength ratios
+     * Home advantage multiplier (1.15x)
+     * Automatic team stats updates (Wins, Draws, Losses, Goals, Points)
+   - **Round results screen**: New RoundResultsScreen displays all matchweek results
+     * Shows all matches in the round with scores
+     * Highlights player's team match in yellow
+     * Dimmed display for unplayed matches
+     * Skippable with ENTER or SPACE key
+   - **Automatic flow**: After each match ends
+     * Other matches in round are simulated
+     * Database saved with all results
+     * Round results screen displayed
+     * User can skip to return to menu
+   - **Championship methods**: Added GetMatchesForMatchweek() and GetCurrentMatchweek()
+   - **Bilingual support**: English/Greek localization for round results screen
+   - **Proper standings**: All teams' results contribute to league table each matchweek
+
 35. ✅ **Sideline and Goalline Repositioning Fix**:
    - **Reduced sideline avoidance trigger**: Changed from 300px to 150px in DribblingState
      * Players can get much closer to sidelines before forced repositioning

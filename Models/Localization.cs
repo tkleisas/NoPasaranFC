@@ -98,6 +98,10 @@ namespace NoPasaranFC.Models
                 ["match.finalScore"] = "FINAL SCORE",
                 ["match.halfTime"] = "HALF TIME",
                 
+                // Round Results
+                ["round_results_title"] = "MATCHWEEK {0} RESULTS",
+                ["round_results_continue"] = "Press ENTER or SPACE to continue",
+                
                 // Lineup
                 ["lineup.title"] = "SELECT LINEUP",
                 ["lineup.starting"] = "STARTING",
@@ -182,6 +186,10 @@ namespace NoPasaranFC.Models
                 ["lineup.position.def"] = "ΑΜ",
                 ["lineup.position.mid"] = "ΜΕ",
                 ["lineup.position.fwd"] = "ΕΠ",
+                
+                // Round Results
+                ["round_results_title"] = "ΑΠΟΤΕΛΕΣΜΑΤΑ ΑΓΩΝΙΣΤΙΚΗΣ {0}",
+                ["round_results_continue"] = "Πατήστε ENTER ή SPACE για συνέχεια",
                 
                 // Settings
                 ["settings.title"] = "ΕΠΙΛΟΓΕΣ",
