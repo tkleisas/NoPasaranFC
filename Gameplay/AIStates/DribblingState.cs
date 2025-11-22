@@ -29,19 +29,24 @@ namespace NoPasaranFC.Gameplay.AIStates
                 return AIStateType.ChasingBall;
             }
             
-            // Check if VERY close to sideline (reduced margin to allow repositioning)
-            // Only trigger avoidance when truly near the boundary (150px instead of 300px)
-            float leftMarginCheck = MatchEngine.StadiumMargin + 150f;
-            float rightMarginCheck = MatchEngine.TotalWidth - MatchEngine.StadiumMargin - 150f;
-            float topMarginCheck = MatchEngine.StadiumMargin + 150f;
-            float bottomMarginCheck = MatchEngine.TotalHeight - MatchEngine.StadiumMargin - 150f;
-            
-            bool nearSideline = player.FieldPosition.X < leftMarginCheck || player.FieldPosition.X > rightMarginCheck ||
-                              player.FieldPosition.Y < topMarginCheck || player.FieldPosition.Y > bottomMarginCheck;
-            
-            if (nearSideline)
+            // More aggressive boundary avoidance
+            float boundaryMargin = 200f; // Increased margin
+            Vector2 repulsion = Vector2.Zero;
+            if (player.FieldPosition.X < MatchEngine.StadiumMargin + boundaryMargin)
+                repulsion.X = 1f;
+            if (player.FieldPosition.X > MatchEngine.TotalWidth - MatchEngine.StadiumMargin - boundaryMargin)
+                repulsion.X = -1f;
+            if (player.FieldPosition.Y < MatchEngine.StadiumMargin + boundaryMargin)
+                repulsion.Y = 1f;
+            if (player.FieldPosition.Y > MatchEngine.TotalHeight - MatchEngine.StadiumMargin - boundaryMargin)
+                repulsion.Y = -1f;
+
+            if (repulsion.LengthSquared() > 0)
             {
-                return AIStateType.AvoidingSideline;
+                repulsion.Normalize();
+                // When avoiding boundary, move decisively
+                player.Velocity = repulsion * (player.Speed * 2.5f);
+                return AIStateType.Dribbling; // Stay in dribbling state
             }
             
             // Decision making (more frequent for responsive play)
@@ -195,36 +200,14 @@ namespace NoPasaranFC.Gameplay.AIStates
             
             // CRITICAL: Dribble toward the opponent's goal
             // This creates attacking behavior - always advance the ball forward
-            Vector2 desiredKickDirection = context.OpponentGoalCenter - context.BallPosition;
+            Vector2 desiredKickDirection = context.OpponentGoalCenter - player.FieldPosition;
             if (desiredKickDirection.LengthSquared() > 0)
             {
                 desiredKickDirection.Normalize();
             }
             
 
-            // Check if VERY near boundaries - adjust direction toward center
-            // Reduced margins to allow better positioning near goallines and sidelines
-            float leftMargin = MatchEngine.StadiumMargin + 100f;  // Reduced from 200f
-            float rightMargin = MatchEngine.TotalWidth - MatchEngine.StadiumMargin - 100f;
-            float topMargin = MatchEngine.StadiumMargin + 100f;  // Reduced from 200f
-            float bottomMargin = MatchEngine.TotalHeight - MatchEngine.StadiumMargin - 100f;
-            
-            bool nearLeftSideline = context.BallPosition.X < leftMargin;
-            bool nearRightSideline = context.BallPosition.X > rightMargin;
-            bool nearTopSideline = context.BallPosition.Y < topMargin;
-            bool nearBottomSideline = context.BallPosition.Y > bottomMargin;
-            
-            if (nearLeftSideline || nearRightSideline || nearTopSideline || nearBottomSideline)
-            {
-                // Slightly redirect toward field center (reduced strength for better repositioning)
-                Vector2 fieldCenter = new Vector2(
-                    MatchEngine.StadiumMargin + MatchEngine.FieldWidth / 2,
-                    MatchEngine.StadiumMargin + MatchEngine.FieldHeight / 2
-                );
-                Vector2 toCenter = fieldCenter - context.BallPosition;
-                // Blend target direction with center direction (reduced center influence)
-                desiredKickDirection = desiredKickDirection * 0.7f + toCenter * 0.3f;  // Was 0.4/0.6
-            }
+
             
             if (desiredKickDirection.LengthSquared() > 0)
             {
@@ -241,21 +224,42 @@ namespace NoPasaranFC.Gameplay.AIStates
                 // The auto-kick system will handle kicking the ball in the right direction
                 
                 float distToBall = Vector2.Distance(player.FieldPosition, context.BallPosition);
-                
-                if (distToBall < 80f)
+
+                // Check if player is ahead of the ball relative to the desired kick direction
+                Vector2 playerToBall = context.BallPosition - player.FieldPosition;
+                float dotProduct = Vector2.Dot(desiredKickDirection, playerToBall);
+
+                bool playerAheadOfBall = dotProduct < 0;
+
+                if (playerAheadOfBall)
                 {
-                    // Close to ball - just move toward goal
-                    // Auto-kick will fire when appropriate
-                    float dribbleSpeed = player.Speed * 2.5f;
-                    player.Velocity = desiredKickDirection * dribbleSpeed;
+                    // Player is ahead of the ball, so reposition behind it
+                    Vector2 positionBehindBall = context.BallPosition - (desiredKickDirection * 80f); // 80px behind ball
+                    Vector2 directionToGetBehind = positionBehindBall - player.FieldPosition;
+                    if (directionToGetBehind.LengthSquared() > 0)
+                    {
+                        directionToGetBehind.Normalize();
+                    }
+                    player.Velocity = directionToGetBehind * (player.Speed * 2.5f);
                 }
                 else
                 {
-                    // Far from ball - chase it
-                    Vector2 toBall = context.BallPosition - player.FieldPosition;
-                    toBall.Normalize();
-                    float chaseSpeed = player.Speed * 2.5f;
-                    player.Velocity = toBall * chaseSpeed;
+                    // Player is behind the ball, proceed with dribbling
+                    if (distToBall < 80f)
+                    {
+                        // Close to ball - just move toward goal
+                        // Auto-kick will fire when appropriate
+                        float dribbleSpeed = player.Speed * 2.5f;
+                        player.Velocity = desiredKickDirection * dribbleSpeed;
+                    }
+                    else
+                    {
+                        // Far from ball - chase it
+                        Vector2 toBall = context.BallPosition - player.FieldPosition;
+                        toBall.Normalize();
+                        float chaseSpeed = player.Speed * 2.5f;
+                        player.Velocity = toBall * chaseSpeed;
+                    }
                 }
             }
             

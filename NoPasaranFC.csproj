@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <TargetFramework>net9.0</TargetFramework>
@@ -31,7 +31,6 @@
   <ItemGroup>
     <Folder Include="Content\Audio\Music\" />
     <Folder Include="Content\Audio\SFX\" />
-    <Folder Include="Content\Sprites\" />
   </ItemGroup>
   <ItemGroup>
     <None Update="Database\teams_seed.json">

@@ -7,6 +7,8 @@ namespace NoPasaranFC.Models
         public int Id { get; set; }
         public string Name { get; set; }
         public bool IsPlayerControlled { get; set; }
+        public string KitName { get; set; }
+        public string Logo { get; set; }
         public List<Player> Players { get; set; }
         
         // Championship stats

@@ -3,6 +3,8 @@
     {
       "name": "NO PASARAN!",
       "isPlayerControlled": true,
+      "kitName": "no_pasaran_kit",
+      "logo": "no_pasaran_logo.png",
       "players": [
         {
           "name": "Wacaby",
@@ -465,23 +467,31 @@
       "players": []
     },
     {
-      "name": "ΜΗΧΑΝΙΚΟΙ",
+      "name": "ΧΑΝΔΡΙΝΑΪΚΟΣ",
       "isPlayerControlled": false,
+      "kitName": "chandrinaikos_kit",
+      "logo": "chandrinaikos_logo.png",
       "players": []
     },
     {
       "name": "ΑΣΑΛΑΓΗΤΟΣ",
       "isPlayerControlled": false,
+      "kitName": "asalagitos_kit",
+      "logo": "asalagitos_logo.png",
       "players": []
     },
     {
       "name": "ΑΣΤΕΡΑΣ ΕΞΑΡΧΕΙΩΝ",
       "isPlayerControlled": false,
+      "kitName": "asteras_exarcheion_kit",
+      "logo": "asteras_exarcheion_logo.png",
       "players": []
     },
     {
       "name": "ΤΗΓΑΝΗΤΗΣ",
       "isPlayerControlled": false,
+      "kitName": "tiganitis_kit",
+      "logo": "tiganitis_logo.png",
       "players": []
     }
   ]

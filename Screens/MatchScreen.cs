@@ -852,7 +852,10 @@ namespace NoPasaranFC.Screens
             if (player.AnimationSystem != null)
             {
                 bool isHomeTeam = player.TeamId == _homeTeam.Id;
-                player.AnimationSystem.Draw(spriteBatch, pos, isHomeTeam, tintColor, scale);
+                string kitname = null;
+                 
+                kitname = player.Team.KitName;
+                player.AnimationSystem.Draw(spriteBatch, pos, isHomeTeam, tintColor, scale,kitname);
             }
             else
             {

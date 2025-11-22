@@ -35,6 +35,11 @@ namespace NoPasaranFC.Models
                 _sharedSpriteSheets = new Dictionary<string, Texture2D>();
                 _sharedSpriteSheets["player_red_multi"] = content.Load<Texture2D>("Sprites/player_red_multi");
                 _sharedSpriteSheets["player_blue_multi"] = content.Load<Texture2D>("Sprites/player_blue_multi");
+                _sharedSpriteSheets["no_pasaran_kit"] = content.Load<Texture2D>("Sprites/no_pasaran_kit");
+                _sharedSpriteSheets["asalagitos_kit"] = content.Load<Texture2D>("Sprites/asalagitos_kit");
+                _sharedSpriteSheets["tiganitis_kit"] = content.Load<Texture2D>("Sprites/tiganitis_kit");
+                _sharedSpriteSheets["asteras_exarchion_kit"] = content.Load<Texture2D>("Sprites/asteras_exarchion_kit");
+                _sharedSpriteSheets["chandrinaikos_kit"] = content.Load<Texture2D>("Sprites/chandrinaikos_kit");
             }
             
             if (_sharedAnimations == null)
@@ -133,13 +138,14 @@ namespace NoPasaranFC.Models
             return _currentFrameIndex >= _currentAnimation.Frames.Count - 1;
         }
         
-        public void Draw(SpriteBatch spriteBatch, Vector2 position, bool isHomeTeam, Color tint, float scale = 2f)
+        public void Draw(SpriteBatch spriteBatch, Vector2 position, bool isHomeTeam, Color tint, float scale = 2f, string kitname = null)
         {
             if (_currentAnimation == null || _currentAnimation.Frames.Count == 0) return;
             if (_sharedSpriteSheets == null) return;
             
             var frame = _currentAnimation.Frames[_currentFrameIndex];
-            string sheetName = isHomeTeam ? "player_blue_multi" : "player_red_multi";
+            
+            string sheetName = (kitname!=null?kitname: (isHomeTeam ? "player_blue_multi" : "player_red_multi"));
             
             if (!_sharedSpriteSheets.ContainsKey(sheetName)) return;
             

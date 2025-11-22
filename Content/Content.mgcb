@@ -19,12 +19,6 @@
 /processorParam:Quality=Best
 /build:Audio/Music/match.mp3
 
-#begin Audio/Music/match.mp3
-/importer:Mp3Importer
-/processor:SongProcessor
-/processorParam:Quality=Best
-/build:Audio/Music/match.mp3
-
 #begin Audio/SFX/crowd_cheer.wav
 /importer:WavImporter
 /processor:SoundEffectProcessor
@@ -86,6 +80,30 @@
 /processorParam:TextureFormat=Compressed
 /build:Font.spritefont
 
+#begin Sprites/asalagitos_kit.png
+/importer:TextureImporter
+/processor:TextureProcessor
+/processorParam:ColorKeyColor=255,0,255,255
+/processorParam:ColorKeyEnabled=True
+/processorParam:GenerateMipmaps=False
+/processorParam:PremultiplyAlpha=True
+/processorParam:ResizeToPowerOfTwo=False
+/processorParam:MakeSquare=False
+/processorParam:TextureFormat=Color
+/build:Sprites/asalagitos_kit.png
+
+#begin Sprites/asteras_exarchion_kit.png
+/importer:TextureImporter
+/processor:TextureProcessor
+/processorParam:ColorKeyColor=255,0,255,255
+/processorParam:ColorKeyEnabled=True
+/processorParam:GenerateMipmaps=False
+/processorParam:PremultiplyAlpha=True
+/processorParam:ResizeToPowerOfTwo=False
+/processorParam:MakeSquare=False
+/processorParam:TextureFormat=Color
+/build:Sprites/asteras_exarchion_kit.png
+
 #begin Sprites/ball.png
 /importer:TextureImporter
 /processor:TextureProcessor
@@ -98,6 +116,18 @@
 /processorParam:TextureFormat=Color
 /build:Sprites/ball.png
 
+#begin Sprites/chandrinaikos_kit.png
+/importer:TextureImporter
+/processor:TextureProcessor
+/processorParam:ColorKeyColor=255,0,255,255
+/processorParam:ColorKeyEnabled=True
+/processorParam:GenerateMipmaps=False
+/processorParam:PremultiplyAlpha=True
+/processorParam:ResizeToPowerOfTwo=False
+/processorParam:MakeSquare=False
+/processorParam:TextureFormat=Color
+/build:Sprites/chandrinaikos_kit.png
+
 #begin Sprites/no_pasaran_fc_logo.png
 /importer:TextureImporter
 /processor:TextureProcessor
@@ -109,6 +139,18 @@
 /processorParam:MakeSquare=False
 /processorParam:TextureFormat=Color
 /build:Sprites/no_pasaran_fc_logo.png
+
+#begin Sprites/no_pasaran_kit.png
+/importer:TextureImporter
+/processor:TextureProcessor
+/processorParam:ColorKeyColor=255,0,255,255
+/processorParam:ColorKeyEnabled=True
+/processorParam:GenerateMipmaps=False
+/processorParam:PremultiplyAlpha=True
+/processorParam:ResizeToPowerOfTwo=False
+/processorParam:MakeSquare=False
+/processorParam:TextureFormat=Color
+/build:Sprites/no_pasaran_kit.png
 
 #begin Sprites/player_blue_multi.png
 /importer:TextureImporter
@@ -157,4 +199,16 @@
 /processorParam:MakeSquare=False
 /processorParam:TextureFormat=Color
 /build:Sprites/player_red.png
+
+#begin Sprites/tiganitis_kit.png
+/importer:TextureImporter
+/processor:TextureProcessor
+/processorParam:ColorKeyColor=255,0,255,255
+/processorParam:ColorKeyEnabled=True
+/processorParam:GenerateMipmaps=False
+/processorParam:PremultiplyAlpha=True
+/processorParam:ResizeToPowerOfTwo=False
+/processorParam:MakeSquare=False
+/processorParam:TextureFormat=Color
+/build:Sprites/tiganitis_kit.png
 

@@ -43,7 +43,9 @@ namespace NoPasaranFC.Database
                     Draws INTEGER DEFAULT 0,
                     Losses INTEGER DEFAULT 0,
                     GoalsFor INTEGER DEFAULT 0,
-                    GoalsAgainst INTEGER DEFAULT 0
+                    GoalsAgainst INTEGER DEFAULT 0,
+                    KitName TEXT,
+                    Logo TEXT
                 );
                 
                 CREATE TABLE IF NOT EXISTS Players (
@@ -121,6 +123,8 @@ namespace NoPasaranFC.Database
                 ";
                 command.Parameters.AddWithValue("@name", team.Name);
                 command.Parameters.AddWithValue("@isPlayerControlled", team.IsPlayerControlled ? 1 : 0);
+                command.Parameters.AddWithValue("@kitName", team.KitName ?? string.Empty);
+                command.Parameters.AddWithValue("@logo", team.Logo ?? string.Empty);
                 command.Parameters.AddWithValue("@wins", team.Wins);
                 command.Parameters.AddWithValue("@draws", team.Draws);
                 command.Parameters.AddWithValue("@losses", team.Losses);
@@ -133,8 +137,8 @@ namespace NoPasaranFC.Database
             {
                 // Team with ID - use INSERT OR REPLACE to handle both new and existing
                 command.CommandText = @"
-                    INSERT OR REPLACE INTO Teams (Id, Name, IsPlayerControlled, Wins, Draws, Losses, GoalsFor, GoalsAgainst)
-                    VALUES (@id, @name, @isPlayerControlled, @wins, @draws, @losses, @goalsFor, @goalsAgainst);
+                    INSERT OR REPLACE INTO Teams (Id, Name, IsPlayerControlled, Wins, Draws, Losses, GoalsFor, GoalsAgainst, KitName, Logo)
+                    VALUES (@id, @name, @isPlayerControlled, @wins, @draws, @losses, @goalsFor, @goalsAgainst, @kitName, @logo);
                 ";
                 command.Parameters.AddWithValue("@id", team.Id);
                 command.Parameters.AddWithValue("@name", team.Name);
@@ -144,7 +148,8 @@ namespace NoPasaranFC.Database
                 command.Parameters.AddWithValue("@losses", team.Losses);
                 command.Parameters.AddWithValue("@goalsFor", team.GoalsFor);
                 command.Parameters.AddWithValue("@goalsAgainst", team.GoalsAgainst);
-                
+                command.Parameters.AddWithValue("@kitName", team.KitName ?? string.Empty);
+                command.Parameters.AddWithValue("@logo", team.Logo ?? string.Empty);
                 command.ExecuteNonQuery();
             }
         }
@@ -224,7 +229,9 @@ namespace NoPasaranFC.Database
                     Draws = reader.GetInt32(4),
                     Losses = reader.GetInt32(5),
                     GoalsFor = reader.GetInt32(6),
-                    GoalsAgainst = reader.GetInt32(7)
+                    GoalsAgainst = reader.GetInt32(7),
+                    KitName = reader.IsDBNull(8) ? string.Empty : reader.GetString(8),
+                    Logo = reader.IsDBNull(9) ? string.Empty : reader.GetString(9)
                 };
                 
                 team.Players = LoadPlayersForTeam(team.Id);

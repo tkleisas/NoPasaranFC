@@ -18,6 +18,8 @@ namespace NoPasaranFC.Database
             public string name { get; set; }
             public bool isPlayerControlled { get; set; }
             public List<PlayerData> players { get; set; }
+            public string kitName { get; set; }
+            public string logo { get; set; }
         }
         
         private class PlayerData
@@ -47,7 +49,9 @@ namespace NoPasaranFC.Database
                 foreach (var teamData in seedData.teams)
                 {
                     var team = new Team(teamData.name, teamData.isPlayerControlled);
-                    
+                    team.KitName = teamData.kitName;
+                    team.Logo = teamData.logo;
+
                     // If no players specified, generate default roster
                     if (teamData.players == null || teamData.players.Count == 0)
                     {
