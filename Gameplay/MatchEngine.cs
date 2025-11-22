@@ -331,9 +331,9 @@ namespace NoPasaranFC.Gameplay
                 float distToBall = Vector2.Distance(_controlledPlayer.FieldPosition, BallPosition);
                 
                 // Handle shoot button for charging shot or tackle
-                if (isShootKeyDown && distToBall < BallKickDistance * 1.5f && BallHeight < 50f)
+                if (isShootKeyDown && distToBall < BallKickDistance * 2f && BallHeight < 50f)
                 {
-                    // Near ball - charge shot
+                    // Near ball - charge shot (no angle check here, allow from any angle when charging)
                     if (!_wasShootButtonDown)
                     {
                         // Just pressed
@@ -346,9 +346,9 @@ namespace NoPasaranFC.Gameplay
                 else if (_wasShootButtonDown && !isShootKeyDown)
                 {
                     // Button released
-                    if (distToBall < BallKickDistance * 1.5f && BallHeight < 50f)
+                    if (distToBall < BallKickDistance * 2f && BallHeight < 50f)
                     {
-                        // Near ball - shoot!
+                        // Near ball - shoot! (no angle check for charged shots)
                         PerformShoot(moveDirection);
                     }
                     else if (_shootButtonHoldTime < 0.1f && _lastPlayerTouchedBall != _controlledPlayer)
@@ -571,34 +571,52 @@ namespace NoPasaranFC.Gameplay
                     break;
                 
                 case PlayerPosition.Midfielder:
-                    if (shouldChaseBall && distanceToBall < 300f)
+                    bool isHomeTeamMID = player.TeamId == _homeTeam.Id;
+                    bool ballInAttackingHalfMID = isHomeTeamMID ? 
+                        (BallPosition.X > StadiumMargin + FieldWidth / 2) : 
+                        (BallPosition.X < StadiumMargin + FieldWidth / 2);
+                    
+                    // Midfielders more aggressive when ball is in attacking half
+                    if (shouldChaseBall && (distanceToBall < 300f || (ballInAttackingHalfMID && distanceToBall < 500f)))
                     {
                         targetPosition = BallPosition;
                         urgency = 0.9f;
                     }
                     else
                     {
-                        targetPosition = Vector2.Lerp(player.HomePosition, BallPosition, 0.5f);
-                        urgency = 0.6f;
+                        // Support attack or defense based on ball position
+                        float lerpFactor = ballInAttackingHalfMID ? 0.6f : 0.4f;
+                        targetPosition = Vector2.Lerp(player.HomePosition, BallPosition, lerpFactor);
+                        urgency = ballInAttackingHalfMID ? 0.7f : 0.5f;
                     }
                     break;
                 
                 case PlayerPosition.Forward:
-                    if (shouldChaseBall && distanceToBall < 250f)
+                    bool isHomeTeamFWD = player.TeamId == _homeTeam.Id;
+                    bool ballInAttackingHalf = isHomeTeamFWD ? 
+                        (BallPosition.X > StadiumMargin + FieldWidth / 2) : 
+                        (BallPosition.X < StadiumMargin + FieldWidth / 2);
+                    
+                    // Forwards should be more aggressive in chasing the ball in attacking half
+                    if (shouldChaseBall && (distanceToBall < 400f || ballInAttackingHalf))
                     {
                         targetPosition = BallPosition;
                         urgency = 1.0f;
                     }
                     else
                     {
-                        // Move toward opponent goal when not chasing ball
-                        // Stay further from goal line to avoid getting stuck
-                        bool isHomeTeam = player.TeamId == _homeTeam.Id;
-                        float targetGoalX = isHomeTeam ? 
-                            StadiumMargin + FieldWidth - 300f : 
-                            StadiumMargin + 300f;
-                        targetPosition = new Vector2(targetGoalX, player.HomePosition.Y);
-                        urgency = 0.5f;
+                        // Move toward opponent goal area (stay in attacking position)
+                        // Position between ball and opponent goal for better positioning
+                        float targetGoalX = isHomeTeamFWD ? 
+                            StadiumMargin + FieldWidth - 400f : 
+                            StadiumMargin + 400f;
+                        
+                        // Move toward center Y when in attacking position (avoid going to edges)
+                        float fieldCenterY = StadiumMargin + FieldHeight / 2;
+                        float targetY = fieldCenterY + (player.HomePosition.Y - fieldCenterY) * 0.5f; // 50% toward center
+                        
+                        targetPosition = new Vector2(targetGoalX, targetY);
+                        urgency = 0.7f; // Keep forwards more active
                     }
                     break;
                 
@@ -611,6 +629,60 @@ namespace NoPasaranFC.Gameplay
             // Move player toward target
             Vector2 direction = targetPosition - player.FieldPosition;
             float distance = direction.Length();
+            
+            // Check if AI player has ball control
+            bool hasControl = _lastPlayerTouchedBall == player && Vector2.Distance(player.FieldPosition, BallPosition) < 80f;
+            
+            // AI repositioning logic: If player has the ball and needs to change direction significantly,
+            // move to a position behind the ball first
+            if (hasControl && urgency > 0.7f)
+            {
+                bool isHomeTeam = player.TeamId == _homeTeam.Id;
+                float opponentGoalX = isHomeTeam ? StadiumMargin + FieldWidth : StadiumMargin;
+                Vector2 idealKickDirection = new Vector2(opponentGoalX - BallPosition.X, 0);
+                idealKickDirection.Normalize();
+                
+                // Check sideline proximity - need to redirect?
+                float topBoundary = StadiumMargin + 150f;
+                float bottomBoundary = StadiumMargin + FieldHeight - 150f;
+                bool nearTopSideline = BallPosition.Y < topBoundary;
+                bool nearBottomSideline = BallPosition.Y > bottomBoundary;
+                
+                if (nearTopSideline || nearBottomSideline)
+                {
+                    // Need to redirect ball toward center
+                    float centerY = StadiumMargin + FieldHeight / 2;
+                    idealKickDirection = new Vector2(opponentGoalX - BallPosition.X, centerY - BallPosition.Y);
+                    if (idealKickDirection.Length() > 0)
+                    {
+                        idealKickDirection.Normalize();
+                    }
+                }
+                
+                // Calculate where player should be to kick in ideal direction (behind the ball)
+                Vector2 idealPlayerPosition = BallPosition - idealKickDirection * 70f; // 70 pixels behind ball
+                
+                // Check if player is roughly in position to kick in ideal direction
+                Vector2 playerToBall = BallPosition - player.FieldPosition;
+                if (playerToBall.Length() > 0)
+                {
+                    playerToBall.Normalize();
+                    float alignment = Vector2.Dot(playerToBall, idealKickDirection);
+                    
+                    // If alignment is poor (player not behind ball relative to kick direction), reposition
+                    if (alignment < 0.7f) // Less than ~45 degree alignment
+                    {
+                        // Override target to ideal position behind ball
+                        targetPosition = idealPlayerPosition;
+                        direction = targetPosition - player.FieldPosition;
+                        distance = direction.Length();
+                        if (distance > 0)
+                        {
+                            direction.Normalize();
+                        }
+                    }
+                }
+            }
             
             // Stop closer to target for tighter control (reduced from 15f to 10f)
             if (distance > 10f)
@@ -648,67 +720,150 @@ namespace NoPasaranFC.Gameplay
                         // Trigger shoot animation for AI
                         player.CurrentAnimationState = "shoot";
                         
-                        // Kick ball toward opponent goal (aim AT the goal, not before it)
-                    bool isHomeTeam = player.TeamId == _homeTeam.Id;
-                    
-                    // Aim at the goal center, with slight variation for realism
-                    float goalCenterY = StadiumMargin + FieldHeight / 2;
-                    float goalTop = StadiumMargin + (FieldHeight - GoalWidth) / 2;
-                    float goalBottom = goalTop + GoalWidth;
-                    
-                    // Random Y position within goal area
-                    float targetGoalY = goalTop + (float)_random.NextDouble() * GoalWidth;
-                    
-                    // Aim past the goal line (not before it)
-                    float targetGoalX = isHomeTeam ? 
-                        StadiumMargin + FieldWidth + 50f : // Right goal (aim past the line)
-                        StadiumMargin - 50f; // Left goal (aim past the line)
-                    
-                    Vector2 goalDirection = new Vector2(targetGoalX, targetGoalY) - BallPosition;
-                    if (goalDirection.Length() > 0)
-                    {
-                        goalDirection.Normalize();
+                        bool isHomeTeam = player.TeamId == _homeTeam.Id;
+                        Vector2 kickTarget;
+                        float kickPowerMultiplier = 1.0f;
                         
-                        // Apply stamina and difficulty to AI shooting
-                        float staminaStatMultiplier = GetStaminaStatMultiplier(player);
-                        float aiDifficultyModifier = GetAIDifficultyModifier();
-                        float kickPower = (player.Shooting / 8f + 6f) * staminaStatMultiplier * aiDifficultyModifier;
-                        BallVelocity = goalDirection * kickPower * player.Speed;
-                        _lastPlayerTouchedBall = player;
-                        
-                        // Decrease stamina for shooting
-                        player.Stamina = Math.Max(0, player.Stamina - StaminaDecreasePerShot);
-                        
-                        // AI can do varied shots based on shooting skill and distance to goal
-                        float distToGoal = Vector2.Distance(BallPosition, new Vector2(targetGoalX, targetGoalY));
-                        float shootingSkill = player.Shooting / 100f; // 0-1 range
-                        
-                        // Calculate shot height based on:
-                        // - Shooting skill (better players can do higher shots)
-                        // - Distance to goal (further away = higher shot)
-                        // - Random variation for realism
-                        float baseHeight = 50f; // Minimum height (ground shot)
-                        float skillBonus = shootingSkill * 300f; // Up to 300 extra based on skill
-                        float distanceBonus = Math.Min(distToGoal / 20f, 200f); // Up to 200 based on distance
-                        float randomFactor = (float)_random.NextDouble() * 150f; // Random 0-150
-                        
-                        // Occasionally do a high shot (20% chance for skilled players)
-                        if (_random.NextDouble() < shootingSkill * 0.2f)
+                        // Strategic passing based on position
+                        switch (player.Position)
                         {
-                            BallVerticalVelocity = baseHeight + skillBonus + distanceBonus + randomFactor;
+                            case PlayerPosition.Defender:
+                                // Defenders pass to midfielders or center (90% of the time)
+                                if (_random.NextDouble() < 0.9)
+                                {
+                                    // Find best midfielder to pass to
+                                    var myTeam = isHomeTeam ? _homeTeam : _awayTeam;
+                                    var midfielders = myTeam.Players.Where(p => 
+                                        p.IsStarting && 
+                                        !p.IsKnockedDown && 
+                                        p.Position == PlayerPosition.Midfielder).ToList();
+                                    
+                                    if (midfielders.Any())
+                                    {
+                                        // Find midfielder closest to opponent goal (most advanced position)
+                                        float opponentGoalX = isHomeTeam ? StadiumMargin + FieldWidth : StadiumMargin;
+                                        var bestMidfielder = midfielders.OrderBy(m => 
+                                            Math.Abs(m.FieldPosition.X - opponentGoalX)).First();
+                                        kickTarget = bestMidfielder.FieldPosition;
+                                        kickPowerMultiplier = 0.7f; // Moderate pass
+                                    }
+                                    else
+                                    {
+                                        // No midfielders available, pass toward attacking half center
+                                        float centerX = isHomeTeam ? 
+                                            StadiumMargin + FieldWidth * 0.65f : 
+                                            StadiumMargin + FieldWidth * 0.35f;
+                                        float centerY = StadiumMargin + FieldHeight / 2;
+                                        kickTarget = new Vector2(centerX, centerY);
+                                        kickPowerMultiplier = 0.8f;
+                                    }
+                                }
+                                else
+                                {
+                                    // 10% chance: Clear ball toward opponent half
+                                    float targetX = isHomeTeam ? 
+                                        StadiumMargin + FieldWidth * 0.75f : 
+                                        StadiumMargin + FieldWidth * 0.25f;
+                                    kickTarget = new Vector2(targetX, StadiumMargin + FieldHeight / 2);
+                                    kickPowerMultiplier = 1.2f; // Strong clearance
+                                }
+                                break;
+                                
+                            case PlayerPosition.Midfielder:
+                                // Midfielders pass to forwards (70%) or try to attack (30%)
+                                if (_random.NextDouble() < 0.7)
+                                {
+                                    // Find best forward to pass to
+                                    var myTeam = isHomeTeam ? _homeTeam : _awayTeam;
+                                    var forwards = myTeam.Players.Where(p => 
+                                        p.IsStarting && 
+                                        !p.IsKnockedDown && 
+                                        p.Position == PlayerPosition.Forward).ToList();
+                                    
+                                    if (forwards.Any())
+                                    {
+                                        // Find forward closest to opponent goal (most advanced position)
+                                        float opponentGoalX2 = isHomeTeam ? StadiumMargin + FieldWidth : StadiumMargin;
+                                        var bestForward = forwards.OrderBy(f => 
+                                            Math.Abs(f.FieldPosition.X - opponentGoalX2)).First();
+                                        kickTarget = bestForward.FieldPosition;
+                                        kickPowerMultiplier = 0.9f;
+                                    }
+                                    else
+                                    {
+                                        // No forwards, shoot at goal
+                                        goto case PlayerPosition.Forward;
+                                    }
+                                }
+                                else
+                                {
+                                    // Attack - shoot at goal
+                                    goto case PlayerPosition.Forward;
+                                }
+                                break;
+                                
+                            case PlayerPosition.Forward:
+                            default:
+                                // Forwards and others shoot at goal
+                                float goalTop = StadiumMargin + (FieldHeight - GoalWidth) / 2;
+                                float targetGoalY = goalTop + (float)_random.NextDouble() * GoalWidth;
+                                // Home team attacks right goal (away goal), away team attacks left goal (home goal)
+                                float targetGoalX = isHomeTeam ? 
+                                    StadiumMargin + FieldWidth : // Right goal (away goal)
+                                    StadiumMargin;               // Left goal (home goal)
+                                kickTarget = new Vector2(targetGoalX, targetGoalY);
+                                kickPowerMultiplier = 1.0f;
+                                break;
                         }
-                        else
+                        
+                        Vector2 kickDirection = kickTarget - BallPosition;
+                        if (kickDirection.Length() > 0)
                         {
-                            // Most shots are lower
-                            BallVerticalVelocity = baseHeight + randomFactor * 0.5f;
+                            kickDirection.Normalize();
+                            
+                            // Apply stamina and difficulty to AI kicking
+                            float staminaStatMultiplier = GetStaminaStatMultiplier(player);
+                            float aiDifficultyModifier = GetAIDifficultyModifier();
+                            float kickPower = (player.Shooting / 8f + 6f) * staminaStatMultiplier * aiDifficultyModifier * kickPowerMultiplier;
+                            BallVelocity = kickDirection * kickPower * player.Speed;
+                            _lastPlayerTouchedBall = player;
+                            
+                            // Decrease stamina for kicking
+                            player.Stamina = Math.Max(0, player.Stamina - StaminaDecreasePerShot);
+                            
+                            // Calculate shot height - passes are lower, shots can be higher
+                            float shootingSkill = player.Shooting / 100f;
+                            float distToTarget = Vector2.Distance(BallPosition, kickTarget);
+                            
+                            if (player.Position == PlayerPosition.Forward || kickPowerMultiplier >= 1.0f)
+                            {
+                                // Shots can have varied heights
+                                float baseHeight = 50f;
+                                float skillBonus = shootingSkill * 300f;
+                                float distanceBonus = Math.Min(distToTarget / 20f, 200f);
+                                float randomFactor = (float)_random.NextDouble() * 150f;
+                                
+                                if (_random.NextDouble() < shootingSkill * 0.2f)
+                                {
+                                    BallVerticalVelocity = baseHeight + skillBonus + distanceBonus + randomFactor;
+                                }
+                                else
+                                {
+                                    BallVerticalVelocity = baseHeight + randomFactor * 0.5f;
+                                }
+                            }
+                            else
+                            {
+                                // Passes stay low
+                                BallVerticalVelocity = 20f + (float)_random.NextDouble() * 30f;
+                            }
+                            
+                            // Play kick sound
+                            AudioManager.Instance.PlaySoundEffect("kick_ball", 0.5f, allowRetrigger: false);
+                            
+                            // Update last kick time
+                            player.LastKickTime = (float)MatchTime;
                         }
-                        
-                        // Play kick sound
-                        AudioManager.Instance.PlaySoundEffect("kick_ball", 0.5f, allowRetrigger: false);
-                        
-                        // Update last kick time
-                        player.LastKickTime = (float)MatchTime;
-                    }
                     }
                 }
             }
@@ -728,6 +883,9 @@ namespace NoPasaranFC.Gameplay
             
             // Check collision with back of goal net
             CheckGoalNetCollision();
+            
+            // Check collision with players (players push the ball)
+            CheckPlayerBallCollisions();
             
             // Apply vertical physics (gravity)
             BallVerticalVelocity -= Gravity * deltaTime;
@@ -906,6 +1064,57 @@ namespace NoPasaranFC.Gameplay
             }
         }
         
+        private void CheckPlayerBallCollisions()
+        {
+            // Check if any player is colliding with the ball
+            var allPlayers = GetAllPlayers();
+            const float ballRadius = 16f; // Ball is 32x32, so radius is 16
+            const float playerRadius = 40f; // Player collision radius (smaller than sprite size)
+            const float collisionDistance = ballRadius + playerRadius;
+            
+            foreach (var player in allPlayers)
+            {
+                // Skip if player is knocked down or ball is too high in the air
+                if (player.IsKnockedDown || BallHeight > 50f) continue;
+                
+                float distance = Vector2.Distance(player.FieldPosition, BallPosition);
+                
+                if (distance < collisionDistance)
+                {
+                    // Player is colliding with the ball - push it
+                    Vector2 pushDirection = BallPosition - player.FieldPosition;
+                    
+                    // If player has zero velocity, don't push the ball
+                    if (player.Velocity.Length() < 0.1f) continue;
+                    
+                    pushDirection.Normalize();
+                    
+                    // Push ball in the direction the player is moving
+                    // The push strength depends on player velocity and ball's current state
+                    float playerSpeed = player.Velocity.Length();
+                    float pushStrength = Math.Min(playerSpeed * 0.3f, 200f); // Cap the push strength
+                    
+                    // If ball is already moving away from player, don't add too much velocity
+                    float currentBallSpeed = BallVelocity.Length();
+                    if (currentBallSpeed < 150f) // Only push if ball isn't moving too fast already
+                    {
+                        Vector2 playerDirection = player.Velocity;
+                        playerDirection.Normalize();
+                        
+                        // Push ball in player's movement direction
+                        BallVelocity += playerDirection * pushStrength;
+                        
+                        // Update last player touched
+                        _lastPlayerTouchedBall = player;
+                    }
+                    
+                    // Separate ball from player to prevent phasing
+                    float overlap = collisionDistance - distance;
+                    BallPosition += pushDirection * overlap;
+                }
+            }
+        }
+        
         private void KnockDownPlayer(Player player, Vector2 impactVelocity)
         {
             player.IsKnockedDown = true;
@@ -974,8 +1183,10 @@ namespace NoPasaranFC.Gameplay
         
         private void ClampToField(ref Vector2 position)
         {
-            position.X = MathHelper.Clamp(position.X, StadiumMargin, StadiumMargin + FieldWidth);
-            position.Y = MathHelper.Clamp(position.Y, StadiumMargin, StadiumMargin + FieldHeight);
+            // Allow players to go 100px outside the field boundaries
+            const float OutOfBoundsMargin = 100f;
+            position.X = MathHelper.Clamp(position.X, StadiumMargin - OutOfBoundsMargin, StadiumMargin + FieldWidth + OutOfBoundsMargin);
+            position.Y = MathHelper.Clamp(position.Y, StadiumMargin - OutOfBoundsMargin, StadiumMargin + FieldHeight + OutOfBoundsMargin);
         }
         
         private void ClampBallToField()
@@ -1029,11 +1240,16 @@ namespace NoPasaranFC.Gameplay
             float leftGoalLine = StadiumMargin;
             float rightGoalLine = StadiumMargin + FieldWidth;
             
-            // Define out-of-bounds areas (with some buffer for goal depth)
-            float leftOutBound = StadiumMargin - GoalDepth - 20;
-            float rightOutBound = StadiumMargin + FieldWidth + GoalDepth + 20;
-            float topOutBound = StadiumMargin - 20;
-            float bottomOutBound = StadiumMargin + FieldHeight + 20;
+            // Define out-of-bounds areas (tighter bounds to prevent ball getting stuck)
+            float leftOutBound = StadiumMargin - GoalDepth - 50;
+            float rightOutBound = StadiumMargin + FieldWidth + GoalDepth + 50;
+            float topOutBound = StadiumMargin - 50;
+            float bottomOutBound = StadiumMargin + FieldHeight + 50;
+            
+            // Additional check: if ball is behind goal and outside goal width, it's out
+            bool behindLeftGoal = BallPosition.X < leftGoalLine - 30;
+            bool behindRightGoal = BallPosition.X > rightGoalLine + 30;
+            bool outsideGoalWidth = BallPosition.Y < goalTop || BallPosition.Y > goalBottom;
             
             // Check if ball is near crossbar height (with tolerance for ricochet)
             bool ballAtCrossbarHeight = BallHeight >= GoalPostHeight - 20 && BallHeight <= GoalPostHeight + 20;
@@ -1109,13 +1325,14 @@ namespace NoPasaranFC.Gameplay
             }
             
             // Ball went out past goal line (not in goal area)
-            if (BallPosition.X < leftOutBound)
+            // ALSO check if ball is stuck behind goal but outside goal width
+            if (BallPosition.X < leftOutBound || (behindLeftGoal && outsideGoalWidth))
             {
                 // Ball went out on left side - corner or goal kick
                 HandleBallOutGoalLine(true, BallPosition.Y);
                 return;
             }
-            else if (BallPosition.X > rightOutBound)
+            else if (BallPosition.X > rightOutBound || (behindRightGoal && outsideGoalWidth))
             {
                 // Ball went out on right side - corner or goal kick
                 HandleBallOutGoalLine(false, BallPosition.Y);
@@ -1150,6 +1367,7 @@ namespace NoPasaranFC.Gameplay
         {
             // Determine if corner kick or goal kick based on who touched the ball last
             bool isCornerKick = false;
+            bool giveToHomeTeam = true;
             
             if (_lastPlayerTouchedBall != null)
             {
@@ -1157,15 +1375,19 @@ namespace NoPasaranFC.Gameplay
                 bool lastTouchWasHomeTeam = _homeTeam.Players.Contains(_lastPlayerTouchedBall);
                 
                 // Home team defends left goal, away team defends right goal
-                // If ball went out on left side and home team touched it last -> goal kick for home
-                // If ball went out on left side and away team touched it last -> corner kick for away
+                // If defending team touched it last -> corner kick for attacking team
+                // If attacking team touched it last -> goal kick for defending team
                 if (leftSide)
                 {
-                    isCornerKick = !lastTouchWasHomeTeam; // Away team gets corner
+                    // Left goal (defended by home team)
+                    isCornerKick = lastTouchWasHomeTeam; // Home defender touched = corner for away
+                    giveToHomeTeam = !lastTouchWasHomeTeam; // Give to opposite of who touched
                 }
                 else // right side
                 {
-                    isCornerKick = lastTouchWasHomeTeam; // Home team gets corner
+                    // Right goal (defended by away team)
+                    isCornerKick = !lastTouchWasHomeTeam; // Away defender touched = corner for home
+                    giveToHomeTeam = lastTouchWasHomeTeam; // Give to opposite of who touched
                 }
             }
             
@@ -1185,7 +1407,7 @@ namespace NoPasaranFC.Gameplay
                 yPos = StadiumMargin + FieldHeight / 2;
             }
             
-            PlaceBallForRestart(new Vector2(xPos, yPos));
+            PlaceBallForRestart(new Vector2(xPos, yPos), giveToHomeTeam);
         }
         
         private void HandleBallOutSideline(float xPosition, bool topSide)
@@ -1194,23 +1416,46 @@ namespace NoPasaranFC.Gameplay
             float xPos = Math.Clamp(xPosition, StadiumMargin + 50, StadiumMargin + FieldWidth - 50);
             float yPos = topSide ? StadiumMargin + 20 : StadiumMargin + FieldHeight - 20;
             
-            PlaceBallForRestart(new Vector2(xPos, yPos));
+            // Determine which team gets the throw-in (opposite of who touched it last)
+            bool giveToHomeTeam = true; // default
+            
+            if (_lastPlayerTouchedBall != null)
+            {
+                bool lastTouchWasHomeTeam = _homeTeam.Players.Contains(_lastPlayerTouchedBall);
+                // Give to opposite team
+                giveToHomeTeam = !lastTouchWasHomeTeam;
+            }
+            
+            PlaceBallForRestart(new Vector2(xPos, yPos), giveToHomeTeam);
         }
         
-        private void PlaceBallForRestart(Vector2 position)
+        private void PlaceBallForRestart(Vector2 position, bool? preferHomeTeam = null)
         {
             BallPosition = position;
             BallVelocity = Vector2.Zero;
             BallHeight = 0f;
             BallVerticalVelocity = 0f;
             
-            // Find nearest player from team that gets the ball
-            // For now, just find any nearby player
-            var allPlayers = GetAllPlayers();
+            // Find nearest player from the team that gets possession
+            IEnumerable<Player> playersToConsider;
+            
+            if (preferHomeTeam.HasValue)
+            {
+                // Use specified team
+                playersToConsider = preferHomeTeam.Value ? 
+                    _homeTeam.Players.Where(p => p.IsStarting && !p.IsKnockedDown) : 
+                    _awayTeam.Players.Where(p => p.IsStarting && !p.IsKnockedDown);
+            }
+            else
+            {
+                // Use any nearby player
+                playersToConsider = GetAllPlayers();
+            }
+            
             Player nearestPlayer = null;
             float minDistance = float.MaxValue;
             
-            foreach (var player in allPlayers)
+            foreach (var player in playersToConsider)
             {
                 float dist = Vector2.Distance(player.FieldPosition, position);
                 if (dist < minDistance)

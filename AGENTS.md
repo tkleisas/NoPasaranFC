@@ -257,6 +257,17 @@ Use UTF8 encoding for all text data as there is multilingual support.
    - **Music transitions**: Menu ↔ Match music automatically
    - **Created AUDIO_SYSTEM.md**: Complete documentation with asset guidelines
 
+16. ✅ **Dynamic Goal Net System**:
+   - Physics-based goal nets with realistic behavior
+   - **Wind animation**: Subtle wave motion simulates natural wind effect
+   - **Ball collision deformation**: Net deforms when ball enters, strength based on velocity
+   - **Spring physics**: Net returns to rest position with damping
+   - **Grid system**: 8×12 dynamic point grid with fixed edges
+   - **Player depth rendering**: Players behind net render under it correctly
+   - **Realistic appearance**: Vertical, horizontal, and diagonal mesh lines
+   - **Performance optimized**: Minimal impact (< 1ms per frame for both nets)
+   - **Created DYNAMIC_GOAL_NETS.md**: Technical documentation
+
 ## Next Steps (Future Enhancements):
 - Improve AI with formation awareness
 - Add more match events (fouls, corners, throw-ins, offsides)

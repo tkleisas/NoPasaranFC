@@ -25,6 +25,10 @@ namespace NoPasaranFC.Screens
         private bool _graphicsInitialized;
         private Minimap _minimap;
         
+        // Goal nets
+        private GoalNet _leftGoalNet;
+        private GoalNet _rightGoalNet;
+        
         // Sprite support
         private Texture2D _playerSpriteRed;  // Away team sprite sheet (OLD)
         private Texture2D _playerSpriteBlue; // Home team sprite sheet (OLD)
@@ -99,6 +103,17 @@ namespace NoPasaranFC.Screens
                         player.CurrentAnimationState = "walk";
                     }
                     
+                    // Initialize goal nets
+                    float margin = MatchEngine.StadiumMargin;
+                    float centerY = margin + MatchEngine.FieldHeight / 2;
+                    float goalWidth = MatchEngine.GoalWidth;
+                    float goalDepth = MatchEngine.GoalDepth;
+                    
+                    _leftGoalNet = new GoalNet(margin - goalDepth, centerY - goalWidth / 2, 
+                        goalDepth, goalWidth, true);
+                    _rightGoalNet = new GoalNet(margin + MatchEngine.FieldWidth, centerY - goalWidth / 2, 
+                        goalDepth, goalWidth, false);
+                    
                     _graphicsInitialized = true;
                 }
                 catch (Exception ex)
@@ -170,6 +185,17 @@ namespace NoPasaranFC.Screens
             
             // Update ball animation
             UpdateBallAnimation(gameTime);
+            
+            // Update goal nets with ball position and velocity
+            if (_leftGoalNet != null && _rightGoalNet != null)
+            {
+                Vector2 ballPos = _matchEngine.BallPosition;
+                Vector2 ballVel = _matchEngine.BallVelocity;
+                float ballRadius = 16f; // Ball display radius
+                
+                _leftGoalNet.Update(gameTime, ballPos, ballVel, ballRadius);
+                _rightGoalNet.Update(gameTime, ballPos, ballVel, ballRadius);
+            }
         }
         
         private void UpdatePlayerAnimations(GameTime gameTime)
@@ -405,13 +431,34 @@ namespace NoPasaranFC.Screens
                 DrawBall(spriteBatch, ballPos);
             }
             
-            // Draw goals
+            // Draw goals (nets only)
             DrawGoals(spriteBatch);
             
-            // Draw players
+            // Draw players that are NOT behind nets
             foreach (var player in _matchEngine.GetAllPlayers())
             {
-                DrawPlayer(spriteBatch, player, font);
+                bool behindLeftNet = _leftGoalNet?.IsPlayerBehindNet(player.FieldPosition) ?? false;
+                bool behindRightNet = _rightGoalNet?.IsPlayerBehindNet(player.FieldPosition) ?? false;
+                
+                if (!behindLeftNet && !behindRightNet)
+                {
+                    DrawPlayer(spriteBatch, player, font);
+                }
+            }
+            
+            // Draw goal posts on top of nets
+            DrawGoalPosts(spriteBatch);
+            
+            // Draw players that ARE behind nets (so they appear under the net)
+            foreach (var player in _matchEngine.GetAllPlayers())
+            {
+                bool behindLeftNet = _leftGoalNet?.IsPlayerBehindNet(player.FieldPosition) ?? false;
+                bool behindRightNet = _rightGoalNet?.IsPlayerBehindNet(player.FieldPosition) ?? false;
+                
+                if (behindLeftNet || behindRightNet)
+                {
+                    DrawPlayer(spriteBatch, player, font);
+                }
             }
             
             // Draw ball AFTER goalposts if outside goal (normal rendering)
@@ -647,29 +694,37 @@ namespace NoPasaranFC.Screens
         
         private void DrawGoals(SpriteBatch spriteBatch)
         {
-            float margin = MatchEngine.StadiumMargin;
-            float centerY = margin + MatchEngine.FieldHeight / 2;
+            // Draw dynamic goal nets
+            if (_leftGoalNet != null)
+            {
+                _leftGoalNet.Draw(spriteBatch, _pixel);
+            }
             
-            // Use properly scaled goal dimensions from MatchEngine
-            float goalWidth = MatchEngine.GoalWidth;   // 534px (7.32m)
-            float goalDepth = MatchEngine.GoalDepth;   // 60px (visual depth)
-            float goalHeight = MatchEngine.GoalPostHeight; // 200px (2.44m)
-            
-            // === LEFT GOAL ===
-            DrawGoalStructure(spriteBatch, margin - goalDepth, centerY - goalWidth / 2, 
-                goalDepth, goalWidth, goalHeight, true);
-            
-            // === RIGHT GOAL ===
-            DrawGoalStructure(spriteBatch, margin + MatchEngine.FieldWidth, centerY - goalWidth / 2, 
-                goalDepth, goalWidth, goalHeight, false);
+            if (_rightGoalNet != null)
+            {
+                _rightGoalNet.Draw(spriteBatch, _pixel);
+            }
         }
         
-        private void DrawGoalStructure(SpriteBatch spriteBatch, float x, float y, 
-            float depth, float width, float height, bool facingRight)
+        private void DrawGoalPosts(SpriteBatch spriteBatch)
         {
-            // Draw goal net with mesh pattern
-            DrawGoalNet(spriteBatch, x, y, depth, width, height, facingRight);
+            float margin = MatchEngine.StadiumMargin;
+            float centerY = margin + MatchEngine.FieldHeight / 2;
+            float goalWidth = MatchEngine.GoalWidth;
+            float goalDepth = MatchEngine.GoalDepth;
             
+            // Draw goal posts for left goal
+            DrawGoalPostsOnly(spriteBatch, margin - goalDepth, centerY - goalWidth / 2, 
+                goalDepth, goalWidth, true);
+            
+            // Draw goal posts for right goal
+            DrawGoalPostsOnly(spriteBatch, margin + MatchEngine.FieldWidth, centerY - goalWidth / 2, 
+                goalDepth, goalWidth, false);
+        }
+        
+        private void DrawGoalPostsOnly(SpriteBatch spriteBatch, float x, float y, 
+            float depth, float width, bool facingRight)
+        {
             // Draw goal posts and crossbar (in front of net)
             // Real goalposts: ~12cm diameter = ~9px at our scale
             Color postColor = Color.White;
@@ -694,64 +749,13 @@ namespace NoPasaranFC.Screens
                 (int)width), postColor);
         }
         
-        private void DrawGoalNet(SpriteBatch spriteBatch, float x, float y, 
-            float depth, float width, float height, bool facingRight)
-        {
-            Color netColor = new Color(220, 220, 220, 150); // Light gray, semi-transparent
-            Color netLineColor = new Color(180, 180, 180, 200); // Slightly darker lines
-            
-            // Draw back panel (solid background)
-            Rectangle backPanel = new Rectangle(
-                (int)x, 
-                (int)y, 
-                (int)depth, 
-                (int)width);
-            spriteBatch.Draw(_pixel, backPanel, new Color(100, 100, 100, 100));
-            
-            // Draw mesh pattern - vertical lines
-            int meshSpacing = 20;
-            for (int i = 0; i < depth; i += meshSpacing)
-            {
-                float netX = facingRight ? x + i : x + depth - i;
-                spriteBatch.Draw(_pixel, new Rectangle(
-                    (int)netX, 
-                    (int)y, 
-                    2, 
-                    (int)width), netLineColor);
-            }
-            
-            // Draw mesh pattern - horizontal lines
-            for (int i = 0; i < width; i += meshSpacing)
-            {
-                spriteBatch.Draw(_pixel, new Rectangle(
-                    (int)x, 
-                    (int)(y + i), 
-                    (int)depth, 
-                    2), netLineColor);
-            }
-            
-            // Draw diagonal mesh for more realistic net appearance
-            for (int i = 0; i < width; i += meshSpacing * 2)
-            {
-                for (int j = 0; j < depth; j += meshSpacing * 2)
-                {
-                    float x1 = facingRight ? x + j : x + depth - j;
-                    float y1 = y + i;
-                    float x2 = facingRight ? x + j + meshSpacing : x + depth - j - meshSpacing;
-                    float y2 = y + i + meshSpacing;
-                    
-                    DrawLine(spriteBatch, new Vector2(x1, y1), new Vector2(x2, y2), netLineColor, 1);
-                }
-            }
-        }
-        
-        private void DrawLine(SpriteBatch spriteBatch, Vector2 start, Vector2 end, Color color, int thickness)
+        private void DrawLine(SpriteBatch spriteBatch, Vector2 start, Vector2 end, Color color, float thickness)
         {
             Vector2 edge = end - start;
             float angle = (float)Math.Atan2(edge.Y, edge.X);
             
             spriteBatch.Draw(_pixel,
-                new Rectangle((int)start.X, (int)start.Y, (int)edge.Length(), thickness),
+                new Rectangle((int)start.X, (int)start.Y, (int)edge.Length(), (int)thickness),
                 null,
                 color,
                 angle,
@@ -1043,16 +1047,6 @@ namespace NoPasaranFC.Screens
                 
                 DrawLine(spriteBatch, p1, p2, color, thickness);
             }
-        }
-        
-        private void DrawLine(SpriteBatch spriteBatch, Vector2 start, Vector2 end, Color color, float thickness)
-        {
-            Vector2 edge = end - start;
-            float angle = (float)Math.Atan2(edge.Y, edge.X);
-            
-            spriteBatch.Draw(_pixel,
-                new Rectangle((int)start.X, (int)start.Y, (int)edge.Length(), (int)thickness),
-                null, color, angle, Vector2.Zero, SpriteEffects.None, 0);
         }
         
         private void DrawHUD(SpriteBatch spriteBatch, SpriteFont font)
