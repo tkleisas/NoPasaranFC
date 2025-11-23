@@ -145,7 +145,7 @@ namespace NoPasaranFC.Models
             
             var frame = _currentAnimation.Frames[_currentFrameIndex];
             
-            string sheetName = (kitname!=null?kitname: (isHomeTeam ? "player_blue_multi" : "player_red_multi"));
+            string sheetName = (!string.IsNullOrEmpty(kitname)?kitname: (isHomeTeam ? "player_blue_multi" : "player_red_multi"));
             
             if (!_sharedSpriteSheets.ContainsKey(sheetName)) return;
             
