@@ -22,7 +22,7 @@ namespace NoPasaranFC.Screens
         private int _matchweek;
         private List<Match> _matchweekMatches;
         private KeyboardState _previousKeyboardState;
-        
+        private Texture2D _trophySprite;
         public RoundResultsScreen(Championship championship, int matchweek, DatabaseManager database, 
             ScreenManager screenManager, ContentManager contentManager, GraphicsDevice graphicsDevice)
         {
@@ -34,6 +34,7 @@ namespace NoPasaranFC.Screens
             _graphicsDevice = graphicsDevice;
             
             _matchweekMatches = championship.GetMatchesForMatchweek(matchweek);
+            _trophySprite = _contentManager.Load<Texture2D>("trophy");
         }
         
         public override void Update(GameTime gameTime)
@@ -72,7 +73,19 @@ namespace NoPasaranFC.Screens
             // Draw all matches for this matchweek
             float yOffset = 150;
             float lineHeight = 40;
-            
+            if(_championship.IsChampionshipOver())
+            {
+                var championTeam = _championship.GetChampionTeam();
+                // Draw trophy if player is champion
+                Vector2 trophyPos = new Vector2(
+                    (_graphicsDevice.Viewport.Width - _trophySprite.Width) / 2,
+                    yOffset
+                );
+                spriteBatch.Draw(_trophySprite, trophyPos, Color.White);
+                yOffset += _trophySprite.Height + 20;
+                string championText = Localization.Instance.Get("round_results_champion")
+                    .Replace("{0}", championTeam.Name);
+            }
             foreach (var match in _matchweekMatches.OrderBy(m => m.Id))
             {
                 var homeTeam = _championship.Teams.Find(t => t.Id == match.HomeTeamId);

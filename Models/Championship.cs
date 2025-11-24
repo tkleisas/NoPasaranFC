@@ -50,7 +50,14 @@ namespace NoPasaranFC.Models
             var unplayedMatch = Matches.FirstOrDefault(m => !m.IsPlayed);
             return unplayedMatch?.Matchweek ?? CurrentMatchweek;
         }
-        
+        public bool IsChampionshipOver()
+        {
+            return Matches.All(m => m.IsPlayed);
+        }
+        public Team GetChampionTeam()
+        {
+             return GetStandings().OrderByDescending(t=>t.Points).FirstOrDefault();
+        }
         public List<Team> GetStandings()
         {
             return Teams.OrderByDescending(t => t.Points)
