@@ -1245,6 +1245,58 @@ namespace NoPasaranFC.Screens
                     spriteBatch.DrawString(font, debugText, pos + new Vector2(-40, -100), 
                         Color.Cyan, 0f, Vector2.Zero, 0.5f, SpriteEffects.None, 0f);
                 }
+                
+                // Draw trajectory visualization
+                if (player.AIController is Gameplay.AIController aiController)
+                {
+                    // Access current state to get trajectory
+                    var currentState = aiController.GetType().GetField("_currentState", 
+                        System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
+                        ?.GetValue(aiController) as Gameplay.AIState;
+                    
+                    if (currentState != null)
+                    {
+                        var trajectory = currentState.CurrentTrajectory;
+                        
+                        if (trajectory != null && trajectory.Waypoints != null && trajectory.Waypoints.Count > 0)
+                        {
+                            // Draw waypoints as circles
+                            for (int i = 0; i < trajectory.Waypoints.Count; i++)
+                            {
+                                Vector2 waypoint = trajectory.Waypoints[i];
+                                
+                                // Current waypoint is larger and brighter
+                                if (i == trajectory.CurrentWaypointIndex)
+                                {
+                                    DrawCircle(spriteBatch, waypoint, 12f, trajectory.DebugColor, 4f);
+                                }
+                                else
+                                {
+                                    DrawCircle(spriteBatch, waypoint, 8f, trajectory.DebugColor * 0.6f, 2f);
+                                }
+                                
+                                // Draw lines connecting waypoints
+                                if (i < trajectory.Waypoints.Count - 1)
+                                {
+                                    DrawLine(spriteBatch, waypoint, trajectory.Waypoints[i + 1], 
+                                        trajectory.DebugColor * 0.5f, 2f);
+                                }
+                            }
+                            
+                            // Draw line from player to current waypoint
+                            if (trajectory.CurrentWaypointIndex < trajectory.Waypoints.Count)
+                            {
+                                DrawLine(spriteBatch, pos, trajectory.Waypoints[trajectory.CurrentWaypointIndex],
+                                    trajectory.DebugColor * 0.3f, 1f);
+                            }
+                            
+                            // Draw trajectory info text
+                            string trajText = $"Traj: {trajectory.CurrentWaypointIndex + 1}/{trajectory.Waypoints.Count}";
+                            spriteBatch.DrawString(font, trajText, pos + new Vector2(-40, -120), 
+                                trajectory.DebugColor, 0f, Vector2.Zero, 0.5f, SpriteEffects.None, 0f);
+                        }
+                    }
+                }
             }
             
             // Draw ball info

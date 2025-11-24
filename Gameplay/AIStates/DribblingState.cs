@@ -11,6 +11,7 @@ namespace NoPasaranFC.Gameplay.AIStates
         private bool _isOrbiting = false;
         private float _orbitTimer = 0f; // Minimum time to stay in orbit state
         private float _orbitDurationVariation = 0f; // Per-player random variation (set on first orbit)
+        private Vector2 _trajectoryBallPosition = Vector2.Zero; // Ball position when trajectory was created
 
         public DribblingState()
         {
@@ -239,15 +240,18 @@ namespace NoPasaranFC.Gameplay.AIStates
                 desiredKickDirection = deepGoalTarget - player.FieldPosition;
             }
             
-            // BOUNDARY ESCAPE LOGIC
-            // If ball is too close to boundary, force kick direction away from it
+            // BOUNDARY ESCAPE LOGIC (DEFENSIVE ONLY)
+            // Only escape boundaries when in defensive half to avoid pushing ball to sidelines when attacking
             float escapeMargin = 150f;
             bool nearLeft = context.BallPosition.X < MatchEngine.StadiumMargin + escapeMargin;
             bool nearRight = context.BallPosition.X > MatchEngine.TotalWidth - MatchEngine.StadiumMargin - escapeMargin;
             bool nearTop = context.BallPosition.Y < MatchEngine.StadiumMargin + escapeMargin;
             bool nearBottom = context.BallPosition.Y > MatchEngine.TotalHeight - MatchEngine.StadiumMargin - escapeMargin;
             
-            if (nearLeft || nearRight || nearTop || nearBottom)
+            // Only apply boundary escape if in defensive half
+            bool inDefensiveHalf = context.IsDefensiveHalf;
+            
+            if ((nearLeft || nearRight || nearTop || nearBottom) && inDefensiveHalf)
             {
                 Vector2 escapeDir = Vector2.Zero;
                 if (nearLeft) escapeDir.X = 1f;
@@ -258,11 +262,13 @@ namespace NoPasaranFC.Gameplay.AIStates
                 if (escapeDir.LengthSquared() > 0)
                 {
                     escapeDir.Normalize();
-                    // Override desired direction to escape boundary
-                    desiredKickDirection = escapeDir;
+                    // Blend escape with goal direction (50/50) instead of full override
+                    desiredKickDirection = Vector2.Normalize(desiredKickDirection) + escapeDir;
+                    if (desiredKickDirection.LengthSquared() > 0)
+                        desiredKickDirection.Normalize();
                 }
             }
-
+            
             if (desiredKickDirection.LengthSquared() > 0)
             {
                 desiredKickDirection.Normalize();
@@ -281,62 +287,85 @@ namespace NoPasaranFC.Gameplay.AIStates
                 bool playerAheadOfBall = dotProduct < 0;
 
                 // ORBIT LOGIC: If we are ahead of the ball, circle around it
-                // Use hysteresis: Once orbiting, stay orbiting until clearly behind ball
+                // Use trajectory-based circular arc for smooth, committed movement
                 if (playerAheadOfBall || _isOrbiting)
                 {
+                    // Check if trajectory needs to be invalidated due to ball movement
+                    if (_isOrbiting && _currentTrajectory != null)
+                    {
+                        float ballMovement = Vector2.Distance(context.BallPosition, _trajectoryBallPosition);
+                        if (ballMovement > 100f) // Ball moved more than 100px
+                        {
+                            // Invalidate trajectory and regenerate
+                            _currentTrajectory = null;
+                            _isOrbiting = false;
+                        }
+                    }
+                    
                     // Start orbiting if ahead
-                    if (playerAheadOfBall) 
+                    if (playerAheadOfBall && !_isOrbiting) 
                     {
                         _isOrbiting = true;
                         // Apply per-player variation: base 0.2s + variation (±0.1s)
                         _orbitTimer = 0.2f + _orbitDurationVariation;
+                        
+                        // Store ball position for trajectory invalidation tracking
+                        _trajectoryBallPosition = context.BallPosition;
+                        
+                        // Generate circular arc trajectory around the ball
+                        // Arc angle: 180 degrees (half circle to get behind ball)
+                        _currentTrajectory = TrajectoryGenerator.GenerateOrbitArc(
+                            context.BallPosition,  // Center of orbit
+                            player.FieldPosition,   // Start position
+                            180f,                   // Arc angle in degrees
+                            16,                     // 16 waypoints for very smooth curve
+                            (float)context.MatchTime  // Current time
+                        );
                     }
                     
                     // Stop orbiting only if:
                     // 1. We are CLEARLY behind the ball (dot product > 0.5) AND
-                    // 2. Timer has expired
-                    // This prevents "half-orbits" where player stops at 90 degrees
-                    if (dotProduct > 0.5f && _orbitTimer <= 0f)
+                    // 2. Timer has expired AND
+                    // 3. Trajectory is complete
+                    bool trajectoryComplete = _currentTrajectory == null || 
+                                             _currentTrajectory.IsComplete(player.FieldPosition);
+                    
+                    if (dotProduct > 0.5f && _orbitTimer <= 0f && trajectoryComplete)
                     {
                         _isOrbiting = false;
+                        _currentTrajectory = null;
                     }
 
-                    if (_isOrbiting)
+                    if (_isOrbiting && _currentTrajectory != null)
                     {
-                        // REPOSITIONING LOGIC: Seek a point BEHIND the ball
-                        // Instead of complex orbiting, just run to the spot behind the ball
-                        Vector2 toGoal = context.OpponentGoalCenter - context.BallPosition;
-                        toGoal.Normalize();
+                        // Follow the arc trajectory
+                        Vector2 trajectoryVelocity = FollowTrajectory(
+                            player, 
+                            player.Speed * 3.0f,  // Fast orbiting speed
+                            (float)context.MatchTime
+                        );
                         
-                        // Target position is 150px behind the ball
-                        Vector2 targetPos = context.BallPosition - (toGoal * 150f);
-                        
-                        // Seek target
-                        Vector2 seekDir = targetPos - player.FieldPosition;
-                        seekDir.Normalize();
-                        
-                        // Avoid Ball: Don't run through the ball!
-                        // If close to ball, push away from it
-                        Vector2 avoidBall = Vector2.Zero;
-                        if (distToBall < 120f)
+                        if (trajectoryVelocity.LengthSquared() > 0)
                         {
-                            Vector2 fromBall = player.FieldPosition - context.BallPosition;
-                            if (fromBall.LengthSquared() > 0)
-                            {
-                                fromBall.Normalize();
-                                // Smoother avoidance: Linear falloff
-                                float strength = 1.0f - (distToBall / 120f);
-                                avoidBall = fromBall * strength * 2.0f; // Stronger but smoother
-                            }
+                            player.Velocity = trajectoryVelocity;
+                            return AIStateType.Dribbling;
                         }
-                        
-                        // Blend seek and avoid
-                        Vector2 finalDir = seekDir + avoidBall;
-                        if (finalDir.LengthSquared() > 0) finalDir.Normalize();
-                        
-                        // Move fast!
-                        player.Velocity = finalDir * (player.Speed * 3.0f);
-                        return AIStateType.Dribbling;
+                        else
+                        {
+                            // Trajectory ended, fallback to seeking behind ball
+                            Vector2 toGoal = context.OpponentGoalCenter - context.BallPosition;
+                            toGoal.Normalize();
+                            Vector2 targetPos = context.BallPosition - (toGoal * 150f);
+                            Vector2 seekDir = targetPos - player.FieldPosition;
+                            
+                            if (seekDir.LengthSquared() > 0)
+                            {
+                                seekDir.Normalize();
+                                player.Velocity = seekDir * (player.Speed * 3.0f);
+                            }
+                            
+                            return AIStateType.Dribbling;
+                        }
                     }
                 }
                 

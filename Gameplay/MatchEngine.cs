@@ -579,8 +579,9 @@ namespace NoPasaranFC.Gameplay
         
         private AIContext BuildAIContext(Player player)
         {
-            bool isHomeTeam = player.Team == _homeTeam;
-            var myTeam = player.Team;
+            // Use Name comparison for robustness as requested
+            bool isHomeTeam = player.Team != null && player.Team.Name == _homeTeam.Name;
+            var myTeam = isHomeTeam ? _homeTeam : _awayTeam; 
             var opponentTeam = isHomeTeam ? _awayTeam : _homeTeam;
             
             // Find nearest opponent and teammate
@@ -645,7 +646,7 @@ namespace NoPasaranFC.Gameplay
                 new Vector2(StadiumMargin + FieldWidth, StadiumMargin + FieldHeight / 2) :
                 new Vector2(StadiumMargin, StadiumMargin + FieldHeight / 2);
             
-            bool ballInDefensiveHalf = IsBallInHalf(player.Team.Id);
+            bool ballInDefensiveHalf = IsBallInHalf(player.Team.Name);
             bool ballInAttackingHalf = !ballInDefensiveHalf;
             
             return new AIContext
@@ -1048,10 +1049,10 @@ namespace NoPasaranFC.Gameplay
             // This makes the gameplay more realistic and gives player control
         }
         
-        private bool IsBallInHalf(int teamId)
+        private bool IsBallInHalf(string teamName)
         {
             float centerX = StadiumMargin + FieldWidth / 2;
-            bool isHomeTeam = teamId == _homeTeam.Id;
+            bool isHomeTeam = teamName == _homeTeam.Name;
             
             // Hysteresis zone around center line to prevent oscillation
             // Ball must move 100 pixels past center to change half

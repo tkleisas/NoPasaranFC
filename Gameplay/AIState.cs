@@ -20,10 +20,41 @@ namespace NoPasaranFC.Gameplay
     public abstract class AIState
     {
         public AIStateType Type { get; protected set; }
+        protected TrajectoryPath _currentTrajectory; // Current trajectory being followed
+        
+        // Public accessor for debugging/visualization
+        public TrajectoryPath CurrentTrajectory => _currentTrajectory;
         
         public abstract void Enter(Player player, AIContext context);
         public abstract AIStateType Update(Player player, AIContext context, float deltaTime);
         public abstract void Exit(Player player, AIContext context);
+        
+        /// <summary>
+        /// Helper method to follow a trajectory path
+        /// Returns the velocity vector to move along the trajectory
+        /// </summary>
+        protected Vector2 FollowTrajectory(Player player, float speed, float currentTime, float waypointRadius = 20f)
+        {
+            if (_currentTrajectory == null || !_currentTrajectory.IsValid(currentTime))
+                return Vector2.Zero;
+            
+            // Update progress (advance to next waypoint if close enough)
+            _currentTrajectory.UpdateProgress(player.FieldPosition, waypointRadius);
+            
+            // Get current target waypoint
+            Vector2 target = _currentTrajectory.GetCurrentTarget(player.FieldPosition);
+            
+            // Calculate direction to target
+            Vector2 direction = target - player.FieldPosition;
+            
+            if (direction.LengthSquared() > 0)
+            {
+                direction.Normalize();
+                return direction * speed;
+            }
+            
+            return Vector2.Zero;
+        }
         
         protected Vector2 GetSafeDirection(Vector2 position, Vector2 targetDirection, AIContext context)
         {
