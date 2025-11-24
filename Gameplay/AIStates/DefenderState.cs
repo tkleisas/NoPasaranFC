@@ -34,8 +34,8 @@ namespace NoPasaranFC.Gameplay.AIStates
             // 1. Ball is in defensive half AND close
             // 2. Opponent has ball near our goal
             // 3. We're the designated chaser
-            bool ballDangerous = context.IsDefensiveHalf && context.DistanceToBall < 300f;
-            bool emergencyDefense = opponentHasBall && ballNearOurGoal && context.DistanceToBall < 500f;
+            bool ballDangerous = context.IsDefensiveHalf && context.DistanceToBall < 400f; // Increased from 300f
+            bool emergencyDefense = opponentHasBall && ballNearOurGoal && context.DistanceToBall < 600f; // Increased from 500f
             
             if ((justAfterKickoff && context.DistanceToBall < 500f) || 
                 (context.ShouldChaseBall && ballDangerous) ||

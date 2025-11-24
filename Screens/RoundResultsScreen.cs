@@ -34,7 +34,7 @@ namespace NoPasaranFC.Screens
             _graphicsDevice = graphicsDevice;
             
             _matchweekMatches = championship.GetMatchesForMatchweek(matchweek);
-            _trophySprite = _contentManager.Load<Texture2D>("trophy");
+            _trophySprite = _contentManager.Load<Texture2D>("Sprites/trophy");
         }
         
         public override void Update(GameTime gameTime)
@@ -81,10 +81,18 @@ namespace NoPasaranFC.Screens
                     (_graphicsDevice.Viewport.Width - _trophySprite.Width) / 2,
                     yOffset
                 );
+                yOffset = yOffset + _trophySprite.Height + lineHeight;
                 spriteBatch.Draw(_trophySprite, trophyPos, Color.White);
-                yOffset += _trophySprite.Height + 20;
                 string championText = Localization.Instance.Get("round_results_champion")
                     .Replace("{0}", championTeam.Name);
+                Vector2 championSize = _font.MeasureString(championText);
+                Vector2 championPos = new Vector2(
+                    (_graphicsDevice.Viewport.Width - championSize.X) / 2,
+                    yOffset
+                );
+                spriteBatch.DrawString(_font, championText, championPos, Color.Gold);
+                yOffset = yOffset + lineHeight;
+
             }
             foreach (var match in _matchweekMatches.OrderBy(m => m.Id))
             {
@@ -98,8 +106,15 @@ namespace NoPasaranFC.Screens
                     
                     if (match.IsPlayed)
                     {
-                        matchText = $"{homeTeam.Name}  {match.HomeScore} - {match.AwayScore}  {awayTeam.Name}";
-                        
+                        string leftString = homeTeam.Name;
+                        string rightString = awayTeam.Name;
+                        string middlestring = $"{match.HomeScore} - {match.AwayScore}";
+                        leftString = leftString.PadLeft(20);
+                        rightString = rightString.PadRight(20);
+                        middlestring = middlestring.PadLeft(6);
+                        middlestring = middlestring.PadRight(7);
+                        //matchText = $"{homeTeam.Name}  {match.HomeScore} - {match.AwayScore}  {awayTeam.Name}";
+                        matchText = $"{leftString}{middlestring}{rightString}";
                         // Highlight player's team match
                         if (homeTeam.IsPlayerControlled || awayTeam.IsPlayerControlled)
                         {

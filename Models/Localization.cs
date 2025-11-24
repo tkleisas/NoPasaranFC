@@ -189,7 +189,7 @@ namespace NoPasaranFC.Models
                 ["lineup.position.fwd"] = "ΕΠ",
                 
                 // Round Results
-                ["round_results_title"] = "ΑΠΟΤΕΛΕΣΜΑΤΑ ΑΓΩΝΙΣΤΙΚΗΣ {0}",
+                ["round_results_title"] = "ΑΠΟΤΕΛΕΣΜΑΤΑ {0}ΗΣ ΑΓΩΝΙΣΤΙΚΗΣ",
                 ["round_results_continue"] = "Πατήστε ENTER ή SPACE για συνέχεια",
                 ["round_results_champion"] = "Η ομάδα {0} είναι Πρωταθλήτρια!",
                 // Settings

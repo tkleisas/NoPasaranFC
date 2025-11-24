@@ -29,7 +29,9 @@ namespace NoPasaranFC.Gameplay.AIStates
 
             // Calculate desired shot direction
             Vector2 target = context.OpponentGoalCenter;
-            target.Y += (float)(context.Random.NextDouble() - 0.5) * 200f; // Random vertical offset
+            // Increased variation: ±220 pixels (goal is ±267, so this uses ~82% of goal width)
+            // This encourages more corner shots and makes them harder to save
+            target.Y += (float)(context.Random.NextDouble() - 0.5) * 440f; // Random vertical offset (-220 to +220)
             
             Vector2 shotDirection = target - context.BallPosition;
             float distance = shotDirection.Length();

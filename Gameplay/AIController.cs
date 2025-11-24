@@ -12,11 +12,15 @@ namespace NoPasaranFC.Gameplay
         private AIState _currentState;
         private Dictionary<AIStateType, AIState> _states;
         private AIContext _context;
+        private Random _playerRandom; // Unique random instance per player
         
         public AIController(Player player)
         {
             _player = player;
             _context = new AIContext();
+            
+            // Create unique random instance based on player ID (ensures different behavior per player)
+            _playerRandom = new Random(player.Id * 12345 + Environment.TickCount);
             
             // Initialize all states - use role-specific positioning state
             _states = new Dictionary<AIStateType, AIState>
@@ -57,6 +61,9 @@ namespace NoPasaranFC.Gameplay
         {
             // Update context
             _context = context;
+            
+            // Override the shared Random with this player's unique Random instance
+            _context.PlayerRandom = _playerRandom;
             
             // Update current state
             AIStateType nextState = _currentState.Update(_player, _context, deltaTime);

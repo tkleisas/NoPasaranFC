@@ -41,8 +41,8 @@ namespace NoPasaranFC.Gameplay.AIStates
             }
             
             // Midfielders are box-to-box players - moderate aggression
-            bool ballInDefensiveHalf = context.IsDefensiveHalf && context.DistanceToBall < 250f;
-            bool ballVeryClose = context.DistanceToBall < 200f;
+            bool ballInDefensiveHalf = context.IsDefensiveHalf && context.DistanceToBall < 350f; // Increased from 250f
+            bool ballVeryClose = context.DistanceToBall < 300f; // Increased from 200f
             
             if ((justAfterKickoff && context.DistanceToBall < 500f) || (context.ShouldChaseBall && (ballInDefensiveHalf || ballVeryClose)))
             {
@@ -96,6 +96,35 @@ namespace NoPasaranFC.Gameplay.AIStates
             
             Vector2 newTargetPosition = Vector2.Lerp(basePosition, context.BallPosition, lerpFactor);
             
+            // IMPROVEMENT: Add "Support Offset" to avoid being in a straight line (blocked by markers)
+            // Create a triangle formation by offsetting perpendicular to the line between home and ball
+            if (distanceToBall > 200f)
+            {
+                Vector2 directionToBall = context.BallPosition - basePosition;
+                if (directionToBall.LengthSquared() > 0)
+                {
+                    directionToBall.Normalize();
+                    // Perpendicular vector (-y, x)
+                    Vector2 perpendicular = new Vector2(-directionToBall.Y, directionToBall.X);
+                    
+                    // Determine which side to offset based on field position
+                    // If we are on the left side of field, offset left (up/negative Y)
+                    // If we are on the right side, offset right (down/positive Y)
+                    float centerY = MatchEngine.StadiumMargin + MatchEngine.FieldHeight / 2;
+                    float offsetDirection = (player.HomePosition.Y < centerY) ? -1f : 1f;
+                    
+                    // Vary offset based on role
+                    if (player.Role == PlayerRole.CentralMidfielder)
+                    {
+                        // Central mids alternate or stay central
+                        offsetDirection = (player.Id % 2 == 0) ? 1f : -1f;
+                    }
+                    
+                    float supportOffset = 150f; // 150px offset
+                    newTargetPosition += perpendicular * offsetDirection * supportOffset;
+                }
+            }
+            
             // Wing midfielders stay wider
             if (player.Role == PlayerRole.LeftMidfielder || player.Role == PlayerRole.LeftWinger)
             {
@@ -121,6 +150,15 @@ namespace NoPasaranFC.Gameplay.AIStates
                 }
             }
             
+            // Clamp target to field boundaries (with margin to prevent going out)
+            float fieldMargin = 150f; // Stay 150px away from boundaries
+            newTargetPosition.X = MathHelper.Clamp(newTargetPosition.X, 
+                MatchEngine.StadiumMargin + fieldMargin, 
+                MatchEngine.StadiumMargin + MatchEngine.FieldWidth - fieldMargin);
+            newTargetPosition.Y = MathHelper.Clamp(newTargetPosition.Y, 
+                MatchEngine.StadiumMargin + fieldMargin, 
+                MatchEngine.StadiumMargin + MatchEngine.FieldHeight - fieldMargin);
+
             // Update target
             player.AITargetPosition = newTargetPosition;
             player.AITargetPositionSet = true;
@@ -146,6 +184,28 @@ namespace NoPasaranFC.Gameplay.AIStates
             if (distance > 0)
             {
                 direction.Normalize();
+
+                // Check if approaching field boundaries and adjust direction
+                float leftDist = player.FieldPosition.X - MatchEngine.StadiumMargin;
+                float rightDist = (MatchEngine.StadiumMargin + MatchEngine.FieldWidth) - player.FieldPosition.X;
+                float topDist = player.FieldPosition.Y - MatchEngine.StadiumMargin;
+                float bottomDist = (MatchEngine.StadiumMargin + MatchEngine.FieldHeight) - player.FieldPosition.Y;
+                
+                // If too close to boundary (< 200px), add repulsion force
+                Vector2 repulsion = Vector2.Zero;
+                if (leftDist < 200f) repulsion.X += 0.5f;
+                if (rightDist < 200f) repulsion.X -= 0.5f;
+                if (topDist < 200f) repulsion.Y += 0.5f;
+                if (bottomDist < 200f) repulsion.Y -= 0.5f;
+                
+                // Blend movement direction with boundary repulsion
+                if (repulsion.LengthSquared() > 0)
+                {
+                    repulsion.Normalize();
+                    direction = Vector2.Lerp(direction, repulsion, 0.4f);
+                    direction.Normalize();
+                }
+
                 float speed = player.Speed * 2.5f; // Base speed
                 player.Velocity = direction * speed; // Set velocity - MatchEngine will apply multipliers and update position
                 player.Stamina = System.Math.Max(0, player.Stamina - 2.5f * deltaTime);

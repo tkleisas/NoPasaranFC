@@ -36,6 +36,8 @@ namespace NoPasaranFC.Gameplay.AIStates
             }
             
             // CRITICAL: If opponent has clear possession and is very close to ball, back off to defensive position
+            // REMOVED: We want to steal the ball!
+            /*
             if (context.NearestOpponent != null)
             {
                 float opponentDistToBall = Vector2.Distance(context.NearestOpponent.FieldPosition, context.BallPosition);
@@ -47,6 +49,7 @@ namespace NoPasaranFC.Gameplay.AIStates
                     return AIStateType.Positioning;
                 }
             }
+            */
             
             // Simple, direct ball chasing - just go to the ball
             Vector2 toBall = context.BallPosition - player.FieldPosition;

@@ -85,6 +85,7 @@ namespace NoPasaranFC.Gameplay
         public List<Player> Opponents { get; set; }
         public Player BestPassTarget { get; set; }
         public bool IsHomeTeam { get; set; } // True if defending left goal
+        public Random PlayerRandom { get; set; } // Unique random instance per player (breaks synchronization)
         
         // Ball steering helper
         public bool IsPlayerBehindBall(Player player, Vector2 desiredDirection)

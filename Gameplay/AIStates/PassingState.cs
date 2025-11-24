@@ -72,15 +72,16 @@ namespace NoPasaranFC.Gameplay.AIStates
                             float power;
                             if (distance < 400f) // Short passes (< 1/8 field)
                             {
-                                power = 0.6f + (distance / 400f) * 0.2f; // 0.6 to 0.8
+                                power = 0.7f + (distance / 400f) * 0.2f; // 0.7 to 0.9
                             }
                             else if (distance < 800f) // Medium passes (1/8 to 1/4 field)
                             {
-                                power = 0.8f + ((distance - 400f) / 400f) * 0.15f; // 0.8 to 0.95
+                                power = 0.9f + ((distance - 400f) / 400f) * 0.2f; // 0.9 to 1.1
                             }
                             else // Long passes (> 1/4 field)
                             {
-                                power = MathHelper.Clamp(0.95f + ((distance - 800f) / 800f) * 0.05f, 0.95f, 1.0f); // 0.95 to 1.0
+                                // Allow overcharge (up to 1.3f) for very long passes
+                                power = MathHelper.Clamp(1.1f + ((distance - 800f) / 800f) * 0.2f, 1.1f, 1.3f); 
                             }
                             
                             // Pass to PREDICTED position, not current position
