@@ -19,7 +19,10 @@ namespace NoPasaranFC.Models
         public int GoalsAgainst { get; set; }
         public int Points => Wins * 3 + Draws;
         public int GoalDifference => GoalsFor - GoalsAgainst;
-        
+
+        // Celebration system
+        public List<string> CelebrationIds { get; set; } // Team-specific celebration IDs (null/empty = use generic)
+
         public Team(string name, bool isPlayerControlled = false)
         {
             Name = name;

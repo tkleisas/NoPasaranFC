@@ -221,16 +221,67 @@ namespace NoPasaranFC.Screens
                 // Update new animation system
                 if (player.AnimationSystem != null)
                 {
-                    // Check if shoot/tackle animation is playing
-                    if (player.CurrentAnimationState == "shoot" || player.CurrentAnimationState == "tackle")
+                    // Update sprite direction based on velocity for all animations
+                    if (player.Velocity.LengthSquared() > 0.1f)
+                    {
+                        Vector2 vel = player.Velocity;
+                        int newDirection;
+
+                        // Determine new direction based on velocity
+                        if (Math.Abs(vel.X) > Math.Abs(vel.Y))
+                        {
+                            // Horizontal movement dominant
+                            newDirection = vel.X > 0 ? 3 : 2; // Right : Left
+                        }
+                        else
+                        {
+                            // Vertical movement dominant
+                            newDirection = vel.Y > 0 ? 0 : 1; // Down : Up
+                        }
+
+                        // Update direction (with hysteresis for opposite directions)
+                        bool isOppositeDirection = (player.SpriteDirection == 2 && newDirection == 3) ||
+                                                   (player.SpriteDirection == 3 && newDirection == 2) ||
+                                                   (player.SpriteDirection == 0 && newDirection == 1) ||
+                                                   (player.SpriteDirection == 1 && newDirection == 0);
+
+                        if (isOppositeDirection)
+                        {
+                            // Require stronger velocity to flip direction
+                            float threshold = 20f;
+                            if (vel.LengthSquared() > threshold * threshold)
+                            {
+                                player.SpriteDirection = newDirection;
+                            }
+                        }
+                        else
+                        {
+                            player.SpriteDirection = newDirection;
+                        }
+                    }
+
+                    // Check if shoot/tackle/celebrate animation is playing
+                    if (player.CurrentAnimationState == "shoot" ||
+                        player.CurrentAnimationState == "tackle" ||
+                        player.CurrentAnimationState == "celebrate")
                     {
                         // Play the animation
                         player.AnimationSystem.PlayAnimation(player.CurrentAnimationState);
-                        
+
+                        // Set rotation based on velocity direction (for celebrate animation)
+                        if (player.Velocity.LengthSquared() > 0.1f)
+                        {
+                            float angle = (float)Math.Atan2(player.Velocity.Y, player.Velocity.X);
+                            float adjustedAngle = angle + MathHelper.PiOver2;
+                            if (adjustedAngle < 0) adjustedAngle += MathHelper.TwoPi;
+                            int rotation = (int)Math.Round(adjustedAngle / (MathHelper.Pi / 4f)) % 8;
+                            player.AnimationSystem.SetRotation(rotation);
+                        }
+
                         // Update animation
                         player.AnimationSystem.Update(deltaTime);
-                        
-                        // Check if animation finished
+
+                        // Check if animation finished (celebrate loops, so won't finish)
                         if (player.AnimationSystem.IsAnimationFinished())
                         {
                             // Reset to walk/idle
@@ -561,22 +612,44 @@ namespace NoPasaranFC.Screens
             // Draw ball particles forming "GOAL!"
             _matchEngine.GoalCelebration.Draw(spriteBatch, _ballSprite, Game1.ScreenWidth, Game1.ScreenHeight);
             
-            // Draw "GOAL!" text
+            // Draw "GOAL!" text (animates from center to top)
             if (_matchEngine.GoalCelebration.ShouldDrawGoalText())
             {
                 string goalText = Models.Localization.Instance.Get("match.goal");
                 float scale = _matchEngine.GoalCelebration.GetGoalTextScale();
+                float yPosition = _matchEngine.GoalCelebration.GetGoalTextYPosition(Game1.ScreenHeight);
                 Vector2 textSize = font.MeasureString(goalText);
                 Vector2 position = new Vector2(
                     Game1.ScreenWidth / 2 - (textSize.X * scale) / 2,
-                    Game1.ScreenHeight / 2 + 150 // Below the ball formation
+                    yPosition
                 );
-                
+
                 // Draw text with shadow
-                spriteBatch.DrawString(font, goalText, position + new Vector2(4, 4) * scale, 
+                spriteBatch.DrawString(font, goalText, position + new Vector2(4, 4) * scale,
                     Color.Black * 0.5f, 0f, Vector2.Zero, scale, SpriteEffects.None, 0f);
-                spriteBatch.DrawString(font, goalText, position, 
+                spriteBatch.DrawString(font, goalText, position,
                     Color.Yellow, 0f, Vector2.Zero, scale, SpriteEffects.None, 0f);
+            }
+
+            // Draw skip celebration message at bottom of screen
+            if (_matchEngine.GoalCelebration.ShouldShowSkipMessage())
+            {
+                string skipMessage = "Press any key to skip celebration";
+                float messageScale = 0.8f;
+                Vector2 messageSize = font.MeasureString(skipMessage);
+                Vector2 messagePosition = new Vector2(
+                    Game1.ScreenWidth / 2 - (messageSize.X * messageScale) / 2,
+                    Game1.ScreenHeight - 80 // 80 pixels from bottom
+                );
+
+                // Blinking effect
+                float blinkAlpha = 0.5f + (float)Math.Sin(DateTime.Now.Millisecond / 1000.0 * Math.PI * 2) * 0.5f;
+
+                // Draw text with shadow
+                spriteBatch.DrawString(font, skipMessage, messagePosition + new Vector2(2, 2) * messageScale,
+                    Color.Black * 0.5f * blinkAlpha, 0f, Vector2.Zero, messageScale, SpriteEffects.None, 0f);
+                spriteBatch.DrawString(font, skipMessage, messagePosition,
+                    Color.White * blinkAlpha, 0f, Vector2.Zero, messageScale, SpriteEffects.None, 0f);
             }
         }
         

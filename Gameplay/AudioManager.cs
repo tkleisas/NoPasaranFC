@@ -192,5 +192,19 @@ namespace NoPasaranFC.Gameplay
         {
             MediaPlayer.Volume = MusicVolume;
         }
+
+        public void StopAllSoundEffects()
+        {
+            // Stop and dispose all active sound instances
+            foreach (var instance in _activeSoundInstances.Values)
+            {
+                if (instance.State == SoundState.Playing)
+                {
+                    instance.Stop();
+                }
+                instance.Dispose();
+            }
+            _activeSoundInstances.Clear();
+        }
     }
 }

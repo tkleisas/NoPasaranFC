@@ -31,7 +31,9 @@ namespace NoPasaranFC.Gameplay
                 { AIStateType.Dribbling, new DribblingState() },
                 { AIStateType.AvoidingSideline, new AvoidingSidelineState() },
                 { AIStateType.Passing, new PassingState() },
-                { AIStateType.Shooting, new ShootingState() }
+                { AIStateType.Shooting, new ShootingState() },
+                { AIStateType.Celebration, new CelebrationRunState() },
+                { AIStateType.CelebrationChase, new CelebrationChaseState() }
             };
             
             // Set initial state
@@ -101,6 +103,23 @@ namespace NoPasaranFC.Gameplay
         public string GetCurrentStateName()
         {
             return _currentState.Type.ToString();
+        }
+
+        public void ForceTransitionTo(AIStateType newState)
+        {
+            if (_states.ContainsKey(newState))
+            {
+                TransitionTo(newState);
+            }
+        }
+
+        public AIState GetState(AIStateType stateType)
+        {
+            if (_states.ContainsKey(stateType))
+            {
+                return _states[stateType];
+            }
+            return null;
         }
     }
 }

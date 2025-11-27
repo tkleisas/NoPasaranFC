@@ -14,7 +14,9 @@ namespace NoPasaranFC.Gameplay
         Passing,
         Shooting,
         Defending,
-        AvoidingSideline
+        AvoidingSideline,
+        Celebration,
+        CelebrationChase
     }
 
     public abstract class AIState

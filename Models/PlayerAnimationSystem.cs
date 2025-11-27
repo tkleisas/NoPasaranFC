@@ -89,6 +89,14 @@ namespace NoPasaranFC.Models
             tackle.AddFrame("dummy", 30, 0, 0);
             tackle.AddFrame("dummy", 31, 0, 0);
             _sharedAnimations["tackle"] = tackle;
+
+            // Celebrate animation - looping (arms extended to sides)
+            var celebrate = new SpriteAnimation("celebrate", 0.15f, true);
+            celebrate.AddFrame("dummy", 32, 0, 0);
+            celebrate.AddFrame("dummy", 33, 0, 0);
+            celebrate.AddFrame("dummy", 34, 0, 0);
+            celebrate.AddFrame("dummy", 35, 0, 0);
+            _sharedAnimations["celebrate"] = celebrate;
         }
         
         public void PlayAnimation(string animationName)

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Microsoft.Xna.Framework;
 using NoPasaranFC.Models;
+using NoPasaranFC.Gameplay.Celebrations;
 
 namespace NoPasaranFC.Gameplay
 {
@@ -13,17 +14,18 @@ namespace NoPasaranFC.Gameplay
         private Player _controlledPlayer;
         private Player _lastPlayerTouchedBall;
         private Random _random;
-        
+
         // Referee
         public Vector2 RefereePosition { get; set; }
         private Vector2 _refereeVelocity;
-        
+
         // Match state
         public enum MatchState { CameraInit, Countdown, Playing, HalfTime, Ended, GoalCelebration, FinalScore }
         public MatchState CurrentState { get; private set; }
         public float CountdownTimer { get; private set; }
         public int CountdownNumber { get; private set; }
         public GoalCelebration GoalCelebration { get; private set; }
+        public CelebrationManager CelebrationManager { get; private set; }
         public float FinalScoreTimer { get; private set; }
         private float _timeSinceKickoff; // Tracks time since last kickoff
         
@@ -34,8 +36,11 @@ namespace NoPasaranFC.Gameplay
         private float _shootButtonHoldTime = 0f;
         private bool _wasShootButtonDown = false;
         private bool _goalScored = false;
+        private bool _isOwnGoal = false;
         private float _goalCelebrationDelay = 0f;
         private const float GoalCelebrationDelayTime = 0.5f; // Half second delay to see ball in goal
+        private float _normalZoom;
+        private const float CelebrationZoomOut = 0.65f; // Zoom out to 65% during celebration
         private const float AutoKickCooldown = 0.3f; // Cooldown between automatic kicks (300ms)
         public int HomeScore { get; private set; }
         public int AwayScore { get; private set; }
@@ -111,14 +116,16 @@ namespace NoPasaranFC.Gameplay
             // Initialize camera with settings
             float zoom = GameSettings.Instance.CameraZoom * ZoomLevel; // Apply both base zoom and user zoom
             Camera = new Camera(viewportWidth, viewportHeight, zoom);
-            
+            _normalZoom = zoom; // Store normal zoom for restoration after celebration
+
             // Initialize referee position (center of field)
             RefereePosition = new Vector2(StadiumMargin + FieldWidth / 2, StadiumMargin + FieldHeight / 2);
             _refereeVelocity = Vector2.Zero;
             
             // Initialize goal celebration
             GoalCelebration = new GoalCelebration();
-            
+            CelebrationManager = new CelebrationManager();
+
             // Start with camera initialization (center on ball first)
             CurrentState = MatchState.CameraInit;
             CountdownTimer = 0.5f; // Half second to center camera
@@ -292,6 +299,7 @@ namespace NoPasaranFC.Gameplay
                 {
                     TriggerGoalCelebration();
                     _goalScored = false;
+                    _isOwnGoal = false; // Reset own goal flag
                 }
                 // Let ball physics continue during delay
             }
@@ -299,20 +307,47 @@ namespace NoPasaranFC.Gameplay
             // Handle goal celebration
             if (CurrentState == MatchState.GoalCelebration)
             {
+                // Smoothly zoom based on celebration preference
+                float zoomMultiplier = CelebrationManager.CurrentCelebration?.GetCameraZoomMultiplier() ?? CelebrationZoomOut;
+                float targetZoom = _normalZoom * zoomMultiplier;
+                Camera.Zoom = MathHelper.Lerp(Camera.Zoom, targetZoom, deltaTime * 2f);
+
+                // Check if user wants to skip celebration (any key press)
+                if (moveDirection.LengthSquared() > 0 || isShootKeyDown)
+                {
+                    GoalCelebration.Stop();
+                    CelebrationManager.StopCelebration();
+                }
+
                 GoalCelebration.Update(deltaTime);
-                
+                CelebrationManager.Update(deltaTime);
+
                 if (!GoalCelebration.IsActive)
                 {
                     // Celebration ended, reset for kickoff with countdown
+                    CelebrationManager.StopCelebration();
+
+                    // Smoothly zoom back in to normal
+                    Camera.Zoom = MathHelper.Lerp(Camera.Zoom, _normalZoom, deltaTime * 2f);
+
                     ResetAfterGoal();
                     CurrentState = MatchState.Countdown;
                     CountdownTimer = 3.5f; // 3 seconds countdown + 0.5 for "GO!"
                     CountdownNumber = 3;
                 }
-                
-                // Keep camera on ball during celebration
-                Camera.Follow(BallPosition, deltaTime);
+
+                // Update players during celebration (only AI updates, handled by CelebrationManager)
+                UpdatePlayersPhysics(deltaTime);
+
+                // Get camera target from celebration manager
+                Vector2 cameraTarget = CelebrationManager.GetCameraTarget();
+                Camera.Follow(cameraTarget, deltaTime);
                 return;
+            }
+            else
+            {
+                // Not in celebration - ensure zoom is at normal level
+                Camera.Zoom = MathHelper.Lerp(Camera.Zoom, _normalZoom, deltaTime * 3f);
             }
             
             // Handle final score overlay
@@ -372,10 +407,28 @@ namespace NoPasaranFC.Gameplay
             CheckGoal();
         }
         
+        private void UpdatePlayersPhysics(float deltaTime)
+        {
+            // Update player positions based on their velocities (set by CelebrationManager)
+            foreach (var player in _homeTeam.Players.Where(p => p.IsStarting).Concat(_awayTeam.Players.Where(p => p.IsStarting)))
+            {
+                // Apply velocity to position
+                player.FieldPosition += player.Velocity * deltaTime;
+
+                // Clamp to field
+                Vector2 pos = player.FieldPosition;
+                ClampToField(ref pos);
+                player.FieldPosition = pos;
+            }
+        }
+
         private void UpdatePlayers(float deltaTime, Vector2 moveDirection, bool isShootKeyDown)
         {
+            // During celebration, all players use AI (including controlled player)
+            bool celebrationActive = CurrentState == MatchState.GoalCelebration;
+
             // Update controlled player
-            if (_controlledPlayer != null)
+            if (_controlledPlayer != null && !celebrationActive)
             {
                 float distToBall = Vector2.Distance(_controlledPlayer.FieldPosition, BallPosition);
                 
@@ -484,8 +537,9 @@ namespace NoPasaranFC.Gameplay
             // Update AI players (only starting players)
             foreach (var player in _homeTeam.Players.Where(p => p.IsStarting).Concat(_awayTeam.Players.Where(p => p.IsStarting)))
             {
-                if (player.IsControlled) continue;
-                
+                // During celebration, update ALL players including controlled player
+                if (player.IsControlled && !celebrationActive) continue;
+
                 UpdateAIPlayer(player, deltaTime);
             }
         }
@@ -1254,25 +1308,33 @@ namespace NoPasaranFC.Gameplay
             
             // === GOAL DETECTION ===
             // Left goal (home team defends) - Ball must cross the goal line
-            if (BallPosition.X < leftGoalLine && 
+            if (BallPosition.X < leftGoalLine &&
                 BallPosition.Y >= goalTop && BallPosition.Y <= goalBottom &&
                 ballBelowGoalHeight && !_goalScored)
             {
                 AwayScore++;
                 _goalScored = true;
                 _goalCelebrationDelay = 0f;
+
+                // Check if it's an own goal (home team scored on themselves)
+                _isOwnGoal = _lastPlayerTouchedBall != null && _lastPlayerTouchedBall.Team == _homeTeam;
+
                 AudioManager.Instance.PlaySoundEffect("goal");
                 // Don't trigger celebration yet - let ball continue for visual effect
                 return;
             }
             // Right goal (away team defends) - Ball must cross the goal line
-            else if (BallPosition.X > rightGoalLine && 
+            else if (BallPosition.X > rightGoalLine &&
                      BallPosition.Y >= goalTop && BallPosition.Y <= goalBottom &&
                      ballBelowGoalHeight && !_goalScored)
             {
                 HomeScore++;
                 _goalScored = true;
                 _goalCelebrationDelay = 0f;
+
+                // Check if it's an own goal (away team scored on themselves)
+                _isOwnGoal = _lastPlayerTouchedBall != null && _lastPlayerTouchedBall.Team == _awayTeam;
+
                 AudioManager.Instance.PlaySoundEffect("goal");
                 // Don't trigger celebration yet - let ball continue for visual effect
                 return;
@@ -1443,24 +1505,61 @@ namespace NoPasaranFC.Gameplay
         private void TriggerGoalCelebration()
         {
             CurrentState = MatchState.GoalCelebration;
-            
+
             // Goal sound already played when goal was detected, just play crowd cheer
-            AudioManager.Instance.PlaySoundEffect("crowd_cheer", 1.2f);
-            
-            // Start celebration with font rendering
+            AudioManager.Instance.PlaySoundEffect("crowd_cheer", 1.2f, allowRetrigger: false);
+
+            // Stop ball movement
+            BallVelocity = Vector2.Zero;
+            BallVerticalVelocity = 0f;
+
+            // Start player celebration using the new CelebrationManager
+            if (_lastPlayerTouchedBall != null)
+            {
+                List<Player> teammates;
+                List<Player> opponents;
+
+                if (_isOwnGoal)
+                {
+                    // Own goal - BOTH teams celebrate together!
+                    // The "scorer" is the player who made the own goal
+                    teammates = _homeTeam.Players
+                        .Where(p => p.IsStarting && p != _lastPlayerTouchedBall && !p.IsKnockedDown)
+                        .Concat(_awayTeam.Players.Where(p => p.IsStarting && p != _lastPlayerTouchedBall && !p.IsKnockedDown))
+                        .ToList();
+
+                    // No opponents - everyone celebrates
+                    opponents = new List<Player>();
+                }
+                else
+                {
+                    // Normal goal - only scoring team celebrates
+                    teammates = _lastPlayerTouchedBall.Team.Players
+                        .Where(p => p.IsStarting && p != _lastPlayerTouchedBall && !p.IsKnockedDown)
+                        .ToList();
+
+                    var opponentTeam = _lastPlayerTouchedBall.Team == _homeTeam ? _awayTeam : _homeTeam;
+                    opponents = opponentTeam.Players
+                        .Where(p => p.IsStarting && !p.IsKnockedDown)
+                        .ToList();
+                }
+
+                // Start celebration (own goals always use "run_around_pitch")
+                CelebrationManager.StartCelebration(_lastPlayerTouchedBall, teammates, opponents, _isOwnGoal);
+            }
+
+            // Start visual celebration (ball animation and text) - must be after CelebrationManager.StartCelebration
+            // so we can get the custom duration from the active celebration
+            float? customDuration = CelebrationManager.CurrentCelebration?.GetCelebrationDuration();
             if (_font != null && _graphicsDevice != null)
             {
                 string goalText = Models.Localization.Instance.Get("match.goal");
-                GoalCelebration.Start(goalText, _font, _graphicsDevice);
+                GoalCelebration.Start(goalText, _font, _graphicsDevice, customDuration);
             }
             else
             {
                 GoalCelebration.Start(); // Fallback to empty
             }
-            
-            // Stop ball movement
-            BallVelocity = Vector2.Zero;
-            BallVerticalVelocity = 0f;
         }
         
         private bool ShouldPlayerChaseBall(Player player)
