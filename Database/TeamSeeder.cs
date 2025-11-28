@@ -20,6 +20,7 @@ namespace NoPasaranFC.Database
             public List<PlayerData> players { get; set; }
             public string kitName { get; set; }
             public string logo { get; set; }
+            public List<string> celebrationIds { get; set; }
         }
         
         private class PlayerData
@@ -35,6 +36,7 @@ namespace NoPasaranFC.Database
             public int agility { get; set; }
             public int technique { get; set; }
             public int stamina { get; set; }
+            public List<string> celebrationIds { get; set; }
         }
         
         public static List<Team> LoadTeamsFromJson(string jsonPath)
@@ -51,6 +53,7 @@ namespace NoPasaranFC.Database
                     var team = new Team(teamData.name, teamData.isPlayerControlled);
                     team.KitName = teamData.kitName;
                     team.Logo = teamData.logo;
+                    team.CelebrationIds = teamData.celebrationIds;
 
                     // If no players specified, generate default roster
                     if (teamData.players == null || teamData.players.Count == 0)
@@ -73,7 +76,8 @@ namespace NoPasaranFC.Database
                                 Defending = playerData.defending,
                                 Agility = playerData.agility,
                                 Technique = playerData.technique,
-                                Stamina = playerData.stamina
+                                Stamina = playerData.stamina,
+                                CelebrationIds = playerData.celebrationIds
                             };
                             team.AddPlayer(player);
                         }

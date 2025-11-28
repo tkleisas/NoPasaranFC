@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Text.Json;
 using Microsoft.Data.Sqlite;
 using NoPasaranFC.Models;
 
@@ -45,7 +46,8 @@ namespace NoPasaranFC.Database
                     GoalsFor INTEGER DEFAULT 0,
                     GoalsAgainst INTEGER DEFAULT 0,
                     KitName TEXT,
-                    Logo TEXT
+                    Logo TEXT,
+                    CelebrationIds TEXT
                 );
                 
                 CREATE TABLE IF NOT EXISTS Players (
@@ -62,6 +64,7 @@ namespace NoPasaranFC.Database
                     Stamina INTEGER DEFAULT 100,
                     IsStarting INTEGER DEFAULT 0,
                     ShirtNumber INTEGER DEFAULT 0,
+                    CelebrationIds TEXT,
                     FOREIGN KEY(TeamId) REFERENCES Teams(Id)
                 );
                 
@@ -117,8 +120,8 @@ namespace NoPasaranFC.Database
             {
                 // New team without ID - let database assign one
                 command.CommandText = @"
-                    INSERT INTO Teams (Name, IsPlayerControlled, Wins, Draws, Losses, GoalsFor, GoalsAgainst)
-                    VALUES (@name, @isPlayerControlled, @wins, @draws, @losses, @goalsFor, @goalsAgainst);
+                    INSERT INTO Teams (Name, IsPlayerControlled, Wins, Draws, Losses, GoalsFor, GoalsAgainst, KitName, Logo, CelebrationIds)
+                    VALUES (@name, @isPlayerControlled, @wins, @draws, @losses, @goalsFor, @goalsAgainst, @kitName, @logo, @celebrationIds);
                     SELECT last_insert_rowid();
                 ";
                 command.Parameters.AddWithValue("@name", team.Name);
@@ -130,15 +133,17 @@ namespace NoPasaranFC.Database
                 command.Parameters.AddWithValue("@losses", team.Losses);
                 command.Parameters.AddWithValue("@goalsFor", team.GoalsFor);
                 command.Parameters.AddWithValue("@goalsAgainst", team.GoalsAgainst);
-                
+                command.Parameters.AddWithValue("@celebrationIds",
+                    team.CelebrationIds != null ? JsonSerializer.Serialize(team.CelebrationIds) : (object)DBNull.Value);
+
                 team.Id = Convert.ToInt32(command.ExecuteScalar());
             }
             else
             {
                 // Team with ID - use INSERT OR REPLACE to handle both new and existing
                 command.CommandText = @"
-                    INSERT OR REPLACE INTO Teams (Id, Name, IsPlayerControlled, Wins, Draws, Losses, GoalsFor, GoalsAgainst, KitName, Logo)
-                    VALUES (@id, @name, @isPlayerControlled, @wins, @draws, @losses, @goalsFor, @goalsAgainst, @kitName, @logo);
+                    INSERT OR REPLACE INTO Teams (Id, Name, IsPlayerControlled, Wins, Draws, Losses, GoalsFor, GoalsAgainst, KitName, Logo, CelebrationIds)
+                    VALUES (@id, @name, @isPlayerControlled, @wins, @draws, @losses, @goalsFor, @goalsAgainst, @kitName, @logo, @celebrationIds);
                 ";
                 command.Parameters.AddWithValue("@id", team.Id);
                 command.Parameters.AddWithValue("@name", team.Name);
@@ -150,6 +155,8 @@ namespace NoPasaranFC.Database
                 command.Parameters.AddWithValue("@goalsAgainst", team.GoalsAgainst);
                 command.Parameters.AddWithValue("@kitName", team.KitName ?? string.Empty);
                 command.Parameters.AddWithValue("@logo", team.Logo ?? string.Empty);
+                command.Parameters.AddWithValue("@celebrationIds",
+                    team.CelebrationIds != null ? JsonSerializer.Serialize(team.CelebrationIds) : (object)DBNull.Value);
                 command.ExecuteNonQuery();
             }
         }
@@ -165,8 +172,8 @@ namespace NoPasaranFC.Database
             {
                 // New player without ID
                 command.CommandText = @"
-                    INSERT INTO Players (TeamId, Name, Position, Speed, Shooting, Passing, Defending, Agility, Technique, Stamina, IsStarting, ShirtNumber)
-                    VALUES (@teamId, @name, @position, @speed, @shooting, @passing, @defending, @agility, @technique, @stamina, @isStarting, @shirtNumber);
+                    INSERT INTO Players (TeamId, Name, Position, Speed, Shooting, Passing, Defending, Agility, Technique, Stamina, IsStarting, ShirtNumber, CelebrationIds)
+                    VALUES (@teamId, @name, @position, @speed, @shooting, @passing, @defending, @agility, @technique, @stamina, @isStarting, @shirtNumber, @celebrationIds);
                     SELECT last_insert_rowid();
                 ";
                 command.Parameters.AddWithValue("@teamId", player.TeamId);
@@ -181,15 +188,17 @@ namespace NoPasaranFC.Database
                 command.Parameters.AddWithValue("@stamina", player.Stamina);
                 command.Parameters.AddWithValue("@isStarting", player.IsStarting ? 1 : 0);
                 command.Parameters.AddWithValue("@shirtNumber", player.ShirtNumber);
-                
+                command.Parameters.AddWithValue("@celebrationIds",
+                    player.CelebrationIds != null ? JsonSerializer.Serialize(player.CelebrationIds) : (object)DBNull.Value);
+
                 player.Id = Convert.ToInt32(command.ExecuteScalar());
             }
             else
             {
                 // Player with ID - use INSERT OR REPLACE
                 command.CommandText = @"
-                    INSERT OR REPLACE INTO Players (Id, TeamId, Name, Position, Speed, Shooting, Passing, Defending, Agility, Technique, Stamina, IsStarting, ShirtNumber)
-                    VALUES (@id, @teamId, @name, @position, @speed, @shooting, @passing, @defending, @agility, @technique, @stamina, @isStarting, @shirtNumber);
+                    INSERT OR REPLACE INTO Players (Id, TeamId, Name, Position, Speed, Shooting, Passing, Defending, Agility, Technique, Stamina, IsStarting, ShirtNumber, CelebrationIds)
+                    VALUES (@id, @teamId, @name, @position, @speed, @shooting, @passing, @defending, @agility, @technique, @stamina, @isStarting, @shirtNumber, @celebrationIds);
                 ";
                 command.Parameters.AddWithValue("@id", player.Id);
                 command.Parameters.AddWithValue("@teamId", player.TeamId);
@@ -204,7 +213,9 @@ namespace NoPasaranFC.Database
                 command.Parameters.AddWithValue("@stamina", player.Stamina);
                 command.Parameters.AddWithValue("@isStarting", player.IsStarting ? 1 : 0);
                 command.Parameters.AddWithValue("@shirtNumber", player.ShirtNumber);
-                
+                command.Parameters.AddWithValue("@celebrationIds",
+                    player.CelebrationIds != null ? JsonSerializer.Serialize(player.CelebrationIds) : (object)DBNull.Value);
+
                 command.ExecuteNonQuery();
             }
         }
@@ -231,9 +242,11 @@ namespace NoPasaranFC.Database
                     GoalsFor = reader.GetInt32(6),
                     GoalsAgainst = reader.GetInt32(7),
                     KitName = reader.IsDBNull(8) ? string.Empty : reader.GetString(8),
-                    Logo = reader.IsDBNull(9) ? string.Empty : reader.GetString(9)
+                    Logo = reader.IsDBNull(9) ? string.Empty : reader.GetString(9),
+                    CelebrationIds = reader.IsDBNull(10) ? null :
+                        JsonSerializer.Deserialize<List<string>>(reader.GetString(10))
                 };
-                
+
                 team.Players = LoadPlayersForTeam(team.Id);
                 teams.Add(team);
             }
@@ -269,7 +282,9 @@ namespace NoPasaranFC.Database
                     Technique = reader.IsDBNull(9) ? 50 : reader.GetInt32(9),
                     Stamina = reader.IsDBNull(10) ? 100 : reader.GetInt32(10),
                     IsStarting = reader.IsDBNull(11) ? false : reader.GetInt32(11) == 1,
-                    ShirtNumber = reader.IsDBNull(12) ? 0 : reader.GetInt32(12)
+                    ShirtNumber = reader.IsDBNull(12) ? 0 : reader.GetInt32(12),
+                    CelebrationIds = reader.IsDBNull(13) ? null :
+                        JsonSerializer.Deserialize<List<string>>(reader.GetString(13))
                 };
                 players.Add(player);
             }
