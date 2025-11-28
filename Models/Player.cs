@@ -1,4 +1,5 @@
-﻿using Microsoft.Xna.Framework;
+﻿using System.Collections.Generic;
+using Microsoft.Xna.Framework;
 
 namespace NoPasaranFC.Models
 {
@@ -87,6 +88,9 @@ namespace NoPasaranFC.Models
         // Roster management
         public bool IsStarting { get; set; } // Whether player is in starting lineup
         public int ShirtNumber { get; set; } // Player's shirt number
+
+        // Celebration system
+        public List<string> CelebrationIds { get; set; } // Player-specific celebration IDs (null/empty = use team/generic)
         
         // AI Controller (not serialized to database)
         [System.Text.Json.Serialization.JsonIgnore]

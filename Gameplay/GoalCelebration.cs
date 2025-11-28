@@ -9,7 +9,9 @@ namespace NoPasaranFC.Gameplay
     {
         private bool _isActive;
         private float _timer;
-        private const float Duration = 2.5f;
+        private const float VisualDuration = 2.5f; // Ball animation and text duration
+        private const float CelebrationDuration = 60.0f; // Default total celebration duration (1 minute, can be skipped with any key)
+        private float _activeCelebrationDuration; // Actual duration for current celebration
         private string _text;
         private SpriteFont _font;
         private GraphicsDevice _graphicsDevice;
@@ -27,13 +29,14 @@ namespace NoPasaranFC.Gameplay
         
         public bool IsActive => _isActive;
         
-        public void Start(string text, SpriteFont font, GraphicsDevice graphicsDevice)
+        public void Start(string text, SpriteFont font, GraphicsDevice graphicsDevice, float? customDuration = null)
         {
             _isActive = true;
             _timer = 0f;
             _text = text;
             _font = font;
             _graphicsDevice = graphicsDevice;
+            _activeCelebrationDuration = customDuration ?? CelebrationDuration;
             InitializeBallParticles();
         }
         
@@ -159,33 +162,44 @@ namespace NoPasaranFC.Gameplay
         public void Update(float deltaTime)
         {
             if (!_isActive) return;
-            
+
             _timer += deltaTime;
-            
-            // Update ball particles
-            for (int i = 0; i < _ballParticles.Length; i++)
+
+            // Update ball particles (only during visual duration)
+            if (_timer <= VisualDuration)
             {
-                float effectiveTime = Math.Max(0f, _timer - _ballParticles[i].Delay);
-                _ballParticles[i].Progress = Math.Min(1f, effectiveTime * 2.5f); // Animation speed
+                for (int i = 0; i < _ballParticles.Length; i++)
+                {
+                    float effectiveTime = Math.Max(0f, _timer - _ballParticles[i].Delay);
+                    _ballParticles[i].Progress = Math.Min(1f, effectiveTime * 2.5f); // Animation speed
+                }
             }
-            
-            if (_timer >= Duration)
+
+            // End celebration after full duration
+            if (_timer >= _activeCelebrationDuration)
             {
                 _isActive = false;
             }
         }
+
+        public void Stop()
+        {
+            _isActive = false;
+        }
         
         public void Draw(SpriteBatch spriteBatch, Texture2D ballTexture, int screenWidth, int screenHeight)
         {
-            if (!_isActive) return;
-            
+            // Only draw visual effects during the visual duration
+            if (!_isActive || _timer > VisualDuration) return;
+
+            // Position at center of screen for initial animation
             Vector2 screenCenter = new Vector2(screenWidth / 2, screenHeight / 2);
-            
+
             // Draw background overlay
             float bgAlpha = Math.Min(1f, _timer * 3f) * 0.7f;
-            if (_timer > Duration - 0.5f)
+            if (_timer > VisualDuration - 0.5f)
             {
-                bgAlpha *= (Duration - _timer) / 0.5f; // Fade out
+                bgAlpha *= (VisualDuration - _timer) / 0.5f; // Fade out
             }
             
             // Draw each ball particle
@@ -201,11 +215,11 @@ namespace NoPasaranFC.Gameplay
                 // Scale and alpha based on progress
                 float scale = 0.5f + easeT * 1.0f; // Balls grow from 0.5x to 1.5x
                 float alpha = Math.Min(1f, particle.Progress * 3f);
-                
-                // Fade out at end
-                if (_timer > Duration - 0.5f)
+
+                // Fade out at end of visual duration
+                if (_timer > VisualDuration - 0.5f)
                 {
-                    alpha *= (Duration - _timer) / 0.5f;
+                    alpha *= (VisualDuration - _timer) / 0.5f;
                 }
                 
                 // Draw ball at normal size
@@ -223,30 +237,64 @@ namespace NoPasaranFC.Gameplay
             }
             
             // Draw "GOAL!" text underneath (using font)
-            if (_timer > 0.5f && _timer < Duration - 0.3f)
+            if (_timer > 0.5f && _timer < VisualDuration - 0.3f)
             {
                 // This will be drawn by MatchScreen using the font
             }
         }
-        
+
         public bool ShouldDrawGoalText()
         {
-            return _isActive && _timer > 0.5f && _timer < Duration - 0.3f;
+            // Show text throughout the entire celebration
+            return _isActive && _timer > 0.5f;
         }
-        
+
         public float GetGoalTextScale()
         {
             if (!_isActive) return 0f;
-            
-            float t = Math.Min(1f, (_timer - 0.5f) * 3f);
-            float scale = MathF.Pow(t, 0.5f);
-            
-            if (_timer > Duration - 0.3f)
+
+            // During visual animation (0-2.5s): scale up to full size
+            if (_timer <= VisualDuration)
             {
-                scale *= (Duration - _timer) / 0.3f;
+                float t = Math.Min(1f, (_timer - 0.5f) * 3f);
+                float scale = MathF.Pow(t, 0.5f);
+                return scale * 3f;
             }
-            
-            return scale * 3f;
+
+            // After visual animation: keep at medium size at top
+            return 1.5f;
+        }
+
+        public float GetGoalTextYPosition(int screenHeight)
+        {
+            if (!_isActive) return 0f;
+
+            // During visual animation: text below center
+            if (_timer <= VisualDuration)
+            {
+                return screenHeight / 2 + 150;
+            }
+
+            // Transition period: move from center to top (0.5 seconds)
+            float transitionDuration = 0.5f;
+            if (_timer <= VisualDuration + transitionDuration)
+            {
+                float t = (_timer - VisualDuration) / transitionDuration;
+                // Smooth ease-out transition
+                t = 1f - MathF.Pow(1f - t, 3f);
+                float startY = screenHeight / 2 + 150;
+                float endY = 50;
+                return MathHelper.Lerp(startY, endY, t);
+            }
+
+            // After transition: stay at top
+            return 50;
+        }
+
+        public bool ShouldShowSkipMessage()
+        {
+            // Show skip message after the visual animation ends
+            return _isActive && _timer > VisualDuration;
         }
     }
 }
