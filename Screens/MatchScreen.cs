@@ -1205,12 +1205,12 @@ namespace NoPasaranFC.Screens
             // Draw time centered
             string timeText = $"Time: {(int)_matchEngine.MatchTime}'";
             Vector2 timeSize = font.MeasureString(timeText);
-            spriteBatch.DrawString(font, timeText, new Vector2((screenWidth - timeSize.X) / 2, screenHeight - 50), Color.White);
+            spriteBatch.DrawString(font, timeText, new Vector2((screenWidth - timeSize.X) / 2, screenHeight - 70), Color.White);
             
             // Draw controls centered at bottom
             string controls = "Arrows: Move | Space: Switch | X: Hold to Charge Shot";
             Vector2 controlsSize = font.MeasureString(controls);
-            spriteBatch.DrawString(font, controls, new Vector2((screenWidth - controlsSize.X) / 2, screenHeight - 25), Color.LightGray);
+            spriteBatch.DrawString(font, controls, new Vector2((screenWidth - controlsSize.X) / 2, screenHeight - 35), Color.LightGray);
         }
         
         private void DrawCountdown(SpriteBatch spriteBatch, SpriteFont font)
