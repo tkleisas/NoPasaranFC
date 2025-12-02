@@ -481,6 +481,28 @@ Use UTF8 encoding for all text data as there is multilingual support.
      * Only ball is restricted to stay in play (handled separately)
    - **Better tactical positioning**: Players can now use full field near all boundaries
 
+37. ✅ **Enhanced Throw-In System**:
+   - **Power charging mechanic**: Hold X button to charge throw power (0-100% over 1 second)
+     * Minimum power (10%+): 12f velocity, 40f height - Short, flat throw
+     * Maximum power (100%): 28f velocity, 160f height - Long, high-arc throw
+     * Power affects both distance and trajectory arc
+   - **Visual power indicator**: Real-time power bar and growing arrow
+     * Power bar shows charge level with color gradient (green → yellow → orange-red)
+     * Arrow length scales from 100px to 250px based on power
+     * Arrow color changes from white to orange with power
+   - **Intelligent AI throw-in targeting**: Multi-factor evaluation system
+     * Forward progress bonus (attacks toward goal)
+     * Open space detection (avoids crowded areas, 150px opponent check)
+     * Position preference (midfielders/forwards over defenders)
+     * Sideline proximity penalty (safer throws away from touchline)
+     * AI uses 70-90% power for realistic variety
+   - **Improved player positioning**: Thrower placed 50px outside field (was 30px)
+   - **Set piece labels**: Localized labels for throw-ins, corners, goal kicks
+     * English: "THROW-IN", "CORNER KICK", "GOAL KICK"
+     * Greek: "ΑΥΤ", "ΚΟΡΝΕΡ", "ΑΠΟΒΟΛΗ ΤΕΡΜΑΤΟΦΥΛΑΚΑ"
+   - **Sound feedback**: Kick sound volume scales with power (0.4-0.7)
+   - **Created THROW_IN_SYSTEM.md**: Complete technical documentation
+
 ## Next Steps (Future Enhancements):
 - Add alternative formations (4-3-3, 3-5-2, etc.)
 - Add more match events (fouls, corners, throw-ins, offsides)

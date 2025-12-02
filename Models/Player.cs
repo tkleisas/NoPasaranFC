@@ -72,6 +72,9 @@ namespace NoPasaranFC.Models
         // Ball control cooldown
         public float LastKickTime { get; set; }
         
+        // Throw-in state
+        public bool IsThrowingIn { get; set; }
+        
         // Animation state (NEW SYSTEM)
         public PlayerAnimationSystem AnimationSystem { get; set; }
         public string CurrentAnimationState { get; set; } // "walk", "fall", "shoot", "tackle"

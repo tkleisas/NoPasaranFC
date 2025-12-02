@@ -78,7 +78,7 @@ namespace NoPasaranFC.Screens
                 _selectedIndex = (_selectedIndex + 1) % _allPlayers.Count;
                 
                 // Auto-scroll
-                if (_selectedIndex - _scrollOffset >= MaxVisiblePlayers)
+                if (_selectedIndex - _scrollOffset >= MaxVisiblePlayers-1)
                 {
                     _scrollOffset++;
                 }
@@ -180,13 +180,13 @@ namespace NoPasaranFC.Screens
             spriteBatch.Draw(_pixel, new Rectangle(0, 0, screenWidth, screenHeight), new Color(20, 40, 20));
             
             // Title
-            string title = $"ΕΠΙΛΟΓΗ ΣΥΝΘΕΣΗΣ - {_team.Name}";
+            string title = $"{Localization.Instance.Get("lineup.title")} - {_team.Name}";
             Vector2 titleSize = font.MeasureString(title);
             spriteBatch.DrawString(font, title, new Vector2((screenWidth - titleSize.X) / 2, 20), Color.Yellow);
             
             // Starting count indicator
             int startingCount = _allPlayers.Count(p => p.IsStarting);
-            string countText = $"ΒΑΣΙΚΟΙ: {startingCount}/11";
+            string countText = $"{Localization.Instance.Get("lineup.starting")}: {startingCount}/11";
             Color countColor = startingCount == 11 ? Color.LightGreen : (startingCount < 11 ? Color.Yellow : Color.Red);
             Vector2 countSize = font.MeasureString(countText);
             spriteBatch.DrawString(font, countText, new Vector2((screenWidth - countSize.X) / 2, 60), countColor);
@@ -204,30 +204,31 @@ namespace NoPasaranFC.Screens
         private void DrawPlayerList(SpriteBatch spriteBatch, SpriteFont font)
         {
             int startY = 120;
-            int lineHeight = 35;
+            int lineHeight = 30;
             int xPos = 50;
-            
+            bool skipFirst = false;
             // Column headers
             spriteBatch.DrawString(font, "#", new Vector2(xPos, startY - 30), Color.Gray);
-            spriteBatch.DrawString(font, "NAME", new Vector2(xPos + 60, startY - 30), Color.Gray);
-            spriteBatch.DrawString(font, "POS", new Vector2(xPos + 270, startY - 30), Color.Gray);
-            spriteBatch.DrawString(font, "STATUS", new Vector2(xPos + 360, startY - 30), Color.Gray);
+            spriteBatch.DrawString(font, Localization.Instance.Get("lineup.name"), new Vector2(xPos + 60, startY - 30), Color.Gray);
+            spriteBatch.DrawString(font, Localization.Instance.Get("lineup.position"), new Vector2(xPos + 270, startY - 30), Color.Gray);
+            spriteBatch.DrawString(font, Localization.Instance.Get("lineup.status"), new Vector2(xPos + 360, startY - 30), Color.Gray);
             
             // Scroll indicators
             if (_scrollOffset > 0)
             {
-                spriteBatch.DrawString(font, "^ MORE", new Vector2(xPos + 180, startY - 30), Color.Gray);
+                spriteBatch.DrawString(font, $"^ {Localization.Instance.Get("lineup.more")}", new Vector2(xPos + 180, startY), Color.Gray);
+
             }
             
             int endIndex = Math.Min(_scrollOffset + MaxVisiblePlayers, _allPlayers.Count);
-            
+            startY = startY + 30;
             for (int i = _scrollOffset; i < endIndex; i++)
             {
                 var player = _allPlayers[i];
                 int yPos = startY + (i - _scrollOffset) * lineHeight;
                 
                 Color bgColor = i == _selectedIndex ? new Color(80, 120, 80, 200) : new Color(40, 60, 40, 100);
-                spriteBatch.Draw(_pixel, new Rectangle(xPos - 5, yPos - 5, 550, lineHeight), bgColor);
+                spriteBatch.Draw(_pixel, new Rectangle(xPos - 5, yPos, 550, lineHeight), bgColor);
                 
                 Color textColor = i == _selectedIndex ? Color.Yellow : Color.White;
                 
@@ -243,7 +244,7 @@ namespace NoPasaranFC.Screens
                 spriteBatch.DrawString(font, posText, new Vector2(xPos + 270, yPos), textColor);
                 
                 // Starting status
-                string statusText = player.IsStarting ? "[STARTER]" : "[BENCH]";
+                string statusText = player.IsStarting ? Localization.Instance.Get("lineup.starter") : Localization.Instance.Get("lineup.benchPlayer");
                 Color statusColor = player.IsStarting ? Color.LightGreen : Color.Gray;
                 if (i == _selectedIndex) statusColor = Color.Yellow;
                 spriteBatch.DrawString(font, statusText, new Vector2(xPos + 360, yPos), statusColor);
@@ -252,7 +253,7 @@ namespace NoPasaranFC.Screens
             if (endIndex < _allPlayers.Count)
             {
                 int yPos = startY + MaxVisiblePlayers * lineHeight;
-                spriteBatch.DrawString(font, "v MORE", new Vector2(xPos + 180, yPos), Color.Gray);
+                spriteBatch.DrawString(font, $"v {Localization.Instance.Get("lineup.more")}", new Vector2(xPos + 180, yPos), Color.Gray);
             }
         }
 
@@ -268,7 +269,7 @@ namespace NoPasaranFC.Screens
                 new Color(30, 50, 30, 200));
             
             // Title
-            string previewTitle = "FORMATION PREVIEW";
+            string previewTitle = Localization.Instance.Get("lineup.formationPreview");
             Vector2 titleSize = font.MeasureString(previewTitle);
             spriteBatch.DrawString(font, previewTitle, 
                 new Vector2(previewX + (previewWidth - titleSize.X) / 2, previewY + 10), Color.White);
@@ -309,7 +310,7 @@ namespace NoPasaranFC.Screens
 
         private void DrawInstructions(SpriteBatch spriteBatch, SpriteFont font, int screenHeight)
         {
-            string instructions = "UP/DOWN: Navigate | SPACE: Toggle Starter | ENTER: Confirm | ESC: Back";
+            string instructions = Localization.Instance.Get("lineup.instructions");
             Vector2 instrSize = font.MeasureString(instructions);
             spriteBatch.DrawString(font, instructions, 
                 new Vector2((Game1.ScreenWidth - instrSize.X) / 2, screenHeight - 30), 
@@ -320,10 +321,10 @@ namespace NoPasaranFC.Screens
         {
             return position switch
             {
-                PlayerPosition.Goalkeeper => "GK",
-                PlayerPosition.Defender => "DEF",
-                PlayerPosition.Midfielder => "MID",
-                PlayerPosition.Forward => "FWD",
+                PlayerPosition.Goalkeeper => Localization.Instance.Get("lineup.position.gk"),
+                PlayerPosition.Defender => Localization.Instance.Get("lineup.position.def"),
+                PlayerPosition.Midfielder => Localization.Instance.Get("lineup.position.mid"),
+                PlayerPosition.Forward => Localization.Instance.Get("lineup.position.fwd"),
                 _ => "?"
             };
         }

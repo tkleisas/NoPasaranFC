@@ -20,13 +20,21 @@ namespace NoPasaranFC.Gameplay
         private Vector2 _refereeVelocity;
 
         // Match state
-        public enum MatchState { CameraInit, Countdown, Playing, HalfTime, Ended, GoalCelebration, FinalScore }
+        public enum MatchState { CameraInit, Countdown, Playing, HalfTime, Ended, GoalCelebration, FinalScore, ThrowIn, CornerKick, GoalKick }
         public MatchState CurrentState { get; private set; }
         public float CountdownTimer { get; private set; }
         public int CountdownNumber { get; private set; }
         public GoalCelebration GoalCelebration { get; private set; }
         public CelebrationManager CelebrationManager { get; private set; }
         public float FinalScoreTimer { get; private set; }
+        
+        // Set piece state
+        public float RestartTimer { get; private set; }
+        public Player RestartPlayer { get; private set; }
+        public Vector2 RestartDirection { get; private set; } = Vector2.Zero;
+        public float ThrowInPowerCharge { get; private set; } = 0f; // 0.0 to 1.0
+        private bool _throwInAnimationStarted = false; // Track if throw animation is playing
+        
         private float _timeSinceKickoff; // Tracks time since last kickoff
         
         public Vector2 BallPosition { get; set; }
@@ -380,6 +388,153 @@ namespace NoPasaranFC.Gameplay
                 return;
             }
             
+            // Handle set pieces (ThrowIn, CornerKick, GoalKick)
+            if (CurrentState == MatchState.ThrowIn || CurrentState == MatchState.CornerKick || CurrentState == MatchState.GoalKick)
+            {
+                RestartTimer -= deltaTime;
+                
+                // Keep camera on restart player
+                if (RestartPlayer != null)
+                {
+                    Camera.Follow(RestartPlayer.FieldPosition, deltaTime);
+                    
+                    // Update restart player animation (idle/aiming)
+                    if (CurrentState == MatchState.ThrowIn)
+                    {
+                        RestartPlayer.IsThrowingIn = true;
+                        RestartPlayer.Velocity = Vector2.Zero; // Ensure stationary
+                    }
+                    else
+                    {
+                        // For corners/goal kicks, also keep stationary
+                        RestartPlayer.Velocity = Vector2.Zero;
+                    }
+                    
+                    // Handle input for controlled player
+                    if (RestartPlayer.IsControlled)
+                    {
+                        // Handle throw-in specific controls
+                        if (CurrentState == MatchState.ThrowIn)
+                        {
+                            // Use left/right to rotate direction
+                            if (moveDirection.X != 0 || moveDirection.Y != 0)
+                            {
+                                // Rotate the current direction based on left/right input
+                                float rotationSpeed = 2.5f * deltaTime; // Radians per second
+                                float currentAngle = (float)Math.Atan2(RestartDirection.Y, RestartDirection.X);
+                                
+                                if (moveDirection.X < 0) // Left key
+                                {
+                                    currentAngle -= rotationSpeed;
+                                }
+                                else if (moveDirection.X > 0) // Right key
+                                {
+                                    currentAngle += rotationSpeed;
+                                }
+                                
+                                RestartDirection = new Vector2((float)Math.Cos(currentAngle), (float)Math.Sin(currentAngle));
+                            }
+                            
+                            // Handle power charging
+                            if (isShootKeyDown)
+                            {
+                                // Charge power (0.0 to 1.0 over 1 second)
+                                ThrowInPowerCharge = Math.Min(1.0f, ThrowInPowerCharge + deltaTime);
+                            }
+                            else if (_wasShootButtonDown)
+                            {
+                                // Released - start throw animation (ball will be released when animation finishes)
+                                RestartPlayer.CurrentAnimationState = "throw_in_throw";
+                                _throwInAnimationStarted = true;
+                                _wasShootButtonDown = false;
+                            }
+                            
+                            // Track button state
+                            if (isShootKeyDown && !_wasShootButtonDown)
+                            {
+                                _wasShootButtonDown = true;
+                            }
+                        }
+                        else
+                        {
+                            // For corners/goal kicks, use arrow keys for direction
+                            if (moveDirection.Length() > 0.1f)
+                            {
+                                RestartDirection = Vector2.Normalize(moveDirection);
+                            }
+                            
+                            // Execute immediately on press
+                            if (isShootKeyDown && !_wasShootButtonDown)
+                            {
+                                ExecuteSetPieceAction();
+                                _wasShootButtonDown = true;
+                            }
+                            else if (!isShootKeyDown)
+                            {
+                                _wasShootButtonDown = false;
+                            }
+                        }
+                    }
+                    else
+                    {
+                        // AI Logic for set pieces
+                        // For throw-ins, wait longer to give teammates time to position
+                        float executeThreshold = CurrentState == MatchState.ThrowIn ? 0.5f : 2.0f;
+                        if (RestartTimer < executeThreshold)
+                        {
+                            // Calculate best direction
+                            Vector2 target = Vector2.Zero;
+                            if (CurrentState == MatchState.GoalKick)
+                            {
+                                // Aim far forward
+                                float forwardX = RestartPlayer.Team == _homeTeam ? RestartPlayer.FieldPosition.X + 500 : RestartPlayer.FieldPosition.X - 500;
+                                target = new Vector2(forwardX, RestartPlayer.FieldPosition.Y);
+                            }
+                            else if (CurrentState == MatchState.CornerKick)
+                            {
+                                // Aim at goal area
+                                float goalX = RestartPlayer.Team == _homeTeam ? StadiumMargin + FieldWidth : StadiumMargin;
+                                target = new Vector2(goalX, StadiumMargin + FieldHeight / 2);
+                            }
+                            else // ThrowIn - improved AI
+                            {
+                                target = FindBestThrowInTarget(RestartPlayer);
+                                // AI uses high power (85-100%) for effective throws
+                                ThrowInPowerCharge = 0.85f + (float)_random.NextDouble() * 0.15f;
+                            }
+                            
+                            RestartDirection = Vector2.Normalize(target - RestartPlayer.FieldPosition);
+                            
+                            // Play throw animation for AI throw-ins
+                            if (CurrentState == MatchState.ThrowIn)
+                            {
+                                RestartPlayer.CurrentAnimationState = "throw_in_throw";
+                                _throwInAnimationStarted = true;
+                            }
+                            else
+                            {
+                                ExecuteSetPieceAction();
+                            }
+                        }
+                    }
+                }
+                
+                // Auto-execute if timer expires
+                if (RestartTimer <= 0)
+                {
+                    // Default direction if none set
+                    if (RestartDirection == Vector2.Zero)
+                    {
+                        float forwardX = (RestartPlayer != null && RestartPlayer.Team == _homeTeam) ? 1 : -1;
+                        RestartDirection = new Vector2(forwardX, 0);
+                    }
+                    ExecuteSetPieceAction();
+                }
+                
+                // Don't return here! We want UpdatePlayers to run so teammates can move.
+                // But we need to make sure the RestartPlayer stays pinned in UpdatePlayers.
+            }
+
             // Update all players
             UpdatePlayers(deltaTime, moveDirection, isShootKeyDown);
             
@@ -566,7 +721,85 @@ namespace NoPasaranFC.Gameplay
                 }
             }
             
-            // Use AI Controller if available
+            // Handle set piece behavior (ThrowIn, CornerKick, GoalKick)
+            if (CurrentState == MatchState.ThrowIn || CurrentState == MatchState.CornerKick || CurrentState == MatchState.GoalKick)
+            {
+                // If this is the restart player, stay put (handled in Update loop)
+                if (player == RestartPlayer)
+                {
+                    player.Velocity = Vector2.Zero;
+                    return;
+                }
+                
+                // If teammate of restart player, move closer to offer support
+                if (RestartPlayer != null && player.Team == RestartPlayer.Team)
+                {
+                    Vector2 targetPosition;
+                    float targetDist;
+                    
+                    if (CurrentState == MatchState.ThrowIn)
+                    {
+                        // For throw-ins, nearest player moves toward the ball
+                        targetPosition = BallPosition;
+                        targetDist = 100f; // Get close to receive the throw
+                    }
+                    else
+                    {
+                        // For corners/goal kicks, spread out around restarter
+                        targetPosition = RestartPlayer.FieldPosition;
+                        targetDist = 200f; // Ideal support distance
+                    }
+                    
+                    float distToTarget = Vector2.Distance(player.FieldPosition, targetPosition);
+                    
+                    // Move closer if too far, but keep distance (don't crowd)
+                    if (distToTarget > targetDist + 50f)
+                    {
+                        // Move towards target
+                        Vector2 dir = Vector2.Normalize(targetPosition - player.FieldPosition);
+                        player.Velocity = dir * player.Speed * 2.5f; // Run towards ball/restarter
+                    }
+                    else if (distToTarget < targetDist - 50f)
+                    {
+                        // Too close, back off slightly
+                        Vector2 dir = Vector2.Normalize(player.FieldPosition - targetPosition);
+                        player.Velocity = dir * player.Speed * 1.0f;
+                    }
+                    else
+                    {
+                        // Good distance, stop and wait
+                        player.Velocity = Vector2.Zero;
+                    }
+                    
+                    // Update position
+                    player.FieldPosition += player.Velocity * deltaTime;
+                    Vector2 pos = player.FieldPosition;
+                    ClampToField(ref pos);
+                    player.FieldPosition = pos;
+                    
+                    // Face the ball/restarter
+                    Vector2 lookDir = targetPosition - player.FieldPosition;
+                    if (lookDir.Length() > 0.1f)
+                    {
+                        // Update sprite direction to face target
+                        if (Math.Abs(lookDir.X) > Math.Abs(lookDir.Y))
+                            player.SpriteDirection = lookDir.X > 0 ? 3 : 2;
+                        else
+                            player.SpriteDirection = lookDir.Y > 0 ? 0 : 1;
+                    }
+                    
+                    return; // Skip normal AI logic
+                }
+                
+                // If opponent, mark/defend (simplified: stay put or move towards ball if close)
+                if (RestartPlayer != null && player.Team != RestartPlayer.Team)
+                {
+                    // Opponents stay put or mark nearby players (simplified: stop)
+                    player.Velocity = Vector2.Zero;
+                    return;
+                }
+            }
+            
             if (player.AIController is AIController aiController)
             {
                 // Build context for AI
@@ -850,6 +1083,17 @@ namespace NoPasaranFC.Gameplay
         
         private void UpdateBall(float deltaTime)
         {
+            // During throw-in, keep ball at player's hands position
+            if (CurrentState == MatchState.ThrowIn && RestartPlayer != null && _throwInAnimationStarted)
+            {
+                // Ball follows player's position (held overhead)
+                BallPosition = RestartPlayer.FieldPosition;
+                BallVelocity = Vector2.Zero;
+                BallHeight = 180f; // Ball held above player's head (player is ~128px tall)
+                BallVerticalVelocity = 0f;
+                return; // Don't apply physics while holding ball
+            }
+            
             // Apply horizontal velocity to ball position
             BallPosition += BallVelocity * deltaTime;
             
@@ -1388,7 +1632,7 @@ namespace NoPasaranFC.Gameplay
             float yPos = BallPosition.Y < StadiumMargin + FieldHeight / 2 ? 
                 StadiumMargin + 50 : StadiumMargin + FieldHeight - 50;
             
-            PlaceBallForRestart(new Vector2(xPos, yPos));
+            PlaceBallForRestart(new Vector2(xPos, yPos), null, MatchState.GoalKick);
         }
         
         private void HandleBallOutGoalLine(bool leftSide, float yPosition)
@@ -1435,7 +1679,7 @@ namespace NoPasaranFC.Gameplay
                 yPos = StadiumMargin + FieldHeight / 2;
             }
             
-            PlaceBallForRestart(new Vector2(xPos, yPos), giveToHomeTeam);
+            PlaceBallForRestart(new Vector2(xPos, yPos), giveToHomeTeam, isCornerKick ? MatchState.CornerKick : MatchState.GoalKick);
         }
         
         private void HandleBallOutSideline(float xPosition, bool topSide)
@@ -1454,10 +1698,10 @@ namespace NoPasaranFC.Gameplay
                 giveToHomeTeam = !lastTouchWasHomeTeam;
             }
             
-            PlaceBallForRestart(new Vector2(xPos, yPos), giveToHomeTeam);
+            PlaceBallForRestart(new Vector2(xPos, yPos), giveToHomeTeam, MatchState.ThrowIn);
         }
         
-        private void PlaceBallForRestart(Vector2 position, bool? preferHomeTeam = null)
+        private void PlaceBallForRestart(Vector2 position, bool? preferHomeTeam = null, MatchState restartState = MatchState.Playing)
         {
             BallPosition = position;
             BallVelocity = Vector2.Zero;
@@ -1494,12 +1738,191 @@ namespace NoPasaranFC.Gameplay
             }
             
             // Move nearest player close to ball
-            if (nearestPlayer != null && minDistance > 100f)
+            if (nearestPlayer != null)
             {
-                Vector2 directionToBall = position - nearestPlayer.FieldPosition;
-                directionToBall.Normalize();
-                nearestPlayer.FieldPosition = position - directionToBall * 80f;
+                // For throw-ins, place player slightly behind the line
+                // For corners/goal kicks, place near ball
+                Vector2 placementOffset = Vector2.Zero;
+                
+                if (restartState == MatchState.ThrowIn)
+                {
+                    // Determine sideline direction (up or down)
+                    bool isTopSideline = position.Y < StadiumMargin + FieldHeight / 2;
+                    // Place player on the sideline, properly positioned for throw
+                    float yOffset = isTopSideline ? -50f : 50f;
+                    nearestPlayer.FieldPosition = new Vector2(position.X, position.Y + yOffset);
+                }
+                else
+                {
+                    // Corner/Goal kick - place slightly behind ball relative to center
+                    Vector2 directionToCenter = new Vector2(StadiumMargin + FieldWidth/2, StadiumMargin + FieldHeight/2) - position;
+                    if (directionToCenter != Vector2.Zero) directionToCenter.Normalize();
+                    nearestPlayer.FieldPosition = position - directionToCenter * 40f;
+                }
+                
+                // Set restart state
+                RestartPlayer = nearestPlayer;
+                RestartTimer = 5.0f;
+                CurrentState = restartState;
+                
+                // Default direction towards center
+                Vector2 toCenter = new Vector2(StadiumMargin + FieldWidth/2, StadiumMargin + FieldHeight/2) - nearestPlayer.FieldPosition;
+                if (toCenter != Vector2.Zero)
+                    RestartDirection = Vector2.Normalize(toCenter);
+                else
+                    RestartDirection = new Vector2(1, 0);
             }
+        }
+        
+        public void ExecuteThrowIn()
+        {
+            if (RestartPlayer == null || !_throwInAnimationStarted) return;
+            
+            // Execute the actual throw-in action
+            ExecuteSetPieceAction();
+            _throwInAnimationStarted = false;
+        }
+        
+        private void ExecuteSetPieceAction()
+        {
+            if (RestartPlayer == null) return;
+            
+            // Reset player state
+            RestartPlayer.IsThrowingIn = false;
+            
+            // Apply velocity to ball
+            float power = 0f;
+            float height = 0f;
+            
+            if (CurrentState == MatchState.ThrowIn)
+            {
+                // Power ranges from 12f (minimum) to 28f (maximum) based on charge
+                float minPower = 12f;
+                float maxPower = 28f;
+                float chargeAmount = Math.Max(0.1f, ThrowInPowerCharge); // Minimum 10% charge
+                power = minPower + (maxPower - minPower) * chargeAmount;
+                
+                // Height scales with power (short throws are flatter, long throws arc higher)
+                height = 40f + 120f * chargeAmount;
+                
+                float volume = 0.4f + 0.3f * chargeAmount;
+                AudioManager.Instance.PlaySoundEffect("kick_ball", volume);
+            }
+            else if (CurrentState == MatchState.CornerKick)
+            {
+                power = 22f; // Corner power
+                height = 150f; // High arc
+                AudioManager.Instance.PlaySoundEffect("kick_ball", 0.8f);
+            }
+            else if (CurrentState == MatchState.GoalKick)
+            {
+                power = 25f; // Goal kick power
+                height = 200f; // Very high arc
+                AudioManager.Instance.PlaySoundEffect("kick_ball", 1.0f);
+            }
+            
+            // Apply velocity
+            BallVelocity = RestartDirection * power * RestartPlayer.Speed * 0.05f; // Scale power
+            BallVerticalVelocity = height;
+            _lastPlayerTouchedBall = RestartPlayer;
+            RestartPlayer.LastKickTime = (float)MatchTime;
+            
+            // Reset throw-in power
+            ThrowInPowerCharge = 0f;
+            
+            // Reset state
+            CurrentState = MatchState.Playing;
+            RestartPlayer = null;
+        }
+        
+        private Player FindNearestTeammate(Player player)
+        {
+            Player nearest = null;
+            float minDist = float.MaxValue;
+            foreach (var teammate in player.Team.Players.Where(p => p.IsStarting && p != player && !p.IsKnockedDown))
+            {
+                float dist = Vector2.Distance(player.FieldPosition, teammate.FieldPosition);
+                if (dist < minDist)
+                {
+                    minDist = dist;
+                    nearest = teammate;
+                }
+            }
+            return nearest;
+        }
+        
+        private Vector2 FindBestThrowInTarget(Player thrower)
+        {
+            if (thrower == null) return thrower.FieldPosition + new Vector2(100, 0);
+            
+            bool throwingHomeTeam = thrower.Team == _homeTeam;
+            float attackingDirection = throwingHomeTeam ? 1f : -1f;
+            
+            // Evaluate all teammates for throw-in target
+            Player bestTarget = null;
+            float bestScore = float.MinValue;
+            
+            foreach (var teammate in thrower.Team.Players.Where(p => p.IsStarting && p != thrower && !p.IsKnockedDown))
+            {
+                float score = 0f;
+                float distance = Vector2.Distance(thrower.FieldPosition, teammate.FieldPosition);
+                
+                // Skip if too far (max realistic throw range ~600px)
+                if (distance > 600f) continue;
+                
+                // Prefer forward passes (attacking direction)
+                float forwardProgress = (teammate.FieldPosition.X - thrower.FieldPosition.X) * attackingDirection;
+                if (forwardProgress > 0)
+                    score += forwardProgress * 0.5f; // Bonus for forward throws
+                else
+                    score += forwardProgress * 0.1f; // Penalty for backward throws
+                
+                // Prefer teammates in open space (fewer opponents nearby)
+                int nearbyOpponents = GetOpponentsWithinRadius(teammate.FieldPosition, 150f, thrower.Team).Count();
+                score -= nearbyOpponents * 100f; // Penalty for crowded areas
+                
+                // Prefer midfielders and forwards over defenders for throw-ins
+                if (teammate.Position == PlayerPosition.Midfielder || 
+                    teammate.Position == PlayerPosition.Forward)
+                {
+                    score += 50f;
+                }
+                
+                // Slight preference for closer teammates (easier throws)
+                score += (600f - distance) * 0.1f;
+                
+                // Avoid throwing to teammates too close to sideline
+                float distanceFromTopEdge = teammate.FieldPosition.Y - StadiumMargin;
+                float distanceFromBottomEdge = (StadiumMargin + FieldHeight) - teammate.FieldPosition.Y;
+                float minDistanceFromEdge = Math.Min(distanceFromTopEdge, distanceFromBottomEdge);
+                if (minDistanceFromEdge < 100f)
+                    score -= 150f; // Penalty for sideline proximity
+                
+                if (score > bestScore)
+                {
+                    bestScore = score;
+                    bestTarget = teammate;
+                }
+            }
+            
+            // If no good target found, throw towards attacking direction in open space
+            if (bestTarget == null)
+            {
+                float targetX = thrower.FieldPosition.X + attackingDirection * 300f;
+                float targetY = StadiumMargin + FieldHeight / 2; // Center of field
+                return new Vector2(targetX, targetY);
+            }
+            
+            return bestTarget.FieldPosition;
+        }
+        
+        private IEnumerable<Player> GetOpponentsWithinRadius(Vector2 position, float radius, Team friendlyTeam)
+        {
+            Team opponentTeam = friendlyTeam == _homeTeam ? _awayTeam : _homeTeam;
+            return opponentTeam.Players.Where(p => 
+                p.IsStarting && 
+                !p.IsKnockedDown && 
+                Vector2.Distance(p.FieldPosition, position) <= radius);
         }
         
         private void TriggerGoalCelebration()
