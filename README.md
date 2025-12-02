@@ -29,12 +29,16 @@ Manage and play as **NO PASARAN!** in an 8-team championship. Control one player
 - **Top-down Match View**: Classic 2D scrolling football perspective (3200x2400 field)
 - **Smooth Camera System**: Follows ball with zoom controls (0.5x-2.0x)
 - **Strategic Minimap**: Shows entire field with player positions and camera viewport
-- **Enhanced AI System**: 
-  - Position-based behavior (Goalkeepers, Defenders, Midfielders, Forwards)
-  - Intelligent goalkeeper positioning (moves to intercept shots)
-  - Anti-clustering system (prevents player bunching)
-  - Team-aware tackling (no friendly fire)
-  - Smart ball control with directional awareness
+- **Advanced AI State Machine**: 
+  - **Position-Aware Behavior**: Distinct roles for Goalkeepers, Defenders, Midfielders, and Forwards
+  - **Dynamic Passing**: AI analyzes pass corridors and teammates' positions
+  - **Aerial Passing**: Intelligent lofted passes to bypass defenders or switch play
+  - **Smart Dribbling**: Direct movement with automatic ball kicking and shielding
+  - **Defensive Coordination**: Team-aware pressing and goal protection
+- **Match Simulation**: 
+  - Full simulation of all non-player matches
+  - Realistic results based on team strength stats
+  - Detailed "Round Results" screen after every matchweek
 - **Ball Physics**: Realistic velocity, friction, bouncing, and aerial trajectories
 - **Tackle System**: Stat-based success probability (enemy players only)
 - **Goal Detection**: Proper goal line crossing with mesh net visualization
@@ -70,7 +74,7 @@ Manage and play as **NO PASARAN!** in an 8-team championship. Control one player
 - **Visual Effects**: 
   - Player shadows and stamina bars
   - FIFA-accurate field markings with proper line thickness
-  - Realistic goalposts with mesh netting
+  - Realistic goalposts with mesh netting and wind animation
   - Stadium stands rendering
   - Single-player yellow selection indicator
 - **Score Display**: Red text with yellow shadow for high visibility
@@ -123,6 +127,7 @@ Manage and play as **NO PASARAN!** in an 8-team championship. Control one player
 - **Formation Preview**: Visual representation in lineup screen with shirt numbers
 - **Season Completion**: Indicator when all matches played
 - **Final Score Overlay**: 5-second display after match ("ΤΕΛΙΚΟ ΣΚΟΡ")
+- **Round Results**: Summary screen showing scores from all matches in the week
 - **Countdown System**: 3-2-1 countdown before kickoff ("ΠΑΜΕ!")
 - **Single Whistle**: Match end whistle plays only once
 
@@ -200,6 +205,7 @@ See **GAMEPAD_SUPPORT.md** for detailed controller information.
 - **StandingsScreen**: League table with detailed statistics
 - **MatchScreen**: Playable matches with scrolling camera
 - **SettingsScreen**: Comprehensive configuration options
+- **RoundResultsScreen**: Matchweek summary display
 
 ### Gameplay Systems
 - **MatchEngine**: Ball physics, AI, collisions, goal detection
@@ -208,6 +214,7 @@ See **GAMEPAD_SUPPORT.md** for detailed controller information.
 - **AudioManager**: Music and sound effect management
 - **GoalCelebration**: Dynamic text rendering with ball particles
 - **TeamSeeder**: JSON-based team/player loading
+- **MatchSimulator**: Simulates results for non-player matches
 
 ### Database
 - **File**: `nopasaran.db` (SQLite)
@@ -246,7 +253,7 @@ NoPasaranFC/
 ### Asset Pipeline
 - **Sprites**: 64x64 frames in 4x4 grids (256x256 total)
 - **Ball**: 32x32 frames in 8x8 grid (64 frames)
-- **Font**: Consolas Bold 24pt with Greek character support
+- **Font**: Inconsolata LGC Bold 24pt with Greek character support
 - **Content Build**: MonoGame Content Pipeline (.mgcb)
 
 ### File Structure
@@ -277,7 +284,8 @@ NoPasaranFC/
     ├── LineupScreen.cs     # Squad selection
     ├── MatchScreen.cs      # Match gameplay
     ├── StandingsScreen.cs  # League table
-    └── SettingsScreen.cs   # Options
+    ├── SettingsScreen.cs   # Options
+    └── RoundResultsScreen.cs # Matchweek summary
 ```
 
 ## 📝 Documentation
@@ -293,25 +301,25 @@ NoPasaranFC/
 - **DIFFICULTY_STAMINA_SYSTEM.md**: Difficulty and stamina mechanics
 - **LOCALIZATION.md**: Translation and language system
 - **GAMEPAD_SUPPORT.md**: Controller configuration guide
+- **AI_*.md**: Comprehensive AI documentation (Passing, Positioning, State Machine)
 - **SETTINGS_*.md**: Settings system documentation
 
-## 🚀 Current Status (v1.0.4)
+## 🚀 Current Status (v1.1.0)
 
-### What's New in v1.0.4
-- 🤖 **Enhanced AI**: Intelligent goalkeeper positioning, anti-clustering, team-aware tackling
-- ⚽ **Realistic Physics**: Goalpost ricochets (sides + crossbar), goal net collision, improved ball control
-- 🎮 **Better Controls**: Dribbling power boost, kick cooldown system, single-player selection
-- 🎨 **Visual Polish**: FIFA-accurate field lines, stamina bar thickness, high-visibility score display
-- 🌍 **Full Localization**: Complete Greek/English translation including settings menu
-- ⚙️ **Difficulty System**: Three difficulty levels affecting AI reaction and accuracy
-- 💪 **Stamina System**: Players tire during matches, affecting performance
-- 🕹️ **Gamepad Support**: Full Xbox-compatible controller integration
-- 🎵 **Audio Improvements**: Fixed double whistle bug, improved kick sound timing
-- 🔄 **Corner/Goal Kick Logic**: Proper last-touch detection for corner vs goal kick decisions
+### What's New in v1.1.0
+- 🧠 **Advanced AI State Machine**: Complete overhaul of AI with position-aware roles (GK/DEF/MID/FWD)
+- ✈️ **Aerial Passing**: Intelligent lofted passes to switch play and bypass defenders
+- 🏟️ **Match Simulation**: Full simulation of league matches with realistic results
+- 📊 **Round Results**: New screen showing scores from all matches in the week
+- 🥅 **Dynamic Goal Nets**: Physics-based nets that react to ball impact and wind
+- 👟 **Improved Dribbling**: Smoother ball control with automatic kicking
+- 🛡️ **Defensive Tactics**: Team-aware pressing and emergency goal protection
+- 🔤 **Font Update**: Switched to Inconsolata LGC for better cross-platform support
 
-**Status:** Fully Playable! All core features implemented and polished:
-- ✅ Championship mode with 8 teams
-- ✅ Advanced match gameplay with enhanced AI
+### Status
+**Fully Playable!** All core features implemented and polished:
+- ✅ Championship mode with 8 teams and full season tracking
+- ✅ Advanced match gameplay with state-machine AI
 - ✅ Flexible rosters (11+) with pre-match lineup selection
 - ✅ Database persistence with UTF-8 support
 - ✅ Complete audio system (music + SFX with smart playback)
@@ -322,7 +330,6 @@ NoPasaranFC/
 - ✅ Difficulty levels with stamina system
 - ✅ Realistic field dimensions and goalposts
 - ✅ Corner/goal kick logic with last-touch detection
-- ✅ Enhanced goalkeeper AI and anti-clustering system
 
 ## 🎯 Future Enhancements
 
