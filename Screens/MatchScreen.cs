@@ -48,7 +48,7 @@ namespace NoPasaranFC.Screens
         // Sprite sheet configuration
         private const int SpriteFrameSize = 64; // Each frame is 64x64 in the sprite sheet
         private const int SpritesheetColumns = 4; // 4 animation frames per direction
-        private const int SpritesheetRows = 4;    // 4 directions
+        private const int SpritesheetRows = 12;    // 12 rows (was 4)
         
         // Ball sprite sheet configuration
         private const int BallFrameSize = 32;     // Each ball frame is 32x32
@@ -192,6 +192,32 @@ namespace NoPasaranFC.Screens
             {
                 _debugOverlayEnabled = !_debugOverlayEnabled;
             }
+            
+            // Debug keys for triggering set pieces (only when debug overlay is enabled)
+            if (_debugOverlayEnabled)
+            {
+                // F5 = Throw-in
+                if (currentKeyboardState.IsKeyDown(Keys.F5) && _previousKeyboardState.IsKeyUp(Keys.F5))
+                {
+                    _matchEngine.DebugTriggerThrowIn();
+                }
+                // F6 = Corner kick
+                if (currentKeyboardState.IsKeyDown(Keys.F6) && _previousKeyboardState.IsKeyUp(Keys.F6))
+                {
+                    _matchEngine.DebugTriggerCornerKick();
+                }
+                // F7 = Goal kick
+                if (currentKeyboardState.IsKeyDown(Keys.F7) && _previousKeyboardState.IsKeyUp(Keys.F7))
+                {
+                    _matchEngine.DebugTriggerGoalKick();
+                }
+                // F8 = Goal
+                if (currentKeyboardState.IsKeyDown(Keys.F8) && _previousKeyboardState.IsKeyUp(Keys.F8))
+                {
+                    _matchEngine.DebugTriggerGoal();
+                }
+            }
+            
             _previousKeyboardState = currentKeyboardState;
             
             // Update player animations
@@ -260,16 +286,33 @@ namespace NoPasaranFC.Screens
                         }
                     }
 
-                    // Check if shoot/tackle/celebrate animation is playing
+                    // Check if shoot/tackle/celebrate/throw_in animation is playing
                     if (player.CurrentAnimationState == "shoot" ||
                         player.CurrentAnimationState == "tackle" ||
-                        player.CurrentAnimationState == "celebrate")
+                        player.CurrentAnimationState == "celebrate" ||
+                        player.CurrentAnimationState == "throw_in_static" ||
+                        player.CurrentAnimationState == "throw_in_throw")
                     {
                         // Play the animation
                         player.AnimationSystem.PlayAnimation(player.CurrentAnimationState);
 
-                        // Set rotation based on velocity direction (for celebrate animation)
-                        if (player.Velocity.LengthSquared() > 0.1f)
+                        // Set rotation based on throw direction for throw-ins
+                        if (player.CurrentAnimationState == "throw_in_static" || 
+                            player.CurrentAnimationState == "throw_in_throw")
+                        {
+                            // Use RestartDirection from MatchEngine
+                            if (_matchEngine.RestartPlayer == player && _matchEngine.RestartDirection != Vector2.Zero)
+                            {
+                                // Player faces the throw direction
+                                float angle = (float)Math.Atan2(_matchEngine.RestartDirection.Y, _matchEngine.RestartDirection.X);
+                                float adjustedAngle = angle + MathHelper.PiOver2;
+                                if (adjustedAngle < 0) adjustedAngle += MathHelper.TwoPi;
+                                int rotation = (int)Math.Round(adjustedAngle / (MathHelper.Pi / 4f)) % 8;
+                                player.AnimationSystem.SetRotation(rotation);
+                            }
+                        }
+                        // Set rotation based on velocity direction (for celebrate/shoot/tackle animations)
+                        else if (player.Velocity.LengthSquared() > 0.1f)
                         {
                             float angle = (float)Math.Atan2(player.Velocity.Y, player.Velocity.X);
                             float adjustedAngle = angle + MathHelper.PiOver2;
@@ -284,6 +327,12 @@ namespace NoPasaranFC.Screens
                         // Check if animation finished (celebrate loops, so won't finish)
                         if (player.AnimationSystem.IsAnimationFinished())
                         {
+                            // If throw animation just finished, execute the throw
+                            if (player.CurrentAnimationState == "throw_in_throw" && _matchEngine.RestartPlayer == player)
+                            {
+                                _matchEngine.ExecuteThrowIn();
+                            }
+                            
                             // Reset to walk/idle
                             player.CurrentAnimationState = "walk";
                         }
@@ -293,7 +342,11 @@ namespace NoPasaranFC.Screens
                         // Determine animation state based on movement
                         string newState = "idle";
                         
-                        if (player.IsKnockedDown)
+                        if (player.IsThrowingIn)
+                        {
+                            newState = "throw_in_static";
+                        }
+                        else if (player.IsKnockedDown)
                         {
                             newState = "fall";
                         }
@@ -567,7 +620,23 @@ namespace NoPasaranFC.Screens
             // Draw ball AFTER goalposts if outside goal (normal rendering)
             if (!ballInsideGoal)
             {
-                DrawBall(spriteBatch, ballPos);
+                // Check if throwing in - if so, attach ball to player
+                bool isThrowingIn = _matchEngine.CurrentState == MatchEngine.MatchState.ThrowIn && _matchEngine.RestartPlayer != null;
+                
+                if (isThrowingIn)
+                {
+                    // Attach to player (slightly above center to simulate holding overhead)
+                    Vector2 playerPos = _matchEngine.RestartPlayer.FieldPosition;
+                    // Offset Y by -20 to put it "above" the player sprite (overhead)
+                    // Since we are in 2D top-down, "above" is negative Y.
+                    // Also scale it slightly to look "higher" (closer to camera)
+                    Vector2 heldPos = new Vector2(playerPos.X, playerPos.Y - 15);
+                    DrawBall(spriteBatch, heldPos, true);
+                }
+                else
+                {
+                    DrawBall(spriteBatch, ballPos);
+                }
             }
             
             // Draw debug overlay (with camera transform)
@@ -605,6 +674,159 @@ namespace NoPasaranFC.Screens
             {
                 DrawFinalScoreOverlay(spriteBatch, font);
             }
+            
+            // Draw set piece indicators (timer and arrow) - for corners, goal kicks, and throw-ins
+            if (_matchEngine.CurrentState == MatchEngine.MatchState.CornerKick || 
+                _matchEngine.CurrentState == MatchEngine.MatchState.GoalKick ||
+                _matchEngine.CurrentState == MatchEngine.MatchState.ThrowIn)
+            {
+                DrawSetPieceIndicators(spriteBatch, font);
+            }
+        }
+        
+        private void DrawSetPieceIndicators(SpriteBatch spriteBatch, SpriteFont font)
+        {
+            // Draw set piece label
+            string labelText = "";
+            if (_matchEngine.CurrentState == MatchEngine.MatchState.ThrowIn)
+                labelText = Localization.Instance.Get("match.throwIn");
+            else if (_matchEngine.CurrentState == MatchEngine.MatchState.CornerKick)
+                labelText = Localization.Instance.Get("match.cornerKick");
+            else if (_matchEngine.CurrentState == MatchEngine.MatchState.GoalKick)
+                labelText = Localization.Instance.Get("match.goalKick");
+            
+            Vector2 labelSize = font.MeasureString(labelText);
+            
+            // Draw timer
+            string timerText = $"{_matchEngine.RestartTimer:F1}";
+            Vector2 timerSize = font.MeasureString(timerText);
+            
+            // Get camera transform to convert world to screen coordinates
+            Matrix cameraMatrix = _matchEngine.Camera.GetTransformMatrix();
+            
+            // Position above player or center screen (in world coordinates)
+            Vector2 worldPosition;
+            if (_matchEngine.RestartPlayer != null)
+                worldPosition = _matchEngine.RestartPlayer.FieldPosition - new Vector2(0, 100);
+            else
+                worldPosition = new Vector2(MatchEngine.StadiumMargin + MatchEngine.FieldWidth/2, MatchEngine.StadiumMargin + MatchEngine.FieldHeight/2);
+            
+            // Transform to screen coordinates
+            Vector2 screenPosition = Vector2.Transform(worldPosition, cameraMatrix);
+            
+            // Draw label above timer (centered)
+            Vector2 labelPos = screenPosition - new Vector2(labelSize.X/2, 35);
+            spriteBatch.DrawString(font, labelText, labelPos + new Vector2(2, 2), Color.Black);
+            spriteBatch.DrawString(font, labelText, labelPos, Color.Cyan);
+            
+            // Draw timer with shadow (centered)
+            Vector2 timerPos = screenPosition - new Vector2(timerSize.X/2, 0);
+            spriteBatch.DrawString(font, timerText, timerPos + new Vector2(2, 2), Color.Black);
+            spriteBatch.DrawString(font, timerText, timerPos, Color.Yellow);
+            
+            // Draw directional arrow for restart player (both human and AI)
+            if (_matchEngine.RestartPlayer != null)
+            {
+                Vector2 direction = _matchEngine.RestartDirection;
+                if (direction == Vector2.Zero) direction = new Vector2(1, 0); // Default right
+                
+                // Transform player position to screen coordinates
+                Vector2 worldStart = _matchEngine.RestartPlayer.FieldPosition;
+                Vector2 screenStart = Vector2.Transform(worldStart, cameraMatrix);
+                
+                // For throw-ins and corners, show power charge with arrow length
+                float arrowLength = 150f * _matchEngine.Camera.Zoom; // Scale arrow with zoom
+                if (_matchEngine.CurrentState == MatchEngine.MatchState.ThrowIn || 
+                    _matchEngine.CurrentState == MatchEngine.MatchState.CornerKick)
+                {
+                    // Arrow grows from 100px to 250px based on power (scaled by zoom)
+                    arrowLength = (100f + 150f * _matchEngine.ThrowInPowerCharge) * _matchEngine.Camera.Zoom;
+                    
+                    // Power bar above timer (only for human-controlled player, not during run-up)
+                    if (_matchEngine.RestartPlayer.IsControlled && !_matchEngine.IsCornerKickRunUp)
+                    {
+                        Vector2 powerBarPos = screenPosition - new Vector2(50, 60);
+                        DrawPowerBar(spriteBatch, powerBarPos, _matchEngine.ThrowInPowerCharge);
+                    }
+                }
+                
+                Vector2 screenEnd = screenStart + direction * arrowLength;
+                
+                // Color changes with power (white -> yellow -> orange) for throw-ins and corners
+                Color arrowColor = Color.Yellow * 0.7f;
+                if (_matchEngine.CurrentState == MatchEngine.MatchState.ThrowIn || 
+                    _matchEngine.CurrentState == MatchEngine.MatchState.CornerKick)
+                {
+                    arrowColor = Color.Lerp(Color.White * 0.6f, Color.Orange * 0.9f, _matchEngine.ThrowInPowerCharge);
+                }
+                
+                DrawArrow(spriteBatch, screenStart, screenEnd, arrowColor, 5);
+            }
+        }
+        
+        private void DrawPowerBar(SpriteBatch spriteBatch, Vector2 position, float powerPercent)
+        {
+            int barWidth = 100;
+            int barHeight = 12;
+            int filledWidth = (int)(barWidth * powerPercent);
+            
+            // Background
+            spriteBatch.Draw(_pixel, new Rectangle((int)position.X, (int)position.Y, barWidth, barHeight), Color.Black * 0.5f);
+            
+            // Border
+            DrawRectangleBorder(spriteBatch, (int)position.X, (int)position.Y, barWidth, barHeight, Color.White, 2);
+            
+            // Filled portion (gradient from green to orange to red)
+            Color fillColor;
+            if (powerPercent < 0.5f)
+                fillColor = Color.Lerp(Color.LightGreen, Color.Yellow, powerPercent * 2f);
+            else
+                fillColor = Color.Lerp(Color.Yellow, Color.OrangeRed, (powerPercent - 0.5f) * 2f);
+            
+            if (filledWidth > 0)
+            {
+                spriteBatch.Draw(_pixel, new Rectangle((int)position.X + 2, (int)position.Y + 2, filledWidth - 4, barHeight - 4), fillColor);
+            }
+        }
+        
+        private void DrawRectangleBorder(SpriteBatch spriteBatch, int x, int y, int width, int height, Color color, int thickness)
+        {
+            // Top
+            spriteBatch.Draw(_pixel, new Rectangle(x, y, width, thickness), color);
+            // Bottom
+            spriteBatch.Draw(_pixel, new Rectangle(x, y + height - thickness, width, thickness), color);
+            // Left
+            spriteBatch.Draw(_pixel, new Rectangle(x, y, thickness, height), color);
+            // Right
+            spriteBatch.Draw(_pixel, new Rectangle(x + width - thickness, y, thickness, height), color);
+        }
+        
+        private void DrawArrow(SpriteBatch spriteBatch, Vector2 start, Vector2 end, Color color, int thickness)
+        {
+            Vector2 direction = end - start;
+            float length = direction.Length();
+            float angle = (float)Math.Atan2(direction.Y, direction.X);
+            
+            // Draw line (shorten it slightly so arrow head connects better)
+            float arrowHeadSize = 15f;
+            float lineLength = Math.Max(0, length - arrowHeadSize * 0.5f);
+            spriteBatch.Draw(_pixel, start, null, color, angle, Vector2.Zero, new Vector2(lineLength, thickness), SpriteEffects.None, 0);
+            
+            // Draw arrow head at the end
+            float arrowHeadAngle = MathHelper.Pi / 6; // 30 degrees
+            
+            Vector2 arrowHead1 = end - new Vector2((float)Math.Cos(angle - arrowHeadAngle), (float)Math.Sin(angle - arrowHeadAngle)) * arrowHeadSize;
+            Vector2 arrowHead2 = end - new Vector2((float)Math.Cos(angle + arrowHeadAngle), (float)Math.Sin(angle + arrowHeadAngle)) * arrowHeadSize;
+            
+            DrawLine(spriteBatch, end, arrowHead1, color, thickness);
+            DrawLine(spriteBatch, end, arrowHead2, color, thickness);
+        }
+        
+        private void DrawLine(SpriteBatch spriteBatch, Vector2 start, Vector2 end, Color color, int thickness)
+        {
+            Vector2 edge = end - start;
+            float angle = (float)Math.Atan2(edge.Y, edge.X);
+            spriteBatch.Draw(_pixel, start, null, color, angle, Vector2.Zero, new Vector2(edge.Length(), thickness), SpriteEffects.None, 0);
         }
         
         private void DrawGoalCelebration(SpriteBatch spriteBatch, SpriteFont font)
@@ -921,19 +1143,20 @@ namespace NoPasaranFC.Screens
             float scale = player.IsControlled ? 2.125f : 2.0f; // Controlled player slightly larger
             int renderSize = player.IsControlled ? 136 : 128; // For UI elements
             
+            // Determine sprite sheet based on team
+            Texture2D spriteSheet = player.TeamId == _homeTeam.Id ? _playerSpriteBlue : _playerSpriteRed;
+            
             // Use new animation system if available
             if (player.AnimationSystem != null)
             {
+                // Use appropriate animation
                 bool isHomeTeam = player.TeamId == _homeTeam.Id;
-                string kitname = null;
-                 
-                kitname = player.Team.KitName;
-                player.AnimationSystem.Draw(spriteBatch, pos, isHomeTeam, tintColor, scale,kitname);
+                string kitname = player.Team.KitName;
+                player.AnimationSystem.Draw(spriteBatch, pos, isHomeTeam, tintColor, scale, kitname);
             }
             else
             {
                 // FALLBACK TO OLD SYSTEM
-                Texture2D spriteSheet = player.TeamId == _homeTeam.Id ? _playerSpriteBlue : _playerSpriteRed;
                 
                 // Calculate source rectangle from sprite sheet
                 int frameIndex = (int)player.AnimationFrame % SpritesheetColumns;
@@ -1128,24 +1351,29 @@ namespace NoPasaranFC.Screens
             spriteBatch.Draw(_pixel, new Rectangle((int)pos.X - 30, (int)pos.Y - 15, 60, 12), Color.White);
         }
         
-        private void DrawBall(SpriteBatch spriteBatch, Vector2 ballPos)
+        private void DrawBall(SpriteBatch spriteBatch, Vector2 ballPos, bool isHeld = false)
         {
             int baseBallSize = 32; // Base size
             
             // Calculate scale based on height (ball appears bigger when higher)
-            float heightScale = 1f + (_matchEngine.BallHeight / 400f); // Grows up to 2x at max height
+            // If held, use a fixed "high" scale
+            float heightScale = isHeld ? 1.3f : (1f + (_matchEngine.BallHeight / 400f)); 
             int ballSize = (int)(baseBallSize * heightScale);
             
             // Draw ball shadow (always on ground, scaled based on height)
-            int shadowSize = (int)(baseBallSize * (1f + _matchEngine.BallHeight / 800f)); // Shadow grows when ball is higher
-            float shadowAlpha = Math.Max(50, 120 - _matchEngine.BallHeight * 0.3f); // Fainter when ball is higher
-            Rectangle shadowRect = new Rectangle(
-                (int)ballPos.X - shadowSize / 2, 
-                (int)ballPos.Y + shadowSize / 2 - 3, 
-                shadowSize, 
-                6
-            );
-            spriteBatch.Draw(_pixel, shadowRect, new Color(0, 0, 0, (int)shadowAlpha));
+            // Skip shadow if held (player already has shadow)
+            if (!isHeld)
+            {
+                int shadowSize = (int)(baseBallSize * (1f + _matchEngine.BallHeight / 800f)); // Shadow grows when ball is higher
+                float shadowAlpha = Math.Max(50, 120 - _matchEngine.BallHeight * 0.3f); // Fainter when ball is higher
+                Rectangle shadowRect = new Rectangle(
+                    (int)ballPos.X - shadowSize / 2, 
+                    (int)ballPos.Y + shadowSize / 2 - 3, 
+                    shadowSize, 
+                    6
+                );
+                spriteBatch.Draw(_pixel, shadowRect, new Color(0, 0, 0, (int)shadowAlpha));
+            }
             
             // Calculate source rectangle from ball sprite sheet (8x8 grid)
             int frameIndex = (int)_ballAnimationFrame % 64; // 0-63

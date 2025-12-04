@@ -97,8 +97,20 @@ namespace NoPasaranFC.Models
             celebrate.AddFrame("dummy", 34, 0, 0);
             celebrate.AddFrame("dummy", 35, 0, 0);
             _sharedAnimations["celebrate"] = celebrate;
+
+            // Throw-in static animation - NOT looping (holding ball overhead)
+            var throwInStatic = new SpriteAnimation("throw_in_static", 0.2f, false);
+            throwInStatic.AddFrame("dummy", 36, 0, 0); // Row 9, Column 0: Holding ball
+            _sharedAnimations["throw_in_static"] = throwInStatic;
+            
+            // Throw-in throw animation - NOT looping (releasing ball)
+            var throwInThrow = new SpriteAnimation("throw_in_throw", 0.15f, false);
+            throwInThrow.AddFrame("dummy", 36, 0, 0); // Row 9, Column 0: Holding ball
+            throwInThrow.AddFrame("dummy", 37, 0, 0); // Row 9, Column 1: Releasing ball
+            _sharedAnimations["throw_in_throw"] = throwInThrow;
+
         }
-        
+
         public void PlayAnimation(string animationName)
         {
             if (_sharedAnimations != null && _sharedAnimations.ContainsKey(animationName) && 
@@ -143,7 +155,9 @@ namespace NoPasaranFC.Models
         public bool IsAnimationFinished()
         {
             if (_currentAnimation == null || _currentAnimation.Loop) return false;
-            return _currentFrameIndex >= _currentAnimation.Frames.Count - 1;
+            // Animation is finished when we're on the last frame AND the frame duration has elapsed
+            return _currentFrameIndex >= _currentAnimation.Frames.Count - 1 && 
+                   _animationTimer >= _currentAnimation.FrameDuration;
         }
         
         public void Draw(SpriteBatch spriteBatch, Vector2 position, bool isHomeTeam, Color tint, float scale = 2f, string kitname = null)
