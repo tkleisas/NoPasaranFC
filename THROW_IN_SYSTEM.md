@@ -40,19 +40,12 @@ The AI now evaluates multiple factors to find the best throw-in target:
 
 ### 3. Visual Improvements
 
-**Throw-In Animations:**
-- **throw_in_static**: Player holds ball overhead (static pose)
-- **throw_in_throw**: 2-frame animation of releasing ball
-- Player sprite rotates 360° to face throw direction
-- Smooth left/right rotation control
-- Animation automatically triggered on ball release
-
-**No Visual Indicators for Throw-Ins:**
-- No power bar displayed
-- No direction arrow shown
-- No countdown timer
-- Player rotation is the only visual feedback
-- Minimalist approach for realistic feel
+**Throw-In Visual Indicators:**
+- **Power bar**: Shows charge level with color gradient (green → yellow → orange-red)
+- **Direction arrow**: Grows from 100px to 250px based on power charge
+- **Arrow color**: Changes from white to orange with increasing power
+- **Label**: "THROW-IN" / "ΑΥΤ" displayed above player
+- **Timer countdown**: Shows remaining time before auto-execute
 
 **Other Set Pieces (Corners/Goal Kicks):**
 - Localized labels displayed:

@@ -155,7 +155,9 @@ namespace NoPasaranFC.Models
         public bool IsAnimationFinished()
         {
             if (_currentAnimation == null || _currentAnimation.Loop) return false;
-            return _currentFrameIndex >= _currentAnimation.Frames.Count - 1;
+            // Animation is finished when we're on the last frame AND the frame duration has elapsed
+            return _currentFrameIndex >= _currentAnimation.Frames.Count - 1 && 
+                   _animationTimer >= _currentAnimation.FrameDuration;
         }
         
         public void Draw(SpriteBatch spriteBatch, Vector2 position, bool isHomeTeam, Color tint, float scale = 2f, string kitname = null)

@@ -192,6 +192,32 @@ namespace NoPasaranFC.Screens
             {
                 _debugOverlayEnabled = !_debugOverlayEnabled;
             }
+            
+            // Debug keys for triggering set pieces (only when debug overlay is enabled)
+            if (_debugOverlayEnabled)
+            {
+                // F5 = Throw-in
+                if (currentKeyboardState.IsKeyDown(Keys.F5) && _previousKeyboardState.IsKeyUp(Keys.F5))
+                {
+                    _matchEngine.DebugTriggerThrowIn();
+                }
+                // F6 = Corner kick
+                if (currentKeyboardState.IsKeyDown(Keys.F6) && _previousKeyboardState.IsKeyUp(Keys.F6))
+                {
+                    _matchEngine.DebugTriggerCornerKick();
+                }
+                // F7 = Goal kick
+                if (currentKeyboardState.IsKeyDown(Keys.F7) && _previousKeyboardState.IsKeyUp(Keys.F7))
+                {
+                    _matchEngine.DebugTriggerGoalKick();
+                }
+                // F8 = Goal
+                if (currentKeyboardState.IsKeyDown(Keys.F8) && _previousKeyboardState.IsKeyUp(Keys.F8))
+                {
+                    _matchEngine.DebugTriggerGoal();
+                }
+            }
+            
             _previousKeyboardState = currentKeyboardState;
             
             // Update player animations
@@ -277,8 +303,8 @@ namespace NoPasaranFC.Screens
                             // Use RestartDirection from MatchEngine
                             if (_matchEngine.RestartPlayer == player && _matchEngine.RestartDirection != Vector2.Zero)
                             {
-                                // Flip direction by 180 degrees since player faces opposite way during throw
-                                float angle = (float)Math.Atan2(-_matchEngine.RestartDirection.Y, -_matchEngine.RestartDirection.X);
+                                // Player faces the throw direction
+                                float angle = (float)Math.Atan2(_matchEngine.RestartDirection.Y, _matchEngine.RestartDirection.X);
                                 float adjustedAngle = angle + MathHelper.PiOver2;
                                 if (adjustedAngle < 0) adjustedAngle += MathHelper.TwoPi;
                                 int rotation = (int)Math.Round(adjustedAngle / (MathHelper.Pi / 4f)) % 8;
@@ -649,9 +675,10 @@ namespace NoPasaranFC.Screens
                 DrawFinalScoreOverlay(spriteBatch, font);
             }
             
-            // Draw set piece indicators (timer and arrow) - only for corners and goal kicks
+            // Draw set piece indicators (timer and arrow) - for corners, goal kicks, and throw-ins
             if (_matchEngine.CurrentState == MatchEngine.MatchState.CornerKick || 
-                _matchEngine.CurrentState == MatchEngine.MatchState.GoalKick)
+                _matchEngine.CurrentState == MatchEngine.MatchState.GoalKick ||
+                _matchEngine.CurrentState == MatchEngine.MatchState.ThrowIn)
             {
                 DrawSetPieceIndicators(spriteBatch, font);
             }
@@ -674,52 +701,66 @@ namespace NoPasaranFC.Screens
             string timerText = $"{_matchEngine.RestartTimer:F1}";
             Vector2 timerSize = font.MeasureString(timerText);
             
-            // Position above player or center screen
-            Vector2 position;
-            if (_matchEngine.RestartPlayer != null)
-                position = _matchEngine.RestartPlayer.FieldPosition - new Vector2(timerSize.X/2, 100);
-            else
-                position = new Vector2(MatchEngine.StadiumMargin + MatchEngine.FieldWidth/2, MatchEngine.StadiumMargin + MatchEngine.FieldHeight/2);
+            // Get camera transform to convert world to screen coordinates
+            Matrix cameraMatrix = _matchEngine.Camera.GetTransformMatrix();
             
-            // Draw label above timer
-            Vector2 labelPos = position - new Vector2(labelSize.X/2, 35);
+            // Position above player or center screen (in world coordinates)
+            Vector2 worldPosition;
+            if (_matchEngine.RestartPlayer != null)
+                worldPosition = _matchEngine.RestartPlayer.FieldPosition - new Vector2(0, 100);
+            else
+                worldPosition = new Vector2(MatchEngine.StadiumMargin + MatchEngine.FieldWidth/2, MatchEngine.StadiumMargin + MatchEngine.FieldHeight/2);
+            
+            // Transform to screen coordinates
+            Vector2 screenPosition = Vector2.Transform(worldPosition, cameraMatrix);
+            
+            // Draw label above timer (centered)
+            Vector2 labelPos = screenPosition - new Vector2(labelSize.X/2, 35);
             spriteBatch.DrawString(font, labelText, labelPos + new Vector2(2, 2), Color.Black);
             spriteBatch.DrawString(font, labelText, labelPos, Color.Cyan);
             
-            // Draw timer with shadow
-            spriteBatch.DrawString(font, timerText, position + new Vector2(2, 2), Color.Black);
-            spriteBatch.DrawString(font, timerText, position, Color.Yellow);
+            // Draw timer with shadow (centered)
+            Vector2 timerPos = screenPosition - new Vector2(timerSize.X/2, 0);
+            spriteBatch.DrawString(font, timerText, timerPos + new Vector2(2, 2), Color.Black);
+            spriteBatch.DrawString(font, timerText, timerPos, Color.Yellow);
             
-            // Draw directional arrow for controlled player
-            if (_matchEngine.RestartPlayer != null && _matchEngine.RestartPlayer.IsControlled)
+            // Draw directional arrow for restart player (both human and AI)
+            if (_matchEngine.RestartPlayer != null)
             {
                 Vector2 direction = _matchEngine.RestartDirection;
                 if (direction == Vector2.Zero) direction = new Vector2(1, 0); // Default right
                 
-                Vector2 start = _matchEngine.RestartPlayer.FieldPosition;
+                // Transform player position to screen coordinates
+                Vector2 worldStart = _matchEngine.RestartPlayer.FieldPosition;
+                Vector2 screenStart = Vector2.Transform(worldStart, cameraMatrix);
                 
-                // For throw-ins, show power charge with arrow length
-                float arrowLength = 150f;
-                if (_matchEngine.CurrentState == MatchEngine.MatchState.ThrowIn)
+                // For throw-ins and corners, show power charge with arrow length
+                float arrowLength = 150f * _matchEngine.Camera.Zoom; // Scale arrow with zoom
+                if (_matchEngine.CurrentState == MatchEngine.MatchState.ThrowIn || 
+                    _matchEngine.CurrentState == MatchEngine.MatchState.CornerKick)
                 {
-                    // Arrow grows from 100px to 250px based on power
-                    arrowLength = 100f + 150f * _matchEngine.ThrowInPowerCharge;
+                    // Arrow grows from 100px to 250px based on power (scaled by zoom)
+                    arrowLength = (100f + 150f * _matchEngine.ThrowInPowerCharge) * _matchEngine.Camera.Zoom;
                     
-                    // Power bar above timer
-                    Vector2 powerBarPos = position - new Vector2(0, 30);
-                    DrawPowerBar(spriteBatch, powerBarPos, _matchEngine.ThrowInPowerCharge);
+                    // Power bar above timer (only for human-controlled player, not during run-up)
+                    if (_matchEngine.RestartPlayer.IsControlled && !_matchEngine.IsCornerKickRunUp)
+                    {
+                        Vector2 powerBarPos = screenPosition - new Vector2(50, 60);
+                        DrawPowerBar(spriteBatch, powerBarPos, _matchEngine.ThrowInPowerCharge);
+                    }
                 }
                 
-                Vector2 end = start + direction * arrowLength;
+                Vector2 screenEnd = screenStart + direction * arrowLength;
                 
-                // Color changes with power (white -> yellow -> orange)
+                // Color changes with power (white -> yellow -> orange) for throw-ins and corners
                 Color arrowColor = Color.Yellow * 0.7f;
-                if (_matchEngine.CurrentState == MatchEngine.MatchState.ThrowIn)
+                if (_matchEngine.CurrentState == MatchEngine.MatchState.ThrowIn || 
+                    _matchEngine.CurrentState == MatchEngine.MatchState.CornerKick)
                 {
                     arrowColor = Color.Lerp(Color.White * 0.6f, Color.Orange * 0.9f, _matchEngine.ThrowInPowerCharge);
                 }
                 
-                DrawArrow(spriteBatch, start, end, arrowColor, 5);
+                DrawArrow(spriteBatch, screenStart, screenEnd, arrowColor, 5);
             }
         }
         
@@ -766,11 +807,12 @@ namespace NoPasaranFC.Screens
             float length = direction.Length();
             float angle = (float)Math.Atan2(direction.Y, direction.X);
             
-            // Draw line
-            spriteBatch.Draw(_pixel, start, null, color, angle, Vector2.Zero, new Vector2(length, thickness), SpriteEffects.None, 0);
+            // Draw line (shorten it slightly so arrow head connects better)
+            float arrowHeadSize = 15f;
+            float lineLength = Math.Max(0, length - arrowHeadSize * 0.5f);
+            spriteBatch.Draw(_pixel, start, null, color, angle, Vector2.Zero, new Vector2(lineLength, thickness), SpriteEffects.None, 0);
             
-            // Draw arrow head
-            float arrowHeadSize = 20f;
+            // Draw arrow head at the end
             float arrowHeadAngle = MathHelper.Pi / 6; // 30 degrees
             
             Vector2 arrowHead1 = end - new Vector2((float)Math.Cos(angle - arrowHeadAngle), (float)Math.Sin(angle - arrowHeadAngle)) * arrowHeadSize;

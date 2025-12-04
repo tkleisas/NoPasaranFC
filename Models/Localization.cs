@@ -188,9 +188,9 @@ namespace NoPasaranFC.Models
                 ["match.goal"] = "ΓΚΟΛ!",
                 ["match.finalScore"] = "ΤΕΛΙΚΟ ΣΚΟΡ",
                 ["match.halfTime"] = "ΗΜΙΧΡΟΝΟ",
-                ["match.throwIn"] = "ΠΛΑΓΙΟ",
+                ["match.throwIn"] = "ΑΥΤ",
                 ["match.cornerKick"] = "ΚΟΡΝΕΡ",
-                ["match.goalKick"] = "ΜΠΕΝΑΛΤΙ",
+                ["match.goalKick"] = "ΑΠΟΒΟΛΗ ΤΕΡΜΑΤΟΦΥΛΑΚΑ",
                 ["match.power"] = "ΔΥΝΑΜΗ",
                 
                 // Lineup

@@ -34,6 +34,10 @@ namespace NoPasaranFC.Gameplay
         public Vector2 RestartDirection { get; private set; } = Vector2.Zero;
         public float ThrowInPowerCharge { get; private set; } = 0f; // 0.0 to 1.0
         private bool _throwInAnimationStarted = false; // Track if throw animation is playing
+        private float _timeSinceSetPiece = 0f; // Tracks time since set piece was executed
+        private bool _cornerKickRunUp = false; // Track if player is running up to kick corner
+        public bool IsCornerKickRunUp => _cornerKickRunUp; // Public accessor for UI
+        private Vector2 _cornerKickStartPosition; // Where player starts run-up from
         
         private float _timeSinceKickoff; // Tracks time since last kickoff
         
@@ -378,6 +382,7 @@ namespace NoPasaranFC.Gameplay
             float gameTimeIncrement = (90f / realTimeDuration) * deltaTime;
             MatchTime += gameTimeIncrement;
             _timeSinceKickoff += deltaTime; // Update kickoff timer
+            _timeSinceSetPiece += deltaTime; // Update set piece timer
             
             // Check if match should end
             if (MatchTime >= 90f)
@@ -455,9 +460,58 @@ namespace NoPasaranFC.Gameplay
                                 _wasShootButtonDown = true;
                             }
                         }
+                        else if (CurrentState == MatchState.CornerKick)
+                        {
+                            if (_cornerKickRunUp)
+                            {
+                                // Player is running toward ball - handled in UpdatePlayers
+                                // Check if player reached the ball
+                                float distToBall = Vector2.Distance(RestartPlayer.FieldPosition, BallPosition);
+                                if (distToBall < 30f)
+                                {
+                                    // Player reached ball - execute kick
+                                    ExecuteSetPieceAction();
+                                    _cornerKickRunUp = false;
+                                }
+                            }
+                            else
+                            {
+                                // Corner kick: rotate direction with arrow keys, charge power with X
+                                if (moveDirection.X != 0 || moveDirection.Y != 0)
+                                {
+                                    // Rotate the current direction based on input
+                                    float rotationSpeed = 2.5f * deltaTime;
+                                    float currentAngle = (float)Math.Atan2(RestartDirection.Y, RestartDirection.X);
+                                    
+                                    if (moveDirection.X < 0)
+                                        currentAngle -= rotationSpeed;
+                                    else if (moveDirection.X > 0)
+                                        currentAngle += rotationSpeed;
+                                    
+                                    RestartDirection = new Vector2((float)Math.Cos(currentAngle), (float)Math.Sin(currentAngle));
+                                }
+                                
+                                // Handle power charging
+                                if (isShootKeyDown)
+                                {
+                                    ThrowInPowerCharge = Math.Min(1.0f, ThrowInPowerCharge + deltaTime);
+                                }
+                                else if (_wasShootButtonDown)
+                                {
+                                    // Released - start run-up toward ball
+                                    _cornerKickRunUp = true;
+                                    _wasShootButtonDown = false;
+                                }
+                                
+                                if (isShootKeyDown && !_wasShootButtonDown)
+                                {
+                                    _wasShootButtonDown = true;
+                                }
+                            }
+                        }
                         else
                         {
-                            // For corners/goal kicks, use arrow keys for direction
+                            // For goal kicks, use arrow keys for direction and execute on press
                             if (moveDirection.Length() > 0.1f)
                             {
                                 RestartDirection = Vector2.Normalize(moveDirection);
@@ -478,8 +532,8 @@ namespace NoPasaranFC.Gameplay
                     else
                     {
                         // AI Logic for set pieces
-                        // For throw-ins, wait longer to give teammates time to position
-                        float executeThreshold = CurrentState == MatchState.ThrowIn ? 0.5f : 2.0f;
+                        // For throw-ins and corners, wait longer to give teammates time to position
+                        float executeThreshold = (CurrentState == MatchState.ThrowIn || CurrentState == MatchState.CornerKick) ? 2.0f : 0.5f;
                         if (RestartTimer < executeThreshold)
                         {
                             // Calculate best direction
@@ -495,6 +549,8 @@ namespace NoPasaranFC.Gameplay
                                 // Aim at goal area
                                 float goalX = RestartPlayer.Team == _homeTeam ? StadiumMargin + FieldWidth : StadiumMargin;
                                 target = new Vector2(goalX, StadiumMargin + FieldHeight / 2);
+                                // AI uses high power (80-100%) for effective corners
+                                ThrowInPowerCharge = 0.80f + (float)_random.NextDouble() * 0.20f;
                             }
                             else // ThrowIn - improved AI
                             {
@@ -505,14 +561,20 @@ namespace NoPasaranFC.Gameplay
                             
                             RestartDirection = Vector2.Normalize(target - RestartPlayer.FieldPosition);
                             
-                            // Play throw animation for AI throw-ins
+                            // Play throw animation for AI throw-ins, start run-up for corners
                             if (CurrentState == MatchState.ThrowIn)
                             {
                                 RestartPlayer.CurrentAnimationState = "throw_in_throw";
                                 _throwInAnimationStarted = true;
                             }
+                            else if (CurrentState == MatchState.CornerKick)
+                            {
+                                // Start run-up for AI corner kick
+                                _cornerKickRunUp = true;
+                            }
                             else
                             {
+                                // Execute goal kick immediately
                                 ExecuteSetPieceAction();
                             }
                         }
@@ -645,46 +707,71 @@ namespace NoPasaranFC.Gameplay
                 }
                 else
                 {
-                    // Normal movement (only if not knocked down)
-                    if (moveDirection.Length() > 0)
+                    // Check if player is in corner kick run-up mode
+                    bool inCornerRunUp = CurrentState == MatchState.CornerKick && 
+                                         _controlledPlayer == RestartPlayer && 
+                                         _cornerKickRunUp;
+                    
+                    if (inCornerRunUp)
                     {
-                        // Apply stamina speed multiplier
-                        float staminaMultiplier = GetStaminaSpeedMultiplier(_controlledPlayer);
-                        float moveSpeed = _controlledPlayer.Speed * 3f * GameSettings.Instance.PlayerSpeedMultiplier * staminaMultiplier;
-                        var newPosition = _controlledPlayer.FieldPosition + moveDirection * moveSpeed * deltaTime;
-                        _controlledPlayer.Velocity = moveDirection * moveSpeed;
-                        ClampToField(ref newPosition);
-                        _controlledPlayer.FieldPosition = newPosition;
-                        
-                        // Decrease stamina while running
-                        _controlledPlayer.Stamina = Math.Max(0, _controlledPlayer.Stamina - StaminaDecreasePerSecondRunning * deltaTime);
-                        
-                        // If controlled player is near ball and moving, kick it (with angle check and cooldown)
-                        // Don't kick if ball is in the air (prevents headbutting glitch)
-                        // Don't kick during countdown
-                        if (CurrentState == MatchState.Playing && moveDirection.Length() > 0.1f && BallHeight < 100f && CanPlayerKickBall(_controlledPlayer, moveDirection, BallKickDistance))
+                        // During corner kick run-up, move automatically toward ball
+                        Vector2 toBall = BallPosition - _controlledPlayer.FieldPosition;
+                        if (toBall.Length() > 1f)
                         {
-                            // Check cooldown to prevent continuous juggling
-                            float timeSinceLastKick = (float)MatchTime - _controlledPlayer.LastKickTime;
-                            if (timeSinceLastKick >= AutoKickCooldown)
-                            {
-                                // Trigger shoot animation
-                                _controlledPlayer.CurrentAnimationState = "shoot";
-                                
-                                // Kick ball in movement direction with stamina effect
-                                float staminaStatMultiplier = GetStaminaStatMultiplier(_controlledPlayer);
-                                float kickPower = (_controlledPlayer.Shooting / 8f + 6f) * staminaStatMultiplier;
-                                BallVelocity = moveDirection * kickPower * _controlledPlayer.Speed * 1.2f;
-                                AudioManager.Instance.PlaySoundEffect("kick_ball", 0.6f, allowRetrigger: false);
-                                _controlledPlayer.LastKickTime = (float)MatchTime;
-                            }
+                            toBall.Normalize();
+                            _controlledPlayer.Velocity = toBall * _controlledPlayer.Speed * 3.5f;
+                            _controlledPlayer.FieldPosition += _controlledPlayer.Velocity * deltaTime;
                         }
                     }
                     else
                     {
-                        _controlledPlayer.Velocity = Vector2.Zero;
-                        // Recover stamina when idle
-                        _controlledPlayer.Stamina = Math.Min(100, _controlledPlayer.Stamina + StaminaRecoveryPerSecond * deltaTime);
+                        // Check if player should be frozen during set piece (not during run-up)
+                        bool frozenForSetPiece = (CurrentState == MatchState.ThrowIn || 
+                                                  CurrentState == MatchState.CornerKick || 
+                                                  CurrentState == MatchState.GoalKick) &&
+                                                 _controlledPlayer == RestartPlayer;
+                        
+                        // Normal movement (only if not knocked down and not frozen for set piece)
+                        if (moveDirection.Length() > 0 && !frozenForSetPiece)
+                        {
+                            // Apply stamina speed multiplier
+                            float staminaMultiplier = GetStaminaSpeedMultiplier(_controlledPlayer);
+                            float moveSpeed = _controlledPlayer.Speed * 3f * GameSettings.Instance.PlayerSpeedMultiplier * staminaMultiplier;
+                            var newPosition = _controlledPlayer.FieldPosition + moveDirection * moveSpeed * deltaTime;
+                            _controlledPlayer.Velocity = moveDirection * moveSpeed;
+                            ClampToField(ref newPosition);
+                            _controlledPlayer.FieldPosition = newPosition;
+                            
+                            // Decrease stamina while running
+                            _controlledPlayer.Stamina = Math.Max(0, _controlledPlayer.Stamina - StaminaDecreasePerSecondRunning * deltaTime);
+                            
+                            // If controlled player is near ball and moving, kick it (with angle check and cooldown)
+                            // Don't kick if ball is in the air (prevents headbutting glitch)
+                            // Don't kick during countdown
+                            if (CurrentState == MatchState.Playing && moveDirection.Length() > 0.1f && BallHeight < 100f && CanPlayerKickBall(_controlledPlayer, moveDirection, BallKickDistance))
+                            {
+                                // Check cooldown to prevent continuous juggling
+                                float timeSinceLastKick = (float)MatchTime - _controlledPlayer.LastKickTime;
+                                if (timeSinceLastKick >= AutoKickCooldown)
+                                {
+                                    // Trigger shoot animation
+                                    _controlledPlayer.CurrentAnimationState = "shoot";
+                                    
+                                    // Kick ball in movement direction with stamina effect
+                                    float staminaStatMultiplier = GetStaminaStatMultiplier(_controlledPlayer);
+                                    float kickPower = (_controlledPlayer.Shooting / 8f + 6f) * staminaStatMultiplier;
+                                    BallVelocity = moveDirection * kickPower * _controlledPlayer.Speed * 1.2f;
+                                    AudioManager.Instance.PlaySoundEffect("kick_ball", 0.6f, allowRetrigger: false);
+                                    _controlledPlayer.LastKickTime = (float)MatchTime;
+                                }
+                            }
+                        }
+                        else
+                        {
+                            _controlledPlayer.Velocity = Vector2.Zero;
+                            // Recover stamina when idle
+                            _controlledPlayer.Stamina = Math.Min(100, _controlledPlayer.Stamina + StaminaRecoveryPerSecond * deltaTime);
+                        }
                     }
                 }
             }
@@ -724,10 +811,25 @@ namespace NoPasaranFC.Gameplay
             // Handle set piece behavior (ThrowIn, CornerKick, GoalKick)
             if (CurrentState == MatchState.ThrowIn || CurrentState == MatchState.CornerKick || CurrentState == MatchState.GoalKick)
             {
-                // If this is the restart player, stay put (handled in Update loop)
+                // If this is the restart player, handle special movement
                 if (player == RestartPlayer)
                 {
-                    player.Velocity = Vector2.Zero;
+                    // During corner kick run-up, move toward ball
+                    if (CurrentState == MatchState.CornerKick && _cornerKickRunUp)
+                    {
+                        Vector2 toBall = BallPosition - player.FieldPosition;
+                        if (toBall.Length() > 1f)
+                        {
+                            toBall.Normalize();
+                            player.Velocity = toBall * player.Speed * 3.5f; // Run fast toward ball
+                            player.FieldPosition += player.Velocity * deltaTime;
+                        }
+                    }
+                    else
+                    {
+                        // Stay put during aiming phase
+                        player.Velocity = Vector2.Zero;
+                    }
                     return;
                 }
                 
@@ -1282,6 +1384,9 @@ namespace NoPasaranFC.Gameplay
         
         private void CheckPlayerBallCollisions()
         {
+            // Don't affect ball immediately after set piece execution
+            if (_timeSinceSetPiece < 0.3f) return;
+            
             // Check if any player is colliding with the ball
             var allPlayers = GetAllPlayers();
             const float ballRadius = 16f; // Ball is 32x32, so radius is 16
@@ -1499,6 +1604,14 @@ namespace NoPasaranFC.Gameplay
         
         private void CheckGoal()
         {
+            // Don't check for goals/out-of-bounds during set pieces
+            if (CurrentState == MatchState.ThrowIn || 
+                CurrentState == MatchState.CornerKick || 
+                CurrentState == MatchState.GoalKick)
+            {
+                return;
+            }
+            
             float goalTop = StadiumMargin + (FieldHeight - GoalWidth) / 2;
             float goalBottom = goalTop + GoalWidth;
             float leftGoalLine = StadiumMargin;
@@ -1752,9 +1865,18 @@ namespace NoPasaranFC.Gameplay
                     float yOffset = isTopSideline ? -50f : 50f;
                     nearestPlayer.FieldPosition = new Vector2(position.X, position.Y + yOffset);
                 }
+                else if (restartState == MatchState.CornerKick)
+                {
+                    // Corner kick - place player further behind ball for run-up (80px back)
+                    Vector2 directionToCenter = new Vector2(StadiumMargin + FieldWidth/2, StadiumMargin + FieldHeight/2) - position;
+                    if (directionToCenter != Vector2.Zero) directionToCenter.Normalize();
+                    nearestPlayer.FieldPosition = position - directionToCenter * 80f;
+                    _cornerKickStartPosition = nearestPlayer.FieldPosition;
+                    _cornerKickRunUp = false;
+                }
                 else
                 {
-                    // Corner/Goal kick - place slightly behind ball relative to center
+                    // Goal kick - place slightly behind ball relative to center
                     Vector2 directionToCenter = new Vector2(StadiumMargin + FieldWidth/2, StadiumMargin + FieldHeight/2) - position;
                     if (directionToCenter != Vector2.Zero) directionToCenter.Normalize();
                     nearestPlayer.FieldPosition = position - directionToCenter * 40f;
@@ -1789,6 +1911,7 @@ namespace NoPasaranFC.Gameplay
             
             // Reset player state
             RestartPlayer.IsThrowingIn = false;
+            RestartPlayer.CurrentAnimationState = "idle"; // Reset animation state
             
             // Apply velocity to ball
             float power = 0f;
@@ -1796,9 +1919,9 @@ namespace NoPasaranFC.Gameplay
             
             if (CurrentState == MatchState.ThrowIn)
             {
-                // Power ranges from 12f (minimum) to 28f (maximum) based on charge
-                float minPower = 12f;
-                float maxPower = 28f;
+                // Power ranges from 200f (minimum) to 500f (maximum) based on charge
+                float minPower = 200f;
+                float maxPower = 500f;
                 float chargeAmount = Math.Max(0.1f, ThrowInPowerCharge); // Minimum 10% charge
                 power = minPower + (maxPower - minPower) * chargeAmount;
                 
@@ -1810,9 +1933,17 @@ namespace NoPasaranFC.Gameplay
             }
             else if (CurrentState == MatchState.CornerKick)
             {
-                power = 22f; // Corner power
-                height = 150f; // High arc
-                AudioManager.Instance.PlaySoundEffect("kick_ball", 0.8f);
+                // Power ranges from 500f (minimum) to 2400f (maximum) based on charge
+                float minPower = 500f;
+                float maxPower = 2400f;
+                float chargeAmount = Math.Max(0.1f, ThrowInPowerCharge); // Minimum 10% charge
+                power = minPower + (maxPower - minPower) * chargeAmount;
+                
+                // Height scales with power (short corners are flatter, long corners arc higher)
+                height = 200f + 400f * chargeAmount;
+                
+                float volume = 0.5f + 0.5f * chargeAmount;
+                AudioManager.Instance.PlaySoundEffect("kick_ball", volume);
             }
             else if (CurrentState == MatchState.GoalKick)
             {
@@ -1821,14 +1952,29 @@ namespace NoPasaranFC.Gameplay
                 AudioManager.Instance.PlaySoundEffect("kick_ball", 1.0f);
             }
             
-            // Apply velocity
-            BallVelocity = RestartDirection * power * RestartPlayer.Speed * 0.05f; // Scale power
+            // Apply velocity based on set piece type
+            if (CurrentState == MatchState.ThrowIn || CurrentState == MatchState.CornerKick)
+            {
+                // Throw-in and Corner: direct power application
+                BallVelocity = RestartDirection * power;
+            }
+            else
+            {
+                // Goal kicks: scale by player speed
+                BallVelocity = RestartDirection * power * RestartPlayer.Speed * 0.05f;
+            }
             BallVerticalVelocity = height;
             _lastPlayerTouchedBall = RestartPlayer;
             RestartPlayer.LastKickTime = (float)MatchTime;
             
             // Reset throw-in power
             ThrowInPowerCharge = 0f;
+            
+            // Reset corner kick run-up flag
+            _cornerKickRunUp = false;
+            
+            // Reset set piece timer to protect ball from immediate collisions
+            _timeSinceSetPiece = 0f;
             
             // Reset state
             CurrentState = MatchState.Playing;
@@ -2339,6 +2485,66 @@ namespace NoPasaranFC.Gameplay
                 return 0.6f + (staminaRatio * 0.4f); // Range: 0.6 to 1.0
             }
             return 1.0f;
+        }
+        
+        // Debug methods for triggering set pieces
+        public void DebugTriggerThrowIn()
+        {
+            if (CurrentState != MatchState.Playing) return;
+            
+            // Place ball at center of the field on top sideline
+            float xPos = StadiumMargin + FieldWidth / 2;
+            float yPos = StadiumMargin + 20; // Top sideline
+            
+            // Give throw-in to player's team
+            bool giveToHomeTeam = _homeTeam.IsPlayerControlled;
+            PlaceBallForRestart(new Vector2(xPos, yPos), giveToHomeTeam, MatchState.ThrowIn);
+        }
+        
+        public void DebugTriggerCornerKick()
+        {
+            if (CurrentState != MatchState.Playing) return;
+            
+            // Place corner for player's team (attacking corner)
+            bool giveToHomeTeam = _homeTeam.IsPlayerControlled;
+            float cornerX = giveToHomeTeam ? StadiumMargin + FieldWidth - 20 : StadiumMargin + 20;
+            float cornerY = StadiumMargin + 20; // Top corner
+            
+            PlaceBallForRestart(new Vector2(cornerX, cornerY), giveToHomeTeam, MatchState.CornerKick);
+        }
+        
+        public void DebugTriggerGoalKick()
+        {
+            if (CurrentState != MatchState.Playing) return;
+            
+            // Place goal kick for player's team
+            bool giveToHomeTeam = _homeTeam.IsPlayerControlled;
+            float goalKickX = giveToHomeTeam ? StadiumMargin + 100 : StadiumMargin + FieldWidth - 100;
+            float goalKickY = StadiumMargin + FieldHeight / 2;
+            
+            PlaceBallForRestart(new Vector2(goalKickX, goalKickY), giveToHomeTeam, MatchState.GoalKick);
+        }
+        
+        public void DebugTriggerGoal()
+        {
+            if (CurrentState != MatchState.Playing) return;
+            
+            // Score a goal for the player's team
+            if (_homeTeam.IsPlayerControlled)
+            {
+                HomeScore++;
+                _lastPlayerTouchedBall = _controlledPlayer;
+            }
+            else
+            {
+                AwayScore++;
+                _lastPlayerTouchedBall = _controlledPlayer;
+            }
+            
+            _goalScored = true;
+            _isOwnGoal = false;
+            _goalCelebrationDelay = 0f;
+            AudioManager.Instance.PlaySoundEffect("goal", allowRetrigger: false);
         }
     }
 }
