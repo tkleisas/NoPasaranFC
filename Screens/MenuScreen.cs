@@ -38,6 +38,7 @@ namespace NoPasaranFC.Screens
         private float _grassScrollOffset = 0f;
         private int _optionsSelectedItem = 0; // 0=resolution, 1=fullscreen, 2=speed, 3=match duration, 4=sprite tests
         private Texture2D _logo;
+        private float _joystickMenuCooldown = 0f; // Cooldown for joystick menu navigation
         
         public bool ShouldExit { get; private set; }
         
@@ -86,6 +87,7 @@ namespace NoPasaranFC.Screens
         {
             _input.Update();
             var keyState = Keyboard.GetState(); // Still needed for some menu controls
+            var touchUI = Gameplay.TouchUI.Instance;
             
             // Update grass scroll
             _grassScrollOffset += 50f * (float)gameTime.ElapsedGameTime.TotalSeconds;
@@ -96,29 +98,61 @@ namespace NoPasaranFC.Screens
             
             if (!_inOptionsMenu)
             {
-                // Main menu navigation (keyboard or gamepad)
+                // Main menu navigation (keyboard, gamepad, or touch)
                 var menuOptions = GetMenuOptions();
-                if (_input.IsMenuDownPressed())
+                
+                // Touch/Joystick navigation
+                Vector2 joystickDir = touchUI.JoystickDirection;
+                bool menuDown = _input.IsMenuDownPressed() || (touchUI.Enabled && joystickDir.Y > 0.5f && _joystickMenuCooldown <= 0);
+                bool menuUp = _input.IsMenuUpPressed() || (touchUI.Enabled && joystickDir.Y < -0.5f && _joystickMenuCooldown <= 0);
+                
+                if (menuDown)
                 {
                     _selectedOption = (_selectedOption + 1) % menuOptions.Length;
                     Gameplay.AudioManager.Instance.PlaySoundEffect("menu_move");
+                    _joystickMenuCooldown = 0.2f; // Cooldown to prevent rapid scrolling
                 }
                 
-                if (_input.IsMenuUpPressed())
+                if (menuUp)
                 {
                     _selectedOption = (_selectedOption - 1 + menuOptions.Length) % menuOptions.Length;
                     Gameplay.AudioManager.Instance.PlaySoundEffect("menu_move");
+                    _joystickMenuCooldown = 0.2f;
                 }
                 
-                // Confirm selection (Enter or A button)
-                if (_input.IsConfirmPressed())
+                // Update cooldown
+                if (_joystickMenuCooldown > 0)
+                    _joystickMenuCooldown -= (float)gameTime.ElapsedGameTime.TotalSeconds;
+                
+                // Check for touch tap on menu items
+                var tap = touchUI.GetTapPosition();
+                if (tap.HasValue)
+                {
+                    float menuStartY = Game1.ScreenHeight * 0.62f;
+                    float itemHeight = 50f * Game1.UIScale;
+                    for (int i = 0; i < menuOptions.Length; i++)
+                    {
+                        float itemY = menuStartY + i * itemHeight;
+                        Rectangle itemRect = new Rectangle(0, (int)itemY, Game1.ScreenWidth, (int)itemHeight);
+                        if (itemRect.Contains(new Point((int)tap.Value.X, (int)tap.Value.Y)))
+                        {
+                            _selectedOption = i;
+                            Gameplay.AudioManager.Instance.PlaySoundEffect("menu_select");
+                            HandleSelection();
+                            break;
+                        }
+                    }
+                }
+                
+                // Confirm selection (Enter, A button, or touch A)
+                if (_input.IsConfirmPressed() || touchUI.IsActionJustPressed)
                 {
                     Gameplay.AudioManager.Instance.PlaySoundEffect("menu_select");
                     HandleSelection();
                 }
                 
-                // Exit (Escape or B button)
-                if (_input.IsBackPressed())
+                // Exit (Escape, B button, or touch B)
+                if (_input.IsBackPressed() || touchUI.IsBackJustPressed)
                 {
                     Gameplay.AudioManager.Instance.PlaySoundEffect("menu_back");
                     ShouldExit = true;
@@ -126,27 +160,39 @@ namespace NoPasaranFC.Screens
             }
             else
             {
-                // Options menu navigation (keyboard or gamepad)
-                if (_input.IsMenuUpPressed())
+                // Options menu navigation
+                Vector2 joystickDir = touchUI.JoystickDirection;
+                bool menuDown = _input.IsMenuDownPressed() || (touchUI.Enabled && joystickDir.Y > 0.5f && _joystickMenuCooldown <= 0);
+                bool menuUp = _input.IsMenuUpPressed() || (touchUI.Enabled && joystickDir.Y < -0.5f && _joystickMenuCooldown <= 0);
+                bool menuLeft = (keyState.IsKeyDown(Keys.Left) && !_previousKeyState.IsKeyDown(Keys.Left)) || 
+                               (touchUI.Enabled && joystickDir.X < -0.5f && _joystickMenuCooldown <= 0);
+                bool menuRight = (keyState.IsKeyDown(Keys.Right) && !_previousKeyState.IsKeyDown(Keys.Right)) ||
+                                (touchUI.Enabled && joystickDir.X > 0.5f && _joystickMenuCooldown <= 0);
+                
+                if (menuUp)
                 {
                     _optionsSelectedItem = (_optionsSelectedItem - 1 + 5) % 5;
                     Gameplay.AudioManager.Instance.PlaySoundEffect("menu_move");
+                    _joystickMenuCooldown = 0.2f;
                 }
                 
-                if (_input.IsMenuDownPressed())
+                if (menuDown)
                 {
                     _optionsSelectedItem = (_optionsSelectedItem + 1) % 5;
                     Gameplay.AudioManager.Instance.PlaySoundEffect("menu_move");
+                    _joystickMenuCooldown = 0.2f;
                 }
                 
-                // Left/Right still use keyboard for now (TODO: add gamepad support)
-                if (keyState.IsKeyDown(Keys.Left) && !_previousKeyState.IsKeyDown(Keys.Left))
+                if (_joystickMenuCooldown > 0)
+                    _joystickMenuCooldown -= (float)gameTime.ElapsedGameTime.TotalSeconds;
+                
+                if (menuLeft)
                 {
                     HandleOptionsChange(-1);
                     Gameplay.AudioManager.Instance.PlaySoundEffect("menu_move");
                 }
                 
-                if (keyState.IsKeyDown(Keys.Right) && !_previousKeyState.IsKeyDown(Keys.Right))
+                if (menuRight)
                 {
                     HandleOptionsChange(1);
                     Gameplay.AudioManager.Instance.PlaySoundEffect("menu_move");
@@ -158,26 +204,24 @@ namespace NoPasaranFC.Screens
                     Gameplay.AudioManager.Instance.PlaySoundEffect("menu_move");
                 }
                 
-                // Confirm (Enter or A button)
-                if (_input.IsConfirmPressed())
+                // Confirm (Enter, A button, or touch A)
+                if (_input.IsConfirmPressed() || touchUI.IsActionJustPressed)
                 {
                     Gameplay.AudioManager.Instance.PlaySoundEffect("menu_select");
                     if (_optionsSelectedItem == 4)
                     {
-                        // Launch sprite test screen
                         _screenManager.PushScreen(new SpriteTestScreen(_screenManager, _contentManager, _graphicsDevice));
                     }
                     else
                     {
-                        // Apply resolution
                         var resolution = Game1.GetAvailableResolutions()[_selectedResolution];
                         _screenManager.SetResolution(resolution.X, resolution.Y, _tempFullscreen);
                         _inOptionsMenu = false;
                     }
                 }
                 
-                // Back (Escape or B button)
-                if (_input.IsBackPressed())
+                // Back (Escape, B button, or touch B)
+                if (_input.IsBackPressed() || touchUI.IsBackJustPressed)
                 {
                     Gameplay.AudioManager.Instance.PlaySoundEffect("menu_back");
                     _inOptionsMenu = false;
@@ -362,6 +406,7 @@ namespace NoPasaranFC.Screens
         {
             int screenWidth = Game1.ScreenWidth;
             int screenHeight = Game1.ScreenHeight;
+            float scale = Game1.UIScale;
             
             DrawGrassBackground(spriteBatch, screenWidth, screenHeight);
             
@@ -370,7 +415,7 @@ namespace NoPasaranFC.Screens
                 // Draw logo at top center
                 if (_logo != null)
                 {
-                    float logoScale = 1.0f; // Adjust scale as needed
+                    float logoScale = scale; // Scale logo with UI
                     int logoWidth = (int)(_logo.Width * logoScale);
                     int logoHeight = (int)(_logo.Height * logoScale);
                     Vector2 logoPos = new Vector2((screenWidth - logoWidth) / 2, screenHeight * 0.01f);
@@ -409,9 +454,10 @@ namespace NoPasaranFC.Screens
                     spriteBatch.DrawString(font, useNewSeason, usePos, Color.Gray);
                 }
                 
-                // Draw menu options centered
+                // Draw menu options centered with scaling
                 var menuOptions = GetMenuOptions();
                 float menuStartY = screenHeight * 0.62f;
+                float itemHeight = 50f * scale;
                 for (int i = 0; i < menuOptions.Length; i++)
                 {
                     var prefix = i == _selectedOption ? "> " : "  ";
@@ -424,16 +470,16 @@ namespace NoPasaranFC.Screens
                         color = new Color(100, 100, 100); // Dark gray
                     }
                     
-                    Vector2 textSize = font.MeasureString(text);
-                    Vector2 textPos = new Vector2((screenWidth - textSize.X) / 2, menuStartY + i * 50);
-                    spriteBatch.DrawString(font, text, textPos, color);
+                    Vector2 textSize = font.MeasureString(text) * scale;
+                    Vector2 textPos = new Vector2((screenWidth - textSize.X) / 2, menuStartY + i * itemHeight);
+                    spriteBatch.DrawString(font, text, textPos, color, 0f, Vector2.Zero, scale, SpriteEffects.None, 0f);
                 }
                 
                 // Draw version in bottom left corner
                 string versionText = Models.Version.GetFullVersion();
-                Vector2 versionSize = font.MeasureString(versionText);
+                Vector2 versionSize = font.MeasureString(versionText) * scale;
                 Vector2 versionPos = new Vector2(10, screenHeight - versionSize.Y - 10);
-                spriteBatch.DrawString(font, versionText, versionPos, Color.Red);
+                spriteBatch.DrawString(font, versionText, versionPos, Color.Red, 0f, Vector2.Zero, scale, SpriteEffects.None, 0f);
             }
             else
             {

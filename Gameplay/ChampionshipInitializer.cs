@@ -11,13 +11,13 @@ namespace NoPasaranFC.Gameplay
         private static readonly string[] TeamNames = new[]
         {
             "NO PASARAN!",
-            "������������",
-            "����",
+            "ΜΠΑΡΤΣΕΛΙΩΜΑ",
+            "ΚΤΕΛ",
             "NO NAME",
-            "���������",
-            "����������",
-            "������� ���������",
-            "���������"
+            "ΧΑΝΔΡΙΝΑΪΚΟΣ",
+            "ΑΣΑΛΑΓΗΤΟΣ",
+            "ΑΣΤΕΡΑΣ ΕΞΑΡΧΕΙΩΝ",
+            "ΤΗΓΑΝΙΤΗΣ"
         };
         
         private static readonly string[] FirstNames = new[]
@@ -33,9 +33,9 @@ namespace NoPasaranFC.Gameplay
         };
         private static readonly string[] NoPasaranNames = new[]
         {
-            "�������", "Dablo", "���������", "������", "�������",
-            "����� ���", "�������� � �����", "�����", "�����",
-             "�������", "������"
+            "Wacaby", "Dablo", "Lamougio", "Donat", "Petros",
+            "Super Fan", "Tonis", "Lefty", "Mihalis",
+            "Giannis", "Kostas"
         };
         private static readonly PlayerPosition[] NoPasaranPositions = new[]
         {
@@ -56,15 +56,28 @@ namespace NoPasaranFC.Gameplay
             var championship = new Championship();
             
             // Try to load teams from JSON seed file
-            string jsonPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Database", "teams_seed.json");
             List<Team> teams = null;
             
+#if ANDROID
+            // On Android, load from embedded assets
+            try
+            {
+                teams = LoadTeamsFromAndroidAssets();
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Failed to load teams from Android assets: {ex.Message}");
+            }
+#else
+            // On desktop, load from file system
+            string jsonPath = PlatformHelper.GetAssetPath(Path.Combine("Database", "teams_seed.json"));
             if (File.Exists(jsonPath))
             {
                 teams = TeamSeeder.LoadTeamsFromJson(jsonPath);
             }
+#endif
             
-            // Fallback to old generation if JSON loading failed
+            // Fallback to legacy generation if JSON loading failed
             if (teams == null || teams.Count == 0)
             {
                 teams = GenerateTeamsLegacy();
@@ -89,6 +102,18 @@ namespace NoPasaranFC.Gameplay
             
             return championship;
         }
+        
+#if ANDROID
+        private static List<Team> LoadTeamsFromAndroidAssets()
+        {
+            // Use Android's AssetManager to read the JSON file
+            var context = global::Android.App.Application.Context;
+            using var stream = context.Assets.Open("Database/teams_seed.json");
+            using var reader = new StreamReader(stream, System.Text.Encoding.UTF8);
+            string jsonString = reader.ReadToEnd();
+            return TeamSeeder.LoadTeamsFromJsonString(jsonString);
+        }
+#endif
         
         private static Player CreatePlayer(Random random, PlayerPosition position)
         {

@@ -75,12 +75,33 @@ namespace NoPasaranFC.Screens
             if (_languageIndex == -1) _languageIndex = 0;
             System.Diagnostics.Debug.WriteLine("SettingsScreen: Constructor complete");
         }
+        private Gameplay.InputHelper _input = new Gameplay.InputHelper();
+        private float _joystickMenuCooldown = 0f;
 
         public override void Update(GameTime gameTime)
         {
+            _input.Update();
             var keyState = Keyboard.GetState();
+            var touchUI = Gameplay.TouchUI.Instance;
             
-            if (keyState.IsKeyDown(Keys.Down) && !_previousKeyState.IsKeyDown(Keys.Down))
+            // Touch/Joystick navigation with cooldown
+            Vector2 joystickDir = touchUI.JoystickDirection;
+            bool menuDown = (keyState.IsKeyDown(Keys.Down) && !_previousKeyState.IsKeyDown(Keys.Down)) || 
+                           _input.IsMenuDownPressed() || 
+                           (touchUI.Enabled && joystickDir.Y > 0.5f && _joystickMenuCooldown <= 0);
+            bool menuUp = (keyState.IsKeyDown(Keys.Up) && !_previousKeyState.IsKeyDown(Keys.Up)) || 
+                         _input.IsMenuUpPressed() || 
+                         (touchUI.Enabled && joystickDir.Y < -0.5f && _joystickMenuCooldown <= 0);
+            bool menuLeft = (keyState.IsKeyDown(Keys.Left) && !_previousKeyState.IsKeyDown(Keys.Left)) ||
+                           (touchUI.Enabled && joystickDir.X < -0.5f && _joystickMenuCooldown <= 0);
+            bool menuRight = (keyState.IsKeyDown(Keys.Right) && !_previousKeyState.IsKeyDown(Keys.Right)) ||
+                            (touchUI.Enabled && joystickDir.X > 0.5f && _joystickMenuCooldown <= 0);
+            
+            // Update cooldown
+            if (_joystickMenuCooldown > 0)
+                _joystickMenuCooldown -= (float)gameTime.ElapsedGameTime.TotalSeconds;
+            
+            if (menuDown)
             {
                 int menuLength = GetMenuOptions().Length;
                 _selectedOption = (_selectedOption + 1) % menuLength;
@@ -90,8 +111,9 @@ namespace NoPasaranFC.Screens
                 {
                     _scrollOffset++;
                 }
+                _joystickMenuCooldown = 0.15f;
             }
-            else if (keyState.IsKeyDown(Keys.Up) && !_previousKeyState.IsKeyDown(Keys.Up))
+            else if (menuUp)
             {
                 int menuLength = GetMenuOptions().Length;
                 _selectedOption = (_selectedOption - 1 + menuLength) % menuLength;
@@ -101,18 +123,22 @@ namespace NoPasaranFC.Screens
                 {
                     _scrollOffset--;
                 }
+                _joystickMenuCooldown = 0.15f;
             }
-            else if (keyState.IsKeyDown(Keys.Enter) && !_previousKeyState.IsKeyDown(Keys.Enter))
+            else if ((keyState.IsKeyDown(Keys.Enter) && !_previousKeyState.IsKeyDown(Keys.Enter)) || 
+                     _input.IsConfirmPressed() || touchUI.IsActionJustPressed)
             {
                 HandleSelection();
             }
-            else if (keyState.IsKeyDown(Keys.Left) && !_previousKeyState.IsKeyDown(Keys.Left))
+            else if (menuLeft)
             {
                 AdjustValue(-1);
+                _joystickMenuCooldown = 0.15f;
             }
-            else if (keyState.IsKeyDown(Keys.Right) && !_previousKeyState.IsKeyDown(Keys.Right))
+            else if (menuRight)
             {
                 AdjustValue(1);
+                _joystickMenuCooldown = 0.15f;
             }
             else if (keyState.IsKeyDown(Keys.PageDown) && !_previousKeyState.IsKeyDown(Keys.PageDown))
             {
@@ -126,6 +152,17 @@ namespace NoPasaranFC.Screens
                 // Jump up by visible amount
                 _selectedOption = Math.Max(_selectedOption - MaxVisibleOptions, 0);
                 _scrollOffset = Math.Max(0, _selectedOption);
+            }
+            
+            // Back button (Escape, B, or touch B)
+            if (_input.IsBackPressed() || touchUI.IsBackJustPressed)
+            {
+                HandleSelection(); // When on "Back" option, this will exit
+                if (_selectedOption != GetMenuOptions().Length - 1)
+                {
+                    // If not on Back option, go back anyway
+                    IsFinished = true;
+                }
             }
             
             _previousKeyState = keyState;

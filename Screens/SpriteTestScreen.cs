@@ -105,45 +105,69 @@ namespace NoPasaranFC.Screens
             }
         }
         
+        private Gameplay.InputHelper _input = new Gameplay.InputHelper();
+        private float _joystickCooldown = 0f;
+        
         public override void Update(GameTime gameTime)
         {
+            _input.Update();
             var keyState = Keyboard.GetState();
+            var touchUI = Gameplay.TouchUI.Instance;
             float deltaTime = (float)gameTime.ElapsedGameTime.TotalSeconds;
             
-            // Navigate animations
-            if (keyState.IsKeyDown(Keys.Left) && !_previousKeyState.IsKeyDown(Keys.Left))
+            // Update joystick cooldown
+            if (_joystickCooldown > 0) _joystickCooldown -= deltaTime;
+            
+            Vector2 joystickDir = touchUI.JoystickDirection;
+            
+            // Navigate animations (Left/Right or joystick X)
+            bool navLeft = (keyState.IsKeyDown(Keys.Left) && !_previousKeyState.IsKeyDown(Keys.Left)) ||
+                          (touchUI.Enabled && joystickDir.X < -0.5f && _joystickCooldown <= 0);
+            bool navRight = (keyState.IsKeyDown(Keys.Right) && !_previousKeyState.IsKeyDown(Keys.Right)) ||
+                           (touchUI.Enabled && joystickDir.X > 0.5f && _joystickCooldown <= 0);
+            bool navUp = (keyState.IsKeyDown(Keys.Up) && !_previousKeyState.IsKeyDown(Keys.Up)) ||
+                        (touchUI.Enabled && joystickDir.Y < -0.5f && _joystickCooldown <= 0);
+            bool navDown = (keyState.IsKeyDown(Keys.Down) && !_previousKeyState.IsKeyDown(Keys.Down)) ||
+                          (touchUI.Enabled && joystickDir.Y > 0.5f && _joystickCooldown <= 0);
+            
+            if (navLeft)
             {
                 _currentAnimationIndex = (_currentAnimationIndex - 1 + _testAnimations.Count) % _testAnimations.Count;
                 _currentFrameIndex = 0;
                 _animationTimer = 0f;
+                _joystickCooldown = 0.2f;
             }
             
-            if (keyState.IsKeyDown(Keys.Right) && !_previousKeyState.IsKeyDown(Keys.Right))
+            if (navRight)
             {
                 _currentAnimationIndex = (_currentAnimationIndex + 1) % _testAnimations.Count;
                 _currentFrameIndex = 0;
                 _animationTimer = 0f;
+                _joystickCooldown = 0.2f;
             }
             
             // Adjust additional rotation
-            if (keyState.IsKeyDown(Keys.Up) && !_previousKeyState.IsKeyDown(Keys.Up))
+            if (navUp)
             {
                 _additionalRotation = (_additionalRotation + 1) % 8;
+                _joystickCooldown = 0.2f;
             }
             
-            if (keyState.IsKeyDown(Keys.Down) && !_previousKeyState.IsKeyDown(Keys.Down))
+            if (navDown)
             {
                 _additionalRotation = (_additionalRotation - 1 + 8) % 8;
+                _joystickCooldown = 0.2f;
             }
             
-            // Reset rotation
-            if (keyState.IsKeyDown(Keys.R) && !_previousKeyState.IsKeyDown(Keys.R))
+            // Reset rotation (A button)
+            if ((keyState.IsKeyDown(Keys.R) && !_previousKeyState.IsKeyDown(Keys.R)) || touchUI.IsActionJustPressed)
             {
                 _additionalRotation = 0;
             }
             
-            // Exit to menu
-            if (keyState.IsKeyDown(Keys.Escape) && !_previousKeyState.IsKeyDown(Keys.Escape))
+            // Exit to menu (Escape, B button, or touch B)
+            if ((keyState.IsKeyDown(Keys.Escape) && !_previousKeyState.IsKeyDown(Keys.Escape)) ||
+                _input.IsBackPressed() || touchUI.IsBackJustPressed)
             {
                 _screenManager.PopScreen();
             }

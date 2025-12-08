@@ -66,6 +66,9 @@ namespace NoPasaranFC.Screens
             _database = database;
             _screenManager = screenManager;
             _input = new Gameplay.InputHelper();
+            _input.ScreenWidth = Game1.ScreenWidth;
+            _input.ScreenHeight = Game1.ScreenHeight;
+            _input.UpdateTouchAreas();
             _matchEngine = new MatchEngine(homeTeam, awayTeam, Game1.ScreenWidth, Game1.ScreenHeight);
             _graphicsInitialized = false;
             _minimap = new Minimap(Game1.ScreenWidth, Game1.ScreenHeight, 150, 100); // Minimap 150x100 pixels
@@ -165,23 +168,28 @@ namespace NoPasaranFC.Screens
             }
             
             _input.Update();
+            var touchUI = Gameplay.TouchUI.Instance;
             
-            // Get movement direction (supports keyboard arrows/WASD and gamepad left stick/D-pad)
+            // Get movement direction (supports keyboard, gamepad, and touch joystick)
             Vector2 moveDirection = _input.GetMovementDirection();
+            if (touchUI.Enabled && touchUI.JoystickActive)
+            {
+                moveDirection = touchUI.JoystickDirection;
+            }
             
-            // Shoot/Tackle (X key or A button)
-            bool isShootKeyDown = _input.IsShootButtonDown();
+            // Shoot/Tackle (X key, A button, or touch A)
+            bool isShootKeyDown = _input.IsShootButtonDown() || touchUI.IsActionPressed;
             
             _matchEngine.Update(gameTime, moveDirection, isShootKeyDown);
             
-            // Switch player (Space or X button)
-            if (_input.IsSwitchPlayerPressed())
+            // Switch player (Space, X button, or touch X)
+            if (_input.IsSwitchPlayerPressed() || touchUI.IsSwitchJustPressed)
             {
                 _matchEngine.SwitchControlledPlayer();
             }
             
-            // Back to menu (Escape or B button)
-            if (_input.IsBackPressed())
+            // Back to menu (Escape, B button, or touch B)
+            if (_input.IsBackPressed() || touchUI.IsBackJustPressed)
             {
                 IsFinished = true;
             }
@@ -681,6 +689,24 @@ namespace NoPasaranFC.Screens
                 _matchEngine.CurrentState == MatchEngine.MatchState.ThrowIn)
             {
                 DrawSetPieceIndicators(spriteBatch, font);
+            }
+            
+            // Touch controls are now drawn globally by TouchUI in Game1.Draw
+        }
+        
+        private void DrawFilledCircle(SpriteBatch spriteBatch, Vector2 center, float radius, Color color)
+        {
+            // Draw filled circle using rectangle strips
+            for (int y = (int)-radius; y <= (int)radius; y++)
+            {
+                float halfWidth = (float)Math.Sqrt(radius * radius - y * y);
+                Rectangle rect = new Rectangle(
+                    (int)(center.X - halfWidth),
+                    (int)(center.Y + y),
+                    (int)(halfWidth * 2),
+                    1
+                );
+                spriteBatch.Draw(_pixel, rect, color);
             }
         }
         

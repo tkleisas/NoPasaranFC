@@ -1,4 +1,5 @@
-﻿using Microsoft.Xna.Framework;
+﻿using System;
+using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
 using NoPasaranFC.Models;
@@ -24,6 +25,9 @@ public class Game1 : Game
     public static int ScreenHeight { get; private set; } = 720;
     public static bool IsFullscreen { get; private set; } = false;
     
+    // UI Scale for high-DPI displays (Android)
+    public static float UIScale { get; private set; } = 1f;
+    
     // Available resolutions
     private static readonly Point[] AvailableResolutions = new[]
     {
@@ -42,8 +46,14 @@ public class Game1 : Game
         Content.RootDirectory = "Content";
         IsMouseVisible = true;
         
-        // Set initial resolution
+#if ANDROID
+        // On Android, use native resolution and fullscreen
+        _graphics.IsFullScreen = true;
+        _graphics.SupportedOrientations = DisplayOrientation.LandscapeLeft | DisplayOrientation.LandscapeRight;
+#else
+        // Set initial resolution for desktop
         ApplyResolution(ScreenWidth, ScreenHeight, IsFullscreen);
+#endif
     }
     
     public void ApplyResolution(int width, int height, bool fullscreen)
@@ -52,10 +62,17 @@ public class Game1 : Game
         ScreenHeight = height;
         IsFullscreen = fullscreen;
         
+        // Calculate UI scale
+        UIScale = Math.Max(1f, height / 720f);
+        UIScale = Math.Clamp(UIScale, 1f, 3f);
+        
         _graphics.PreferredBackBufferWidth = width;
         _graphics.PreferredBackBufferHeight = height;
         _graphics.IsFullScreen = fullscreen;
         _graphics.ApplyChanges();
+        
+        // Update TouchUI
+        Gameplay.TouchUI.Instance.UpdateScreenSize(width, height);
     }
     
     public static Point[] GetAvailableResolutions()
@@ -72,9 +89,26 @@ public class Game1 : Game
         var settings = _database.LoadSettings();
         GameSettings.SetInstance(settings);
         
-        // Apply video settings
+#if ANDROID
+        // On Android, get actual screen resolution after graphics device is ready
+        ScreenWidth = GraphicsDevice.Adapter.CurrentDisplayMode.Width;
+        ScreenHeight = GraphicsDevice.Adapter.CurrentDisplayMode.Height;
+        
+        // Calculate UI scale for Android
+        UIScale = Math.Max(1f, ScreenHeight / 720f);
+        UIScale = Math.Clamp(UIScale, 1f, 3f);
+        
+        _graphics.PreferredBackBufferWidth = ScreenWidth;
+        _graphics.PreferredBackBufferHeight = ScreenHeight;
+        _graphics.ApplyChanges();
+        
+        // Update TouchUI
+        Gameplay.TouchUI.Instance.UpdateScreenSize(ScreenWidth, ScreenHeight);
+#else
+        // Apply video settings on desktop
         ApplyResolution(settings.ResolutionWidth, settings.ResolutionHeight, settings.IsFullscreen);
         _graphics.SynchronizeWithVerticalRetrace = settings.VSync;
+#endif
         
         // Try to load existing championship or create new one
         _championship = _database.LoadChampionship();
@@ -98,6 +132,9 @@ public class Game1 : Game
         _font.MeasureString("▲ MORE");
         _font.MeasureString("ΕΠΙΛΟΓΕΣ");
         
+        // Initialize touch UI
+        Gameplay.TouchUI.Instance.Initialize(GraphicsDevice);
+        
         // Initialize audio system
         AudioManager.Instance.Initialize(Content);
         AudioManager.Instance.MusicVolume = GameSettings.Instance.MusicVolume;
@@ -115,6 +152,9 @@ public class Game1 : Game
 
     protected override void Update(GameTime gameTime)
     {
+        // Update touch UI first
+        Gameplay.TouchUI.Instance.Update();
+        
         _screenManager.Update(gameTime);
         
         // Update audio manager
@@ -146,6 +186,9 @@ public class Game1 : Game
 
         _spriteBatch.Begin();
         _screenManager.Draw(_spriteBatch, _font);
+        
+        // Draw touch UI overlay on top of everything
+        Gameplay.TouchUI.Instance.Draw(_spriteBatch, _font);
         _spriteBatch.End();
 
         base.Draw(gameTime);
