@@ -18,10 +18,12 @@ namespace NoPasaranFC.Android;
 public class Activity1 : AndroidGameActivity
 {
     private Game1 _game;
+    public static Activity1 Instance { get; private set; }
 
     protected override void OnCreate(Bundle bundle)
     {
         base.OnCreate(bundle);
+        Instance = this;
 
         // Set fullscreen immersive mode
         if (Build.VERSION.SdkInt >= BuildVersionCodes.Kitkat)
@@ -42,5 +44,15 @@ public class Activity1 : AndroidGameActivity
         _game = new Game1();
         SetContentView((View)_game.Services.GetService(typeof(View)));
         _game.Run();
+    }
+
+    /// <summary>
+    /// Properly exit the Android activity and finish the process
+    /// </summary>
+    public void ExitGame()
+    {
+        _game?.Exit();
+        Finish();
+        Java.Lang.JavaSystem.Exit(0);
     }
 }

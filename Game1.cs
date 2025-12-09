@@ -167,7 +167,7 @@ public class Game1 : Game
             
             if (menuScreen.ShouldExit)
             {
-                Exit();
+                ExitGame();
             }
         }
         
@@ -192,5 +192,17 @@ public class Game1 : Game
         _spriteBatch.End();
 
         base.Draw(gameTime);
+    }
+
+    /// <summary>
+    /// Platform-aware exit. On Android, properly finishes the activity.
+    /// </summary>
+    private void ExitGame()
+    {
+#if ANDROID
+        NoPasaranFC.Android.Activity1.Instance?.ExitGame();
+#else
+        Exit();
+#endif
     }
 }
