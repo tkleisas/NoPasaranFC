@@ -89,6 +89,11 @@ namespace NoPasaranFC.Gameplay
         {
             List<Vector2> positions = new List<Vector2>();
             
+#if ANDROID
+            // On Android, use a simpler grid-based approach instead of render targets
+            // which don't work reliably for GetData() on all devices
+            return CreateSimpleTextGrid(text, font);
+#else
             // Render at smaller scale for fewer balls
             float renderScale = 8.0f; // Render text 1.5x larger (smaller bitmap, fewer balls)
             Vector2 textSize = font.MeasureString(text) * renderScale;
@@ -154,6 +159,52 @@ namespace NoPasaranFC.Gameplay
                     $"Render Scale: {renderScale}\n" +
                     $"Bitmap Size: {width}×{height}\n" +
                     $"Ball Count: {positions.Count}\n");
+            }
+            
+            return positions;
+#endif
+        }
+        
+        /// <summary>
+        /// Simple grid-based text representation for Android (no render targets)
+        /// Creates a rough approximation of the text using ball particles
+        /// </summary>
+        private List<Vector2> CreateSimpleTextGrid(string text, SpriteFont font)
+        {
+            List<Vector2> positions = new List<Vector2>();
+            
+            // Measure text to get overall size
+            Vector2 textSize = font.MeasureString(text);
+            float scale = 4f; // Scale factor for ball spacing
+            
+            // Create a grid of balls in a rectangular pattern
+            // This is a simplified version - just creates "GOAL!" text pattern
+            int gridWidth = (int)(textSize.X / 3);
+            int gridHeight = (int)(textSize.Y / 3);
+            
+            // Generate balls in a pattern that roughly represents text
+            // Simple approach: create balls for each character position
+            float charWidth = textSize.X / Math.Max(1, text.Length);
+            float spacing = 8f;
+            
+            for (int charIndex = 0; charIndex < text.Length; charIndex++)
+            {
+                float charCenterX = (charIndex - text.Length / 2f) * charWidth * scale / 2;
+                
+                // Create a simple block pattern for each character
+                for (int y = -2; y <= 2; y++)
+                {
+                    for (int x = -1; x <= 1; x++)
+                    {
+                        // Skip some positions to make it look more like letters
+                        if (y == 0 && x == 0) continue; // hollow center
+                        
+                        positions.Add(new Vector2(
+                            charCenterX + x * spacing,
+                            y * spacing
+                        ));
+                    }
+                }
             }
             
             return positions;

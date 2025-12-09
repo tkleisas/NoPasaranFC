@@ -7,23 +7,45 @@
     <UseKerning>true</UseKerning>
     <Style>Bold</Style>
     <CharacterRegions>
+      <!-- Basic ASCII -->
       <CharacterRegion>
         <Start>&#32;</Start>
         <End>&#126;</End>
       </CharacterRegion>
-      <CharacterRegion>
-        <Start>&#902;</Start>
-        <End>&#974;</End>
-      </CharacterRegion>
-      <!-- Extended Latin and symbols -->
+      <!-- Extended Latin (accented characters) -->
       <CharacterRegion>
         <Start>&#160;</Start>
         <End>&#255;</End>
       </CharacterRegion>
-      <!-- Specific Arrows and Geometric Shapes -->
+      <!-- Greek and Coptic (full range including accented) -->
       <CharacterRegion>
-        <Start>&#9650;</Start>
-        <End>&#9660;</End>
+        <Start>&#880;</Start>
+        <End>&#1023;</End>
+      </CharacterRegion>
+      <!-- Greek Extended (polytonic Greek with diacritics) -->
+      <CharacterRegion>
+        <Start>&#7936;</Start>
+        <End>&#8191;</End>
+      </CharacterRegion>
+      <!-- General Punctuation -->
+      <CharacterRegion>
+        <Start>&#8192;</Start>
+        <End>&#8303;</End>
+      </CharacterRegion>
+      <!-- Arrows -->
+      <CharacterRegion>
+        <Start>&#8592;</Start>
+        <End>&#8703;</End>
+      </CharacterRegion>
+      <!-- Geometric Shapes (triangles) -->
+      <CharacterRegion>
+        <Start>&#9632;</Start>
+        <End>&#9727;</End>
+      </CharacterRegion>
+      <!-- Box Drawing -->
+      <CharacterRegion>
+        <Start>&#9472;</Start>
+        <End>&#9599;</End>
       </CharacterRegion>
     </CharacterRegions>
   </Asset>

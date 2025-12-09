@@ -41,11 +41,16 @@ namespace NoPasaranFC.Database
         
         public static List<Team> LoadTeamsFromJson(string jsonPath)
         {
+            string jsonString = File.ReadAllText(jsonPath, System.Text.Encoding.UTF8);
+            return LoadTeamsFromJsonString(jsonString);
+        }
+        
+        public static List<Team> LoadTeamsFromJsonString(string jsonString)
+        {
             var teams = new List<Team>();
             
             try
             {
-                string jsonString = File.ReadAllText(jsonPath, System.Text.Encoding.UTF8);
                 var seedData = JsonSerializer.Deserialize<TeamSeedData>(jsonString);
                 
                 foreach (var teamData in seedData.teams)

@@ -10,16 +10,17 @@ namespace NoPasaranFC.Database
     {
         private static string GetDatabasePath()
         {
-            // Use AppDomain.CurrentDomain.BaseDirectory to get consistent path
-            // whether running from VS or command line
-            var baseDir = AppDomain.CurrentDomain.BaseDirectory;
-            return System.IO.Path.Combine(baseDir, "nopasaran.db");
+            // Use platform-specific path for cross-platform compatibility
+            return PlatformHelper.GetDatabasePath();
         }
         
         private readonly string ConnectionString;
         
         public DatabaseManager()
         {
+            // Initialize SQLite for the current platform (required for Android)
+            PlatformHelper.InitializeSQLite();
+            
             ConnectionString = $"Data Source={GetDatabasePath()};Mode=ReadWriteCreate;";
             InitializeDatabase();
         }

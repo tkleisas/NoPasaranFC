@@ -1,0 +1,70 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net9.0-android</TargetFramework>
+    <SupportedOSPlatformVersion>21</SupportedOSPlatformVersion>
+    <OutputType>Exe</OutputType>
+    <ApplicationId>com.nopasaranfc.game</ApplicationId>
+    <ApplicationVersion>1</ApplicationVersion>
+    <ApplicationDisplayVersion>1.0</ApplicationDisplayVersion>
+    <ApplicationTitle>NO PASARAN FC</ApplicationTitle>
+    <EnableDefaultItems>false</EnableDefaultItems>
+    <DefineConstants>$(DefineConstants);ANDROID</DefineConstants>
+    <!-- Prevent file locking issues during incremental builds -->
+    <AndroidUseIntermediateDesignerFile>false</AndroidUseIntermediateDesignerFile>
+    <EmbedAssembliesIntoApk>true</EmbedAssembliesIntoApk>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="MonoGame.Framework.Android" Version="3.8.*" />
+    <PackageReference Include="MonoGame.Content.Builder.Task" Version="3.8.*" />
+    <!-- Use bundle version to avoid native library locking issues -->
+    <PackageReference Include="Microsoft.Data.Sqlite.Core" Version="8.0.0" />
+    <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" Version="2.1.10" />
+  </ItemGroup>
+
+  <!-- Include shared source files from main project -->
+  <ItemGroup>
+    <Compile Include="..\Game1.cs" Link="Game1.cs" />
+    <Compile Include="..\PlatformHelper.cs" Link="PlatformHelper.cs" />
+    <Compile Include="..\Models\*.cs" Link="Models\%(Filename)%(Extension)" />
+    <Compile Include="..\Database\*.cs" Link="Database\%(Filename)%(Extension)" />
+    <Compile Include="..\Gameplay\*.cs" Link="Gameplay\%(Filename)%(Extension)" />
+    <Compile Include="..\Gameplay\AIStates\*.cs" Link="Gameplay\AIStates\%(Filename)%(Extension)" />
+    <Compile Include="..\Gameplay\Celebrations\*.cs" Link="Gameplay\Celebrations\%(Filename)%(Extension)" />
+    <Compile Include="..\Screens\*.cs" Link="Screens\%(Filename)%(Extension)" />
+    <Compile Include="Activity1.cs" />
+  </ItemGroup>
+
+  <!-- Use pre-built content for Android (avoid MGCB rebuild issues) -->
+  <!-- Exclude any .db database files - database is created at runtime by seeder -->
+  <ItemGroup>
+    <AndroidAsset Include="..\Content\bin\Android\Content\**\*.*" Exclude="**\*.db" Link="Assets\Content\%(RecursiveDir)%(Filename)%(Extension)" />
+    <AndroidAsset Include="..\Database\teams_seed.json" Link="Assets\Database\teams_seed.json" />
+    <!-- Explicitly exclude database files -->
+    <AndroidAsset Remove="**\*.db" />
+    <AndroidAsset Remove="**\nopasaran.db" />
+  </ItemGroup>
+
+  <!-- Android resources -->
+  <ItemGroup>
+    <AndroidResource Include="Resources\**\*" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="Properties\AndroidManifest.xml" />
+  </ItemGroup>
+
+  <!-- Git commit hash for version info -->
+  <Target Name="GetGitCommitHash" BeforeTargets="BeforeBuild">
+    <Exec Command="git rev-parse --short HEAD" ConsoleToMSBuild="true" IgnoreExitCode="true">
+      <Output TaskParameter="ConsoleOutput" PropertyName="GitCommitHash" />
+    </Exec>
+    <PropertyGroup>
+      <GitCommitHash Condition="'$(GitCommitHash)' == ''">unknown</GitCommitHash>
+    </PropertyGroup>
+    <WriteLinesToFile File="$(IntermediateOutputPath)GitCommitHash.cs" Overwrite="true" Lines="namespace NoPasaranFC.Models%0A{%0A    public static partial class Version%0A    {%0A        public const string COMMIT_HASH = &quot;$(GitCommitHash)&quot;%3B%0A    }%0A}" />
+    <ItemGroup>
+      <Compile Include="$(IntermediateOutputPath)GitCommitHash.cs" />
+    </ItemGroup>
+  </Target>
+</Project>

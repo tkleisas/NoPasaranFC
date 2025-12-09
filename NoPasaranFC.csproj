@@ -11,6 +11,15 @@
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>Icon.ico</ApplicationIcon>
   </PropertyGroup>
+  
+  <!-- Exclude Android project folder from compilation -->
+  <ItemGroup>
+    <Compile Remove="NoPasaranFC.Android\**" />
+    <Content Remove="NoPasaranFC.Android\**" />
+    <EmbeddedResource Remove="NoPasaranFC.Android\**" />
+    <None Remove="NoPasaranFC.Android\**" />
+  </ItemGroup>
+  
   <ItemGroup>
     <None Remove="Icon.ico" />
     <None Remove="Icon.bmp" />

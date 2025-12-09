@@ -80,18 +80,23 @@ namespace NoPasaranFC.Models
                 ["menu.newSeason"] = "NEW SEASON",
                 ["menu.settings"] = "SETTINGS",
                 ["menu.exit"] = "EXIT",
+                ["menu.back"] = "BACK",
                 ["menu.seasonComplete"] = "Season Complete!",
                 
                 // Standings
                 ["standings.title"] = "STANDINGS",
+                ["standings.pos"] = "POS",
                 ["standings.rank"] = "Rank",
                 ["standings.team"] = "Team",
                 ["standings.wins"] = "W",
                 ["standings.draws"] = "D",
                 ["standings.losses"] = "L",
+                ["standings.gf"] = "GF",
+                ["standings.ga"] = "GA",
                 ["standings.goalsFor"] = "GF",
                 ["standings.goalsAgainst"] = "GA",
                 ["standings.points"] = "Pts",
+                ["standings.back"] = "Press ESC or B to go back",
                 
                 // Match
                 ["match.goal"] = "GOAL!",
@@ -171,18 +176,23 @@ namespace NoPasaranFC.Models
                 ["menu.newSeason"] = "ΝΕΟ ΠΡΩΤΑΘΛΗΜΑ",
                 ["menu.settings"] = "ΕΠΙΛΟΓΕΣ",
                 ["menu.exit"] = "ΕΞΟΔΟΣ",
+                ["menu.back"] = "ΠΙΣΩ",
                 ["menu.seasonComplete"] = "Τέλος Σεζόν!",
                 
                 // Standings
                 ["standings.title"] = "ΒΑΘΜΟΛΟΓΙΑ",
+                ["standings.pos"] = "ΘΕΣΗ",
                 ["standings.rank"] = "Θέση",
                 ["standings.team"] = "Ομάδα",
                 ["standings.wins"] = "Ν",
                 ["standings.draws"] = "Ι",
                 ["standings.losses"] = "Η",
+                ["standings.gf"] = "ΓΥ",
+                ["standings.ga"] = "ΓΚ",
                 ["standings.goalsFor"] = "ΓΥ",
                 ["standings.goalsAgainst"] = "ΓΚ",
                 ["standings.points"] = "Βαθ",
+                ["standings.back"] = "Πατήστε ESC ή B για επιστροφή",
                 
                 // Match
                 ["match.goal"] = "ΓΚΟΛ!",

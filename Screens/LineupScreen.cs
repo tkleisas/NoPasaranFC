@@ -67,13 +67,24 @@ namespace NoPasaranFC.Screens
             _pixel = new Texture2D(GraphicsDevice, 1, 1);
             _pixel.SetData(new[] { Color.White });
         }
+        private float _joystickMenuCooldown = 0f;
 
         public override void Update(GameTime gameTime)
         {
             _input.Update();
+            var touchUI = Gameplay.TouchUI.Instance;
+            
+            // Touch/Joystick navigation with cooldown
+            Vector2 joystickDir = touchUI.JoystickDirection;
+            bool menuDown = _input.IsMenuDownPressed() || (touchUI.Enabled && joystickDir.Y > 0.5f && _joystickMenuCooldown <= 0);
+            bool menuUp = _input.IsMenuUpPressed() || (touchUI.Enabled && joystickDir.Y < -0.5f && _joystickMenuCooldown <= 0);
+            
+            // Update cooldown
+            if (_joystickMenuCooldown > 0)
+                _joystickMenuCooldown -= (float)gameTime.ElapsedGameTime.TotalSeconds;
             
             // Navigation
-            if (_input.IsMenuDownPressed())
+            if (menuDown)
             {
                 _selectedIndex = (_selectedIndex + 1) % _allPlayers.Count;
                 
@@ -84,8 +95,9 @@ namespace NoPasaranFC.Screens
                 }
                 
                 Gameplay.AudioManager.Instance.PlaySoundEffect("menu_move");
+                _joystickMenuCooldown = 0.15f;
             }
-            else if (_input.IsMenuUpPressed())
+            else if (menuUp)
             {
                 _selectedIndex = (_selectedIndex - 1 + _allPlayers.Count) % _allPlayers.Count;
                 
@@ -96,6 +108,7 @@ namespace NoPasaranFC.Screens
                 }
                 
                 Gameplay.AudioManager.Instance.PlaySoundEffect("menu_move");
+                _joystickMenuCooldown = 0.15f;
             }
             
             // PageUp/PageDown still use raw keyboard (TODO: add to InputHelper)
@@ -114,8 +127,8 @@ namespace NoPasaranFC.Screens
                 Gameplay.AudioManager.Instance.PlaySoundEffect("menu_move");
             }
             
-            // Toggle starting status (Space or X button)
-            if (_input.IsSwitchPlayerPressed())
+            // Toggle starting status (Space, X button, or touch X)
+            if (_input.IsSwitchPlayerPressed() || touchUI.IsSwitchJustPressed)
             {
                 var player = _allPlayers[_selectedIndex];
                 int currentStartingCount = _allPlayers.Count(p => p.IsStarting);
@@ -137,8 +150,8 @@ namespace NoPasaranFC.Screens
                 }
             }
             
-            // Confirm lineup and start match (Enter or A button)
-            if (_input.IsConfirmPressed())
+            // Confirm lineup and start match (Enter, A button, or touch A)
+            if (_input.IsConfirmPressed() || touchUI.IsActionJustPressed)
             {
                 int startingCount = _allPlayers.Count(p => p.IsStarting);
                 
@@ -163,8 +176,8 @@ namespace NoPasaranFC.Screens
                 }
             }
             
-            // Cancel (Escape or B button)
-            if (_input.IsBackPressed())
+            // Cancel (Escape, B button, or touch B)
+            if (_input.IsBackPressed() || touchUI.IsBackJustPressed)
             {
                 Gameplay.AudioManager.Instance.PlaySoundEffect("menu_back");
                 IsFinished = true;

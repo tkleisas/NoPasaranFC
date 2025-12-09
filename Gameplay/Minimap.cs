@@ -12,11 +12,15 @@ namespace NoPasaranFC.Gameplay
         
         public Minimap(int screenWidth, int screenHeight, int minimapWidth, int minimapHeight)
         {
-            // Position minimap in bottom-right corner
-            int margin = 10;
+            // Apply 150% scale
+            minimapWidth = (int)(minimapWidth * 1.5f);
+            minimapHeight = (int)(minimapHeight * 1.5f);
+            
+            // Position minimap at top center, underneath the score (around y=50)
+            int topMargin = 50; // Below the score display
             _minimapRect = new Rectangle(
-                screenWidth - minimapWidth - margin,
-                screenHeight - minimapHeight - margin,
+                (screenWidth - minimapWidth) / 2,
+                topMargin,
                 minimapWidth,
                 minimapHeight
             );

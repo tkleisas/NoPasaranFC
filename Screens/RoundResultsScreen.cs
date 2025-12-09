@@ -37,8 +37,13 @@ namespace NoPasaranFC.Screens
             _trophySprite = _contentManager.Load<Texture2D>("Sprites/trophy");
         }
         
+        private Gameplay.InputHelper _input = new Gameplay.InputHelper();
+        
         public override void Update(GameTime gameTime)
         {
+            _input.Update();
+            var touchUI = Gameplay.TouchUI.Instance;
+            
             // Load font on first update if not loaded
             if (_font == null)
             {
@@ -47,9 +52,10 @@ namespace NoPasaranFC.Screens
             
             KeyboardState keyboardState = Keyboard.GetState();
             
-            // Press Enter or Space to continue
+            // Press Enter, Space, A, or B to continue
             if ((keyboardState.IsKeyDown(Keys.Enter) && _previousKeyboardState.IsKeyUp(Keys.Enter)) ||
-                (keyboardState.IsKeyDown(Keys.Space) && _previousKeyboardState.IsKeyUp(Keys.Space)))
+                (keyboardState.IsKeyDown(Keys.Space) && _previousKeyboardState.IsKeyUp(Keys.Space)) ||
+                _input.IsConfirmPressed() || touchUI.IsActionJustPressed || touchUI.IsBackJustPressed)
             {
                 // Pop back to menu
                 _screenManager.PopScreen();
