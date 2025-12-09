@@ -119,14 +119,15 @@ namespace NoPasaranFC.Gameplay
         
         private void UpdateButtonAreas()
         {
-            int buttonSize = (int)(100 * UIScale);
+            int buttonSize = (int)(120 * UIScale);  // Increased from 100 to 120
             int padding = (int)(20 * UIScale);
-            int smallButtonSize = (int)(70 * UIScale);
+            int smallButtonSize = (int)(85 * UIScale);  // Increased from 70 to 85
+            int verticalOffset = (int)(40 * UIScale);  // Move buttons up by 40 pixels
             
             // Action button (A) - bottom right, largest
             _actionButtonArea = new Rectangle(
                 ScreenWidth - buttonSize - padding,
-                ScreenHeight - buttonSize - padding,
+                ScreenHeight - buttonSize - padding - verticalOffset,
                 buttonSize,
                 buttonSize
             );
@@ -134,7 +135,7 @@ namespace NoPasaranFC.Gameplay
             // Switch button (X) - above action button
             _switchButtonArea = new Rectangle(
                 ScreenWidth - buttonSize - padding,
-                ScreenHeight - buttonSize * 2 - padding * 2,
+                ScreenHeight - buttonSize * 2 - padding * 2 - verticalOffset,
                 buttonSize,
                 buttonSize
             );
@@ -142,7 +143,7 @@ namespace NoPasaranFC.Gameplay
             // Back button (B) - to the left of action button
             _backButtonArea = new Rectangle(
                 ScreenWidth - buttonSize * 2 - padding * 2,
-                ScreenHeight - buttonSize - padding,
+                ScreenHeight - buttonSize - padding - verticalOffset,
                 smallButtonSize,
                 smallButtonSize
             );
@@ -150,7 +151,7 @@ namespace NoPasaranFC.Gameplay
             // Default joystick center (bottom left)
             _joystickCenter = new Vector2(
                 padding + buttonSize,
-                ScreenHeight - padding - buttonSize
+                ScreenHeight - padding - buttonSize - verticalOffset
             );
         }
         

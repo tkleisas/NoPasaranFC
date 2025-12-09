@@ -13,6 +13,7 @@ namespace NoPasaranFC.Models
         private float _animationTimer;
         private int _currentFrameIndex;
         private int _additionalRotation; // For directional rotation
+        private bool _animationFinished; // Track if non-looping animation has completed
         
         private const int SpriteSize = 64;
         private const int SpritesPerRow = 4;
@@ -26,6 +27,7 @@ namespace NoPasaranFC.Models
             _animationTimer = 0f;
             _currentFrameIndex = 0;
             _additionalRotation = 0;
+            _animationFinished = false;
         }
         
         public static void LoadSharedResources(ContentManager content)
@@ -119,6 +121,7 @@ namespace NoPasaranFC.Models
                 _currentAnimation = _sharedAnimations[animationName];
                 _animationTimer = 0f;
                 _currentFrameIndex = 0;
+                _animationFinished = false;
             }
         }
         
@@ -147,6 +150,7 @@ namespace NoPasaranFC.Models
                     else
                     {
                         _currentFrameIndex = _currentAnimation.Frames.Count - 1;
+                        _animationFinished = true; // Mark animation as finished
                     }
                 }
             }
@@ -155,9 +159,7 @@ namespace NoPasaranFC.Models
         public bool IsAnimationFinished()
         {
             if (_currentAnimation == null || _currentAnimation.Loop) return false;
-            // Animation is finished when we're on the last frame AND the frame duration has elapsed
-            return _currentFrameIndex >= _currentAnimation.Frames.Count - 1 && 
-                   _animationTimer >= _currentAnimation.FrameDuration;
+            return _animationFinished;
         }
         
         public void Draw(SpriteBatch spriteBatch, Vector2 position, bool isHomeTeam, Color tint, float scale = 2f, string kitname = null)

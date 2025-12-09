@@ -80,6 +80,7 @@ namespace NoPasaranFC.Models
                 ["menu.newSeason"] = "NEW SEASON",
                 ["menu.settings"] = "SETTINGS",
                 ["menu.exit"] = "EXIT",
+                ["menu.back"] = "BACK",
                 ["menu.seasonComplete"] = "Season Complete!",
                 
                 // Standings
@@ -175,6 +176,7 @@ namespace NoPasaranFC.Models
                 ["menu.newSeason"] = "ΝΕΟ ΠΡΩΤΑΘΛΗΜΑ",
                 ["menu.settings"] = "ΕΠΙΛΟΓΕΣ",
                 ["menu.exit"] = "ΕΞΟΔΟΣ",
+                ["menu.back"] = "ΠΙΣΩ",
                 ["menu.seasonComplete"] = "Τέλος Σεζόν!",
                 
                 // Standings
