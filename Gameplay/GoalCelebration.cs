@@ -90,125 +90,214 @@ namespace NoPasaranFC.Gameplay
         {
             List<Vector2> positions = new List<Vector2>();
             
-#if ANDROID
-            // On Android, use a simpler grid-based approach instead of render targets
-            // which don't work reliably for GetData() on all devices
-            return CreateSimpleTextGrid(text, font);
-#else
-            // Render at smaller scale for fewer balls
-            float renderScale = 8.0f; // Render text 1.5x larger (smaller bitmap, fewer balls)
-            Vector2 textSize = font.MeasureString(text) * renderScale;
-            int width = (int)Math.Ceiling(textSize.X);
-            int height = (int)Math.Ceiling(textSize.Y);
-            
-            if (width <= 0 || height <= 0)
-                return positions;
-            
-            // Create render target at scaled size
-            using (RenderTarget2D renderTarget = new RenderTarget2D(
-                graphicsDevice, 
-                width, 
-                height, 
-                false, 
-                SurfaceFormat.Color, 
-                DepthFormat.None))
+            try
             {
-                // Render text to target
-                graphicsDevice.SetRenderTarget(renderTarget);
-                graphicsDevice.Clear(Color.Transparent);
+                // Render at smaller scale for fewer balls
+                float renderScale = 8.0f; // Render text larger (smaller bitmap, fewer balls)
+                Vector2 textSize = font.MeasureString(text) * renderScale;
+                int width = (int)Math.Ceiling(textSize.X);
+                int height = (int)Math.Ceiling(textSize.Y);
                 
-                using (SpriteBatch spriteBatch = new SpriteBatch(graphicsDevice))
+                if (width <= 0 || height <= 0)
+                    return positions;
+                
+                // Create render target at scaled size
+                using (RenderTarget2D renderTarget = new RenderTarget2D(
+                    graphicsDevice, 
+                    width, 
+                    height, 
+                    false, 
+                    SurfaceFormat.Color, 
+                    DepthFormat.None))
                 {
-                    // Use scale matrix to render text larger with point sampling (no AA)
-                    spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, 
-                        SamplerState.PointClamp, // Point sampling = no anti-aliasing
-                        null, null, null, Matrix.CreateScale(renderScale));
-                    spriteBatch.DrawString(font, text, Vector2.Zero, Color.White);
-                    spriteBatch.End();
-                }
-                
-                // Reset render target before reading pixels
-                graphicsDevice.SetRenderTarget(null);
-                
-                // Extract pixels
-                Color[] pixels = new Color[width * height];
-                renderTarget.GetData(pixels);
-                
-                // Render one ball per visible pixel with spacing
-                float ballSpacingScale = 1.5f; // Scale to add space between balls
-                
-                for (int y = 0; y < height; y++)
-                {
-                    for (int x = 0; x < width; x++)
+                    // Render text to target
+                    graphicsDevice.SetRenderTarget(renderTarget);
+                    graphicsDevice.Clear(Color.Transparent);
+                    
+                    using (SpriteBatch spriteBatch = new SpriteBatch(graphicsDevice))
                     {
-                        int index = y * width + x;
-                        
-                        // If this pixel is visible, place a ball
-                        if (index < pixels.Length && pixels[index].A > 200)
+                        // Use scale matrix to render text larger with point sampling (no AA)
+                        spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, 
+                            SamplerState.PointClamp, // Point sampling = no anti-aliasing
+                            null, null, null, Matrix.CreateScale(renderScale));
+                        spriteBatch.DrawString(font, text, Vector2.Zero, Color.White);
+                        spriteBatch.End();
+                    }
+                    
+                    // Reset render target before reading pixels
+                    graphicsDevice.SetRenderTarget(null);
+                    
+                    // Extract pixels
+                    Color[] pixels = new Color[width * height];
+                    renderTarget.GetData(pixels);
+                    
+                    // Render one ball per visible pixel with spacing
+                    float ballSpacingScale = 1.5f; // Scale to add space between balls
+                    
+                    for (int y = 0; y < height; y++)
+                    {
+                        for (int x = 0; x < width; x++)
                         {
-                            // Convert to centered coordinates and apply spacing scale
-                            float posX = (x - width / 2f) * ballSpacingScale;
-                            float posY = (y - height / 2f) * ballSpacingScale;
-                            positions.Add(new Vector2(posX, posY));
+                            int index = y * width + x;
+                            
+                            // If this pixel is visible, place a ball
+                            if (index < pixels.Length && pixels[index].A > 200)
+                            {
+                                // Convert to centered coordinates and apply spacing scale
+                                float posX = (x - width / 2f) * ballSpacingScale;
+                                float posY = (y - height / 2f) * ballSpacingScale;
+                                positions.Add(new Vector2(posX, posY));
+                            }
                         }
                     }
                 }
-                
-                // Debug output
-                System.IO.File.WriteAllText("celebration_debug.txt", 
-                    $"Text: '{text}'\n" +
-                    $"Render Scale: {renderScale}\n" +
-                    $"Bitmap Size: {width}×{height}\n" +
-                    $"Ball Count: {positions.Count}\n");
+            }
+            catch (Exception)
+            {
+                // Fallback to simple grid if render target fails on some devices
+                return CreateSimpleTextGrid(text, font);
             }
             
             return positions;
-#endif
         }
         
         /// <summary>
-        /// Simple grid-based text representation for Android (no render targets)
-        /// Creates a rough approximation of the text using ball particles
+        /// Pixel-based text representation for Android (no render targets)
+        /// Creates ball positions based on predefined letter pixel patterns
         /// </summary>
         private List<Vector2> CreateSimpleTextGrid(string text, SpriteFont font)
         {
             List<Vector2> positions = new List<Vector2>();
             
-            // Measure text to get overall size
-            Vector2 textSize = font.MeasureString(text);
-            float scale = 4f; // Scale factor for ball spacing
-            
-            // Create a grid of balls in a rectangular pattern
-            // This is a simplified version - just creates "GOAL!" text pattern
-            int gridWidth = (int)(textSize.X / 3);
-            int gridHeight = (int)(textSize.Y / 3);
-            
-            // Generate balls in a pattern that roughly represents text
-            // Simple approach: create balls for each character position
-            float charWidth = textSize.X / Math.Max(1, text.Length);
-            float spacing = 8f;
+            float spacing = 6f; // Space between balls
+            float charSpacing = 42f; // Space between characters
+            float startX = -(text.Length - 1) * charSpacing / 2f;
             
             for (int charIndex = 0; charIndex < text.Length; charIndex++)
             {
-                float charCenterX = (charIndex - text.Length / 2f) * charWidth * scale / 2;
+                float charCenterX = startX + charIndex * charSpacing;
+                char c = text[charIndex];
                 
-                // Create a simple block pattern for each character
-                for (int y = -2; y <= 2; y++)
+                // Get pixel pattern for this character
+                bool[,] pattern = GetCharacterPattern(c);
+                if (pattern == null) continue;
+                
+                int height = pattern.GetLength(0);
+                int width = pattern.GetLength(1);
+                
+                for (int y = 0; y < height; y++)
                 {
-                    for (int x = -1; x <= 1; x++)
+                    for (int x = 0; x < width; x++)
                     {
-                        // Skip some positions to make it look more like letters
-                        if (y == 0 && x == 0) continue; // hollow center
-                        
-                        positions.Add(new Vector2(
-                            charCenterX + x * spacing,
-                            y * spacing
-                        ));
+                        if (pattern[y, x])
+                        {
+                            positions.Add(new Vector2(
+                                charCenterX + (x - width / 2f) * spacing,
+                                (y - height / 2f) * spacing
+                            ));
+                        }
                     }
                 }
             }
             
             return positions;
+        }
+        
+        /// <summary>
+        /// Returns a pixel pattern for common characters used in goal celebrations
+        /// Each pattern is a 7-row bitmap (true = ball, false = empty)
+        /// </summary>
+        private bool[,] GetCharacterPattern(char c)
+        {
+            // 7x5 pixel patterns for letters
+            return c switch
+            {
+                // Greek ΓΚΟΛ! (Goal in Greek)
+                'Γ' => new bool[,] {
+                    { true, true, true, true, true },
+                    { true, false, false, false, false },
+                    { true, false, false, false, false },
+                    { true, false, false, false, false },
+                    { true, false, false, false, false },
+                    { true, false, false, false, false },
+                    { true, false, false, false, false }
+                },
+                'Κ' or 'K' => new bool[,] {
+                    { true, false, false, false, true },
+                    { true, false, false, true, false },
+                    { true, false, true, false, false },
+                    { true, true, false, false, false },
+                    { true, false, true, false, false },
+                    { true, false, false, true, false },
+                    { true, false, false, false, true }
+                },
+                'Ο' or 'O' => new bool[,] {
+                    { false, true, true, true, false },
+                    { true, false, false, false, true },
+                    { true, false, false, false, true },
+                    { true, false, false, false, true },
+                    { true, false, false, false, true },
+                    { true, false, false, false, true },
+                    { false, true, true, true, false }
+                },
+                'Λ' => new bool[,] {
+                    { false, false, true, false, false },
+                    { false, false, true, false, false },
+                    { false, true, false, true, false },
+                    { false, true, false, true, false },
+                    { true, false, false, false, true },
+                    { true, false, false, false, true },
+                    { true, false, false, false, true }
+                },
+                // English GOAL!
+                'G' => new bool[,] {
+                    { false, true, true, true, false },
+                    { true, false, false, false, true },
+                    { true, false, false, false, false },
+                    { true, false, true, true, true },
+                    { true, false, false, false, true },
+                    { true, false, false, false, true },
+                    { false, true, true, true, false }
+                },
+                'A' => new bool[,] {
+                    { false, false, true, false, false },
+                    { false, true, false, true, false },
+                    { true, false, false, false, true },
+                    { true, true, true, true, true },
+                    { true, false, false, false, true },
+                    { true, false, false, false, true },
+                    { true, false, false, false, true }
+                },
+                'L' => new bool[,] {
+                    { true, false, false, false, false },
+                    { true, false, false, false, false },
+                    { true, false, false, false, false },
+                    { true, false, false, false, false },
+                    { true, false, false, false, false },
+                    { true, false, false, false, false },
+                    { true, true, true, true, true }
+                },
+                '!' => new bool[,] {
+                    { true },
+                    { true },
+                    { true },
+                    { true },
+                    { true },
+                    { false },
+                    { true }
+                },
+                // Space or unknown
+                ' ' => null,
+                _ => new bool[,] {
+                    { true, true, true, true, true },
+                    { true, false, false, false, true },
+                    { true, false, false, false, true },
+                    { true, false, false, false, true },
+                    { true, false, false, false, true },
+                    { true, false, false, false, true },
+                    { true, true, true, true, true }
+                }
+            };
         }
         
         public void Update(float deltaTime)
