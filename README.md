@@ -2,6 +2,8 @@
 
 A top-down 2D soccer game built with C# .NET and MonoGame, inspired by classic games like Sensible Soccer and Tecmo World Cup.
 
+**Now available on Windows, Linux, macOS, and Android!**
+
 ## 🎥 Gameplay Video
 
 [![No Pasaran FC v1.0.4 Gameplay](https://img.youtube.com/vi/0NB9AkLI7O0/0.jpg)](https://www.youtube.com/watch?v=0NB9AkLI7O0)
@@ -134,59 +136,84 @@ Manage and play as **NO PASARAN!** in an 8-team championship. Control one player
 ## How to Run
 
 ### Prerequisites
+
+#### Desktop (Windows/Linux/macOS)
 - .NET 9.0 SDK (or .NET 8.0+)
-- Windows, Linux, or macOS
+
+#### Android
+- .NET 9.0 SDK with Android workload
+- Android SDK (included with Visual Studio or Android Studio)
+- Android device with USB debugging enabled, or Android emulator
 
 ### Build and Run
 
-#### From Command Line (Recommended)
+#### Desktop - From Command Line (Recommended)
 ```bash
 cd NoPasaranFC
 dotnet build
 dotnet run
 ```
 
-#### From Visual Studio
-1. Open `NoPasaranFC.csproj` in Visual Studio
-2. Press F5 or click Run
-3. **Note:** The game works fine in Visual Studio - it just doesn't show console debug output since it's configured as a Windows application (WinExe)
+#### Desktop - From Visual Studio
+1. Open `NoPasaranFC.sln` in Visual Studio
+2. Set `NoPasaranFC` as startup project
+3. Press F5 or click Run
+
+#### Android - Build and Deploy
+```powershell
+# Clean build and deploy to connected device
+.\clean-and-build-android.ps1
+```
+
+Or manually:
+```bash
+dotnet build NoPasaranFC.Android\NoPasaranFC.Android.csproj -t:Install -c Debug
+```
+
+#### Android - Build APK for Distribution
+```powershell
+# Creates NoPasaranFC.apk in project root
+.\build-apk.ps1
+```
+
+The APK can be sideloaded onto any Android device (enable "Install from unknown sources" in device settings).
 
 ## 🎮 Controls
 
-**Supports both Keyboard and Xbox-compatible GamePads!**
+**Supports Keyboard, Xbox-compatible GamePads, and Touch Controls (Android)!**
 
 ### Menu Navigation
-| Action | Keyboard | GamePad |
-|--------|----------|---------|
-| Navigate | Up/Down Arrows | D-Pad / Left Stick |
-| Confirm | Enter | A Button / Start |
-| Back/Exit | Escape | B Button |
+| Action | Keyboard | GamePad | Touch (Android) |
+|--------|----------|---------|-----------------|
+| Navigate | Up/Down Arrows | D-Pad / Left Stick | Virtual Joystick |
+| Confirm | Enter | A Button / Start | A Button |
+| Back/Exit | Escape | B Button | B Button |
 
 ### Lineup Selection
-| Action | Keyboard | GamePad |
-|--------|----------|---------|
-| Navigate | Up/Down Arrows | D-Pad / Left Stick |
-| Toggle Starter | Space | X Button |
-| Quick Scroll | Page Up/Down | — |
-| Confirm Lineup | Enter | A Button |
-| Cancel | Escape | B Button |
+| Action | Keyboard | GamePad | Touch (Android) |
+|--------|----------|---------|-----------------|
+| Navigate | Up/Down Arrows | D-Pad / Left Stick | Virtual Joystick |
+| Toggle Starter | Space | X Button | X Button |
+| Quick Scroll | Page Up/Down | — | — |
+| Confirm Lineup | Enter | A Button | A Button |
+| Cancel | Escape | B Button | B Button |
 
 ### During Match
-| Action | Keyboard | GamePad |
-|--------|----------|---------|
-| Move Player | Arrow Keys / WASD | Left Stick / D-Pad |
-| Shoot/Pass | X (tap/hold) | A Button (tap/hold) |
-| Switch Player | Space | X Button |
-| Pause/Exit | Escape | B Button |
+| Action | Keyboard | GamePad | Touch (Android) |
+|--------|----------|---------|-----------------|
+| Move Player | Arrow Keys / WASD | Left Stick / D-Pad | Virtual Joystick |
+| Shoot/Pass | X (tap/hold) | A Button (tap/hold) | A Button |
+| Switch Player | Space | X Button | X Button |
+| Pause/Exit | Escape | B Button | B Button |
 
 ### Settings Screen
-| Action | Keyboard | GamePad |
-|--------|----------|---------|
-| Navigate | Up/Down Arrows | D-Pad / Left Stick |
-| Adjust Values | Left/Right Arrows | — |
-| Quick Scroll | Page Up/Down | — |
-| Save | Enter | A Button |
-| Cancel | Escape | B Button |
+| Action | Keyboard | GamePad | Touch (Android) |
+|--------|----------|---------|-----------------|
+| Navigate | Up/Down Arrows | D-Pad / Left Stick | Virtual Joystick |
+| Adjust Values | Left/Right Arrows | — | Joystick Left/Right |
+| Quick Scroll | Page Up/Down | — | — |
+| Save | Enter | A Button | A Button |
+| Cancel | Escape | B Button | B Button |
 
 See **GAMEPAD_SUPPORT.md** for detailed controller information.
 
@@ -231,17 +258,28 @@ NoPasaranFC/
 ├── Gameplay/         # Match engine and game logic
 ├── Screens/          # UI screens and navigation
 ├── Content/          # Game assets (fonts, sprites)
-└── Game1.cs          # Main game loop
+├── Game1.cs          # Main game loop
+└── NoPasaranFC.Android/  # Android-specific project
+    ├── Activity1.cs      # Android main activity
+    └── AndroidManifest.xml
 ```
 
 ## 🔧 Technical Details
 
 ### Technology Stack
 - **Framework**: .NET 9.0 (compatible with .NET 8.0+)
-- **Game Engine**: MonoGame 3.8 (DesktopGL)
+- **Game Engine**: MonoGame 3.8 (DesktopGL for desktop, Android for mobile)
 - **Database**: SQLite 9.0 (Microsoft.Data.Sqlite)
 - **Graphics**: 2D sprite sheets with animation
 - **Audio**: .wav (SFX), .mp3/.ogg (music)
+- **Platforms**: Windows, Linux, macOS, Android
+
+### Android-Specific Features
+- **Touch Controls**: Virtual joystick and buttons (A, B, X)
+- **Adaptive UI**: Scaled for different screen densities
+- **Platform-Aware Settings**: Android settings screen excludes desktop-only options (Resolution, Fullscreen, VSync)
+- **Database Path**: Uses Android's internal storage for SQLite database
+- **Immersive Mode**: Full-screen experience with hidden system bars
 
 ### Performance
 - **Field Size**: 3200x2400 pixels with 200px margins
@@ -304,7 +342,15 @@ NoPasaranFC/
 - **AI_*.md**: Comprehensive AI documentation (Passing, Positioning, State Machine)
 - **SETTINGS_*.md**: Settings system documentation
 
-## 🚀 Current Status (v1.1.0)
+## 🚀 Current Status (v1.2.0)
+
+### What's New in v1.2.0
+- 📱 **Android Support**: Full mobile port with touch controls
+- 🕹️ **Virtual Controls**: Joystick and buttons optimized for touchscreen
+- 📐 **Adaptive UI**: Automatic scaling for different screen sizes
+- ⚙️ **Platform-Aware Settings**: Android excludes desktop-only options
+- 🎬 **Animation Fixes**: Resolved stuck tackle animation issue
+- 🗃️ **Database Improvements**: Platform-specific storage paths
 
 ### What's New in v1.1.0
 - 🧠 **Advanced AI State Machine**: Complete overhaul of AI with position-aware roles (GK/DEF/MID/FWD)
@@ -317,16 +363,17 @@ NoPasaranFC/
 - 🔤 **Font Update**: Switched to Inconsolata LGC for better cross-platform support
 
 ### Status
-**Fully Playable!** All core features implemented and polished:
+**Fully Playable on Desktop and Android!** All core features implemented and polished:
 - ✅ Championship mode with 8 teams and full season tracking
 - ✅ Advanced match gameplay with state-machine AI
 - ✅ Flexible rosters (11+) with pre-match lineup selection
 - ✅ Database persistence with UTF-8 support
 - ✅ Complete audio system (music + SFX with smart playback)
 - ✅ Animated sprites with stamina visualization
-- ✅ Comprehensive settings system (17 options)
+- ✅ Comprehensive settings system (platform-aware)
 - ✅ Full Greek/English localization
 - ✅ Gamepad support (Xbox-compatible controllers)
+- ✅ Touch controls for Android
 - ✅ Difficulty levels with stamina system
 - ✅ Realistic field dimensions and goalposts
 - ✅ Corner/goal kick logic with last-touch detection
@@ -334,6 +381,7 @@ NoPasaranFC/
 ## 🎯 Future Enhancements
 
 Potential improvements for future versions:
+- [ ] iOS support
 - [ ] Substitution system during matches
 - [ ] Fouls and yellow/red cards
 - [ ] Offsides detection
