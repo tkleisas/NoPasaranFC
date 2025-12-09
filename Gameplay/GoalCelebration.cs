@@ -27,6 +27,7 @@ namespace NoPasaranFC.Gameplay
         
         private BallParticle[] _ballParticles;
         
+        public float Timer => _timer;
         public bool IsActive => _isActive;
         
         public void Start(string text, SpriteFont font, GraphicsDevice graphicsDevice, float? customDuration = null)
@@ -344,8 +345,8 @@ namespace NoPasaranFC.Gameplay
 
         public bool ShouldShowSkipMessage()
         {
-            // Show skip message after the visual animation ends
-            return _isActive && _timer > VisualDuration;
+            // Show skip message only after 5 seconds (when skipping is allowed)
+            return _isActive && _timer > 5.0f;
         }
     }
 }

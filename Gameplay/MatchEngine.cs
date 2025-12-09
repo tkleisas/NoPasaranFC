@@ -324,8 +324,9 @@ namespace NoPasaranFC.Gameplay
                 float targetZoom = _normalZoom * zoomMultiplier;
                 Camera.Zoom = MathHelper.Lerp(Camera.Zoom, targetZoom, deltaTime * 2f);
 
-                // Check if user wants to skip celebration (any key press)
-                if (moveDirection.LengthSquared() > 0 || isShootKeyDown)
+                // Check if user wants to skip celebration (any key press) - only after 5 seconds
+                const float MinCelebrationTime = 5.0f;
+                if (GoalCelebration.Timer >= MinCelebrationTime && (moveDirection.LengthSquared() > 0 || isShootKeyDown))
                 {
                     GoalCelebration.Stop();
                     CelebrationManager.StopCelebration();

@@ -43,6 +43,11 @@ namespace NoPasaranFC.Gameplay
         private bool _switchPressed;
         private bool _switchPreviousPressed;
         
+        // Back button hold timer (0.3 second hold required)
+        private float _backButtonHoldTime;
+        private const float BackButtonHoldThreshold = 0.3f;
+        private bool _backButtonHeld; // True when held long enough
+        
         // Touch state
         private TouchCollection _currentTouchState;
         private TouchCollection _previousTouchState;
@@ -50,10 +55,13 @@ namespace NoPasaranFC.Gameplay
         // Public properties for input checking
         public bool IsActionPressed => _actionPressed;
         public bool IsActionJustPressed => _actionPressed && !_actionPreviousPressed;
-        public bool IsBackPressed => _backPressed;
-        public bool IsBackJustPressed => _backPressed && !_backPreviousPressed;
+        public bool IsBackPressed => _backButtonHeld; // Only true after held 0.3s
+        public bool IsBackJustPressed => _backButtonHeld && !_backPreviousPressed;
         public bool IsSwitchPressed => _switchPressed;
         public bool IsSwitchJustPressed => _switchPressed && !_switchPreviousPressed;
+        
+        // Back button hold progress (0.0 to 1.0)
+        public float BackButtonHoldProgress => _backPressed ? Math.Min(_backButtonHoldTime / BackButtonHoldThreshold, 1f) : 0f;
         
         public Vector2 JoystickDirection
         {
@@ -140,10 +148,10 @@ namespace NoPasaranFC.Gameplay
                 buttonSize
             );
             
-            // Back button (B) - to the left of action button
+            // Back/Menu button (B) - TOP RIGHT corner (requires 0.3s hold)
             _backButtonArea = new Rectangle(
-                ScreenWidth - buttonSize * 2 - padding * 2,
-                ScreenHeight - buttonSize - padding - verticalOffset,
+                ScreenWidth - smallButtonSize - padding,
+                padding,
                 smallButtonSize,
                 smallButtonSize
             );
@@ -155,19 +163,21 @@ namespace NoPasaranFC.Gameplay
             );
         }
         
-        public void Update()
+        public void Update(GameTime gameTime = null)
         {
             if (!Enabled) return;
             
+            float deltaTime = gameTime != null ? (float)gameTime.ElapsedGameTime.TotalSeconds : 0.016f;
+            
             _previousTouchState = _currentTouchState;
             _actionPreviousPressed = _actionPressed;
-            _backPreviousPressed = _backPressed;
+            _backPreviousPressed = _backButtonHeld;
             _switchPreviousPressed = _switchPressed;
             
             _currentTouchState = TouchPanel.GetState();
             
             _actionPressed = false;
-            _backPressed = false;
+            bool backTouched = false;
             _switchPressed = false;
             
             bool joystickTouchFound = false;
@@ -183,7 +193,7 @@ namespace NoPasaranFC.Gameplay
                 }
                 else if (_backButtonArea.Contains(touchPoint))
                 {
-                    _backPressed = true;
+                    backTouched = true;
                 }
                 else if (_switchButtonArea.Contains(touchPoint))
                 {
@@ -213,6 +223,23 @@ namespace NoPasaranFC.Gameplay
                     _joystickPosition = touch.Position;
                     joystickTouchFound = true;
                 }
+            }
+            
+            // Handle back button hold timer
+            if (backTouched)
+            {
+                _backPressed = true;
+                _backButtonHoldTime += deltaTime;
+                if (_backButtonHoldTime >= BackButtonHoldThreshold)
+                {
+                    _backButtonHeld = true;
+                }
+            }
+            else
+            {
+                _backPressed = false;
+                _backButtonHoldTime = 0f;
+                _backButtonHeld = false;
             }
             
             if (!joystickTouchFound)
@@ -260,7 +287,7 @@ namespace NoPasaranFC.Gameplay
             
             Color buttonColor = new Color(255, 255, 255, 80);
             Color buttonPressedColor = new Color(255, 255, 255, 160);
-            Color textColor = new Color(255, 255, 255, 200);
+            Color textColor = new Color(40, 40, 40, 255); // Dark text for visibility
             
             // Draw joystick
             float joystickScale = 1.5f; // 150% size
@@ -297,11 +324,19 @@ namespace NoPasaranFC.Gameplay
                 _actionButtonArea.Width / 2, actionColor);
             DrawButtonLabel(spriteBatch, font, "A", _actionButtonArea, textColor);
             
-            // Draw back button (B)
-            Color backColor = _backPressed ? buttonPressedColor : buttonColor;
-            DrawFilledCircle(spriteBatch, 
-                new Vector2(_backButtonArea.Center.X, _backButtonArea.Center.Y), 
-                _backButtonArea.Width / 2, backColor);
+            // Draw back/menu button (B) - top right with hold progress indicator
+            Color backColor = _backButtonHeld ? buttonPressedColor : (_backPressed ? new Color(200, 200, 100, 120) : buttonColor);
+            Vector2 backCenter = new Vector2(_backButtonArea.Center.X, _backButtonArea.Center.Y);
+            float backRadius = _backButtonArea.Width / 2;
+            DrawFilledCircle(spriteBatch, backCenter, backRadius, backColor);
+            
+            // Draw hold progress ring
+            if (_backPressed && !_backButtonHeld)
+            {
+                float progress = BackButtonHoldProgress;
+                Color progressColor = new Color(255, 200, 0, 180);
+                DrawProgressRing(spriteBatch, backCenter, backRadius + 5, backRadius + 12, progress, progressColor);
+            }
             DrawButtonLabel(spriteBatch, font, "B", _backButtonArea, textColor);
             
             // Draw switch button (X)
@@ -314,8 +349,8 @@ namespace NoPasaranFC.Gameplay
         
         private void DrawButtonLabel(SpriteBatch spriteBatch, SpriteFont font, string text, Rectangle area, Color color)
         {
+            float scale = UIScale * 1.5f; // Larger text for visibility
             Vector2 textSize = font.MeasureString(text);
-            float scale = UIScale;
             Vector2 pos = new Vector2(
                 area.Center.X - (textSize.X * scale) / 2,
                 area.Center.Y - (textSize.Y * scale) / 2
@@ -337,6 +372,39 @@ namespace NoPasaranFC.Gameplay
                 );
                 spriteBatch.Draw(_pixel, rect, color);
             }
+        }
+        
+        private void DrawProgressRing(SpriteBatch spriteBatch, Vector2 center, float innerRadius, float outerRadius, float progress, Color color)
+        {
+            // Draw progress ring as arc from top (0 degrees) clockwise
+            int segments = 36;
+            int segmentsToDraw = (int)(segments * progress);
+            
+            for (int i = 0; i < segmentsToDraw; i++)
+            {
+                // Start from top (-90 degrees) and go clockwise
+                float angle1 = (float)(-Math.PI / 2 + (i * 2 * Math.PI / segments));
+                float angle2 = (float)(-Math.PI / 2 + ((i + 1) * 2 * Math.PI / segments));
+                
+                // Draw thick line segment
+                for (float r = innerRadius; r <= outerRadius; r += 1)
+                {
+                    Vector2 p1 = center + new Vector2((float)Math.Cos(angle1) * r, (float)Math.Sin(angle1) * r);
+                    Vector2 p2 = center + new Vector2((float)Math.Cos(angle2) * r, (float)Math.Sin(angle2) * r);
+                    DrawLine(spriteBatch, p1, p2, color);
+                }
+            }
+        }
+        
+        private void DrawLine(SpriteBatch spriteBatch, Vector2 start, Vector2 end, Color color)
+        {
+            Vector2 edge = end - start;
+            float angle = (float)Math.Atan2(edge.Y, edge.X);
+            float length = edge.Length();
+            
+            spriteBatch.Draw(_pixel,
+                new Rectangle((int)start.X, (int)start.Y, (int)length, 2),
+                null, color, angle, Vector2.Zero, SpriteEffects.None, 0);
         }
     }
 }

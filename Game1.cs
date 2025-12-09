@@ -153,7 +153,7 @@ public class Game1 : Game
     protected override void Update(GameTime gameTime)
     {
         // Update touch UI first
-        Gameplay.TouchUI.Instance.Update();
+        Gameplay.TouchUI.Instance.Update(gameTime);
         
         _screenManager.Update(gameTime);
         
