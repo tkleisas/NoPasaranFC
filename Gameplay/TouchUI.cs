@@ -128,8 +128,8 @@ namespace NoPasaranFC.Gameplay
         private void UpdateButtonAreas()
         {
             int buttonSize = (int)(120 * UIScale);  // Increased from 100 to 120
-            int padding = (int)(20 * UIScale);
-            int smallButtonSize = (int)(85 * UIScale);  // Increased from 70 to 85
+            int padding = (int)(40 * UIScale);
+            int smallButtonSize = (int)(90 * UIScale);  // Increased from 70 to 85
             int verticalOffset = (int)(40 * UIScale);  // Move buttons up by 40 pixels
             
             // Action button (A) - bottom right, largest
