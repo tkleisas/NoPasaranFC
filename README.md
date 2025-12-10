@@ -16,13 +16,13 @@ Manage and play as **NO PASARAN!** in an 8-team championship. Control one player
 
 ### Teams
 - **NO PASARAN!** (Player-controlled)
-- BARTSELIOMA
-- KTEL
+- BARTSELIOMA (ΜΠΑΡΤΣΕΛΙΩΜΑ)
+- KTEL (ΚΤΕΛ)
 - NONAME
-- MIHANIKOI
-- ASALAGITOS
-- ASTERAS EXARXION
-- TIGANITIS
+- CHANDRINAIKOS (ΧΑΝΔΡΙΝΑΪΚΟΣ)
+- ASALAGITOS (ΑΣΑΛΑΓΗΤΟΣ)
+- ASTERAS EXARXION (ΑΣΤΕΡΑΣ ΕΞΑΡΧΙΩΝ)
+- TIGANITIS (ΤΗΓΑΝΙΤΗΣ)
 
 ## ✨ Features
 
@@ -399,4 +399,5 @@ See **AGENTS.md** for complete development roadmap.
 
 ## License
 
-This is a game project. All rights reserved.
+This game is provided under an MIT License. The license text can be found in LICENSE.txt
+ 
