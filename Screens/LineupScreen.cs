@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Content;
@@ -22,18 +23,22 @@ namespace NoPasaranFC.Screens
         private List<Player> _allPlayers;
         private int _selectedIndex = 0;
         private int _scrollOffset = 0;
-        private const int MaxVisiblePlayers = 15;
+        private const int MaxVisiblePlayers = 12; // Reduced to make room for stats panel
         
         private Gameplay.InputHelper _input;
         private Texture2D _pixel;
+        
+        // Player picture cache
+        private Dictionary<int, Texture2D> _playerPictureCache = new Dictionary<int, Texture2D>();
+        private Texture2D _defaultPlayerPicture;
         
         // Formation positions for preview (simple 4-4-2)
         private readonly Vector2[] _formationPositions = new[]
         {
             new Vector2(160, 380), // GK
-            new Vector2(260, 320), new Vector2(260, 360), new Vector2(260, 400), new Vector2(260, 440), // DEF (4)
-            new Vector2(360, 320), new Vector2(360, 360), new Vector2(360, 400), new Vector2(360, 440), // MID (4)
-            new Vector2(460, 360), new Vector2(460, 400) // FWD (2)
+            new Vector2(240, 320), new Vector2(240, 360), new Vector2(240, 400), new Vector2(240, 440), // DEF (4)
+            new Vector2(320, 320), new Vector2(320, 360), new Vector2(320, 400), new Vector2(320, 440), // MID (4)
+            new Vector2(400, 360), new Vector2(400, 400) // FWD (2)
         };
 
         public LineupScreen(Team team, Match match, Championship championship, DatabaseManager database, 
@@ -202,10 +207,13 @@ namespace NoPasaranFC.Screens
             string countText = $"{Localization.Instance.Get("lineup.starting")}: {startingCount}/11";
             Color countColor = startingCount == 11 ? Color.LightGreen : (startingCount < 11 ? Color.Yellow : Color.Red);
             Vector2 countSize = font.MeasureString(countText);
-            spriteBatch.DrawString(font, countText, new Vector2((screenWidth - countSize.X) / 2, 60), countColor);
+            spriteBatch.DrawString(font, countText, new Vector2((screenWidth - countSize.X) / 2, 50), countColor);
             
             // Draw player list (left side)
             DrawPlayerList(spriteBatch, font);
+            
+            // Draw selected player details (middle)
+            DrawPlayerDetails(spriteBatch, font, screenWidth, screenHeight);
             
             // Draw formation preview (right side)
             DrawFormationPreview(spriteBatch, font, screenWidth, screenHeight);
@@ -216,32 +224,32 @@ namespace NoPasaranFC.Screens
 
         private void DrawPlayerList(SpriteBatch spriteBatch, SpriteFont font)
         {
-            int startY = 120;
-            int lineHeight = 30;
-            int xPos = 50;
+            int startY = 90;
+            int lineHeight = 28;
+            int xPos = 30;
             bool skipFirst = false;
             // Column headers
-            spriteBatch.DrawString(font, "#", new Vector2(xPos, startY - 30), Color.Gray);
-            spriteBatch.DrawString(font, Localization.Instance.Get("lineup.name"), new Vector2(xPos + 60, startY - 30), Color.Gray);
-            spriteBatch.DrawString(font, Localization.Instance.Get("lineup.position"), new Vector2(xPos + 270, startY - 30), Color.Gray);
-            spriteBatch.DrawString(font, Localization.Instance.Get("lineup.status"), new Vector2(xPos + 360, startY - 30), Color.Gray);
+            spriteBatch.DrawString(font, "#", new Vector2(xPos, startY - 25), Color.Gray);
+            spriteBatch.DrawString(font, Localization.Instance.Get("lineup.name"), new Vector2(xPos + 40, startY - 25), Color.Gray);
+            spriteBatch.DrawString(font, Localization.Instance.Get("lineup.position"), new Vector2(xPos + 230, startY - 25), Color.Gray);
+            spriteBatch.DrawString(font, Localization.Instance.Get("lineup.status"), new Vector2(xPos + 330, startY - 25), Color.Gray);
             
             // Scroll indicators
             if (_scrollOffset > 0)
             {
-                spriteBatch.DrawString(font, $"^ {Localization.Instance.Get("lineup.more")}", new Vector2(xPos + 180, startY), Color.Gray);
+                spriteBatch.DrawString(font, $"^ {Localization.Instance.Get("lineup.more")}", new Vector2(xPos + 120, startY), Color.Gray);
 
             }
             
             int endIndex = Math.Min(_scrollOffset + MaxVisiblePlayers, _allPlayers.Count);
-            startY = startY + 30;
+            startY = startY + 25;
             for (int i = _scrollOffset; i < endIndex; i++)
             {
                 var player = _allPlayers[i];
                 int yPos = startY + (i - _scrollOffset) * lineHeight;
                 
                 Color bgColor = i == _selectedIndex ? new Color(80, 120, 80, 200) : new Color(40, 60, 40, 100);
-                spriteBatch.Draw(_pixel, new Rectangle(xPos - 5, yPos, 550, lineHeight), bgColor);
+                spriteBatch.Draw(_pixel, new Rectangle(xPos - 5, yPos+4, 480, lineHeight), bgColor);
                 
                 Color textColor = i == _selectedIndex ? Color.Yellow : Color.White;
                 
@@ -249,33 +257,164 @@ namespace NoPasaranFC.Screens
                 spriteBatch.DrawString(font, player.ShirtNumber.ToString(), new Vector2(xPos, yPos), textColor);
                 
                 // Name (truncated if too long)
-                string displayName = player.Name.Length > 15 ? player.Name.Substring(0, 15) : player.Name;
-                spriteBatch.DrawString(font, displayName, new Vector2(xPos + 60, yPos), textColor);
+                string displayName = player.Name.Length > 12 ? player.Name.Substring(0, 12) : player.Name;
+                spriteBatch.DrawString(font, displayName, new Vector2(xPos + 40, yPos), textColor);
                 
                 // Position
                 string posText = GetPositionAbbreviation(player.Position);
-                spriteBatch.DrawString(font, posText, new Vector2(xPos + 270, yPos), textColor);
+                spriteBatch.DrawString(font, posText, new Vector2(xPos + 240, yPos), textColor);
                 
                 // Starting status
                 string statusText = player.IsStarting ? Localization.Instance.Get("lineup.starter") : Localization.Instance.Get("lineup.benchPlayer");
                 Color statusColor = player.IsStarting ? Color.LightGreen : Color.Gray;
                 if (i == _selectedIndex) statusColor = Color.Yellow;
-                spriteBatch.DrawString(font, statusText, new Vector2(xPos + 360, yPos), statusColor);
+                spriteBatch.DrawString(font, statusText, new Vector2(xPos + 330, yPos), statusColor);
             }
             
             if (endIndex < _allPlayers.Count)
             {
                 int yPos = startY + MaxVisiblePlayers * lineHeight;
-                spriteBatch.DrawString(font, $"v {Localization.Instance.Get("lineup.more")}", new Vector2(xPos + 180, yPos), Color.Gray);
+                spriteBatch.DrawString(font, $"v {Localization.Instance.Get("lineup.more")}", new Vector2(xPos + 120, yPos), Color.Gray);
             }
+        }
+
+        private void DrawPlayerDetails(SpriteBatch spriteBatch, SpriteFont font, int screenWidth, int screenHeight)
+        {
+            if (_selectedIndex < 0 || _selectedIndex >= _allPlayers.Count)
+                return;
+                
+            var player = _allPlayers[_selectedIndex];
+            
+            // Panel position (middle of screen)
+            int panelX = 520;
+            int panelY = 90;
+            int panelWidth = 240;
+            int panelHeight = 380;
+            
+            // Panel background
+            spriteBatch.Draw(_pixel, new Rectangle(panelX, panelY, panelWidth, panelHeight), new Color(40, 60, 40, 220));
+            spriteBatch.Draw(_pixel, new Rectangle(panelX + 2, panelY + 2, panelWidth - 4, panelHeight - 4), new Color(30, 50, 30, 200));
+            
+            // Player picture (128x128)
+            int pictureX = panelX + (panelWidth - 128) / 2;
+            int pictureY = panelY + 10;
+            
+            Texture2D playerPicture = GetPlayerPicture(player);
+            if (playerPicture != null)
+            {
+                spriteBatch.Draw(playerPicture, new Rectangle(pictureX, pictureY, 128, 128), Color.White);
+            }
+            else
+            {
+                // Draw placeholder
+                spriteBatch.Draw(_pixel, new Rectangle(pictureX, pictureY, 128, 128), new Color(60, 80, 60));
+                string numText = player.ShirtNumber.ToString();
+                Vector2 numSize = font.MeasureString(numText);
+                spriteBatch.DrawString(font, numText, 
+                    new Vector2(pictureX + 64 - numSize.X, pictureY + 64 - numSize.Y), 
+                    Color.White, 0f, Vector2.Zero, 2f, SpriteEffects.None, 0f);
+            }
+            
+            // Player name
+            int textY = pictureY + 140;
+            string name = player.Name.Length > 16 ? player.Name.Substring(0, 16) + "..." : player.Name;
+            Vector2 nameSize = font.MeasureString(name);
+            spriteBatch.DrawString(font, name, new Vector2(panelX + (panelWidth - nameSize.X) / 2, textY), Color.Yellow);
+            
+            // Position
+            textY += 25;
+            string positionText = GetPositionFullName(player.Position);
+            Vector2 posSize = font.MeasureString(positionText);
+            spriteBatch.DrawString(font, positionText, new Vector2(panelX + (panelWidth - posSize.X) / 2, textY), Color.LightGray);
+            
+            // Stats header
+            textY += 35;
+            string statsHeader = Localization.Instance.Get("lineup.stats");
+            Vector2 statsHeaderSize = font.MeasureString(statsHeader);
+            spriteBatch.DrawString(font, statsHeader, new Vector2(panelX + (panelWidth - statsHeaderSize.X) / 2, textY), Color.White);
+            
+            // Stats bars
+            textY += 25;
+            int barX = panelX + 15;
+            int barWidth = panelWidth - 30;
+            int barHeight = 16;
+            int barSpacing = 22;
+            
+            DrawStatBar(spriteBatch, font, Localization.Instance.Get("lineup.stat.spd"), player.Speed, barX, textY, barWidth, barHeight);
+            textY += barSpacing;
+            DrawStatBar(spriteBatch, font, Localization.Instance.Get("lineup.stat.sht"), player.Shooting, barX, textY, barWidth, barHeight);
+            textY += barSpacing;
+            DrawStatBar(spriteBatch, font, Localization.Instance.Get("lineup.stat.pas"), player.Passing, barX, textY, barWidth, barHeight);
+            textY += barSpacing;
+            DrawStatBar(spriteBatch, font, Localization.Instance.Get("lineup.stat.def"), player.Defending, barX, textY, barWidth, barHeight);
+            textY += barSpacing;
+            DrawStatBar(spriteBatch, font, Localization.Instance.Get("lineup.stat.agi"), player.Agility, barX, textY, barWidth, barHeight);
+            textY += barSpacing;
+            DrawStatBar(spriteBatch, font, Localization.Instance.Get("lineup.stat.tec"), player.Technique, barX, textY, barWidth, barHeight);
+        }
+        
+        private void DrawStatBar(SpriteBatch spriteBatch, SpriteFont font, string label, int value, int x, int y, int width, int height)
+        {
+            // Label
+            spriteBatch.DrawString(font, label, new Vector2(x, y), Color.LightGray, 0f, Vector2.Zero, 0.8f, SpriteEffects.None, 0f);
+            
+            // Bar background
+            int barStartX = x + 45;
+            int barWidth = width - 75;
+            spriteBatch.Draw(_pixel, new Rectangle(barStartX, y + 2, barWidth, height - 4), new Color(20, 30, 20));
+            
+            // Bar fill
+            float fillPercent = Math.Clamp(value / 100f, 0f, 1f);
+            int fillWidth = (int)(barWidth * fillPercent);
+            Color barColor = value >= 80 ? Color.LightGreen : (value >= 60 ? Color.Yellow : (value >= 40 ? Color.Orange : Color.Red));
+            spriteBatch.Draw(_pixel, new Rectangle(barStartX, y + 2, fillWidth, height - 4), barColor);
+            
+            // Value text
+            spriteBatch.DrawString(font, value.ToString(), new Vector2(barStartX + barWidth + 5, y), Color.White, 0f, Vector2.Zero, 0.8f, SpriteEffects.None, 0f);
+        }
+        
+        private Texture2D GetPlayerPicture(Player player)
+        {
+            if (string.IsNullOrEmpty(player.PlayerPicture))
+                return _defaultPlayerPicture;
+                
+            // Check cache
+            if (_playerPictureCache.TryGetValue(player.Id, out var cached))
+                return cached;
+            
+            try
+            {
+                // Decode base64 to texture
+                byte[] imageData = Convert.FromBase64String(player.PlayerPicture);
+                using var stream = new MemoryStream(imageData);
+                var texture = Texture2D.FromStream(GraphicsDevice, stream);
+                _playerPictureCache[player.Id] = texture;
+                return texture;
+            }
+            catch
+            {
+                return _defaultPlayerPicture;
+            }
+        }
+        
+        private string GetPositionFullName(PlayerPosition position)
+        {
+            return position switch
+            {
+                PlayerPosition.Goalkeeper => Localization.Instance.Get("lineup.position.goalkeeper"),
+                PlayerPosition.Defender => Localization.Instance.Get("lineup.position.defender"),
+                PlayerPosition.Midfielder => Localization.Instance.Get("lineup.position.midfielder"),
+                PlayerPosition.Forward => Localization.Instance.Get("lineup.position.forward"),
+                _ => "?"
+            };
         }
 
         private void DrawFormationPreview(SpriteBatch spriteBatch, SpriteFont font, int screenWidth, int screenHeight)
         {
-            int previewX = screenWidth - 350;
-            int previewY = 120;
-            int previewWidth = 300;
-            int previewHeight = 400;
+            int previewX = screenWidth - 420;
+            int previewY = 90;
+            int previewWidth = 330;
+            int previewHeight = 380;
             
             // Preview box
             spriteBatch.Draw(_pixel, new Rectangle(previewX, previewY, previewWidth, previewHeight), 
@@ -285,7 +424,7 @@ namespace NoPasaranFC.Screens
             string previewTitle = Localization.Instance.Get("lineup.formationPreview");
             Vector2 titleSize = font.MeasureString(previewTitle);
             spriteBatch.DrawString(font, previewTitle, 
-                new Vector2(previewX + (previewWidth - titleSize.X) / 2, previewY + 10), Color.White);
+                new Vector2(previewX + (previewWidth - titleSize.X) / 2, previewY -30), Color.White);
             
             // Draw starting players on formation
             var startingPlayers = _allPlayers.Where(p => p.IsStarting).OrderBy(p => GetPositionOrder(p.Position)).ToList();
@@ -293,19 +432,19 @@ namespace NoPasaranFC.Screens
             for (int i = 0; i < Math.Min(startingPlayers.Count, 11); i++)
             {
                 var player = startingPlayers[i];
-                Vector2 pos = new Vector2(previewX + _formationPositions[i].X - 140, 
-                                         previewY + _formationPositions[i].Y - 310);
+                Vector2 pos = new Vector2(previewX + _formationPositions[i].X - 120, 
+                                         previewY + _formationPositions[i].Y - 280);
                 
                 // Player circle
-                spriteBatch.Draw(_pixel, new Rectangle((int)pos.X - 12, (int)pos.Y - 12, 24, 24), Color.DarkBlue);
-                spriteBatch.Draw(_pixel, new Rectangle((int)pos.X - 10, (int)pos.Y - 10, 20, 20), Color.LightBlue);
+                spriteBatch.Draw(_pixel, new Rectangle((int)pos.X - 32, (int)pos.Y - 32, 32, 32), Color.DarkBlue);
+                spriteBatch.Draw(_pixel, new Rectangle((int)pos.X - 30, (int)pos.Y - 30, 28, 28), Color.Green);
                 
                 // Shirt number
                 string numText = player.ShirtNumber.ToString();
                 Vector2 numSize = font.MeasureString(numText);
                 spriteBatch.DrawString(font, numText, 
-                    new Vector2(pos.X - numSize.X / 2, pos.Y - numSize.Y / 2 - 2), 
-                    Color.White, 0f, Vector2.Zero, 0.7f, SpriteEffects.None, 0f);
+                    new Vector2(pos.X-8 - numSize.X / 2, pos.Y-8 - numSize.Y / 2 - 2), 
+                    Color.Red, 0f, Vector2.Zero, 0.7f, SpriteEffects.None, 0f);
             }
             
             // Formation info

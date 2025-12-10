@@ -8,6 +8,8 @@ namespace NoPasaranFC.Database
 {
     public class DatabaseManager
     {
+        private const int CurrentSchemaVersion = 2; // Increment when adding migrations
+        
         private static string GetDatabasePath()
         {
             // Use platform-specific path for cross-platform compatibility
@@ -23,6 +25,7 @@ namespace NoPasaranFC.Database
             
             ConnectionString = $"Data Source={GetDatabasePath()};Mode=ReadWriteCreate;";
             InitializeDatabase();
+            RunMigrations();
         }
         
         private void InitializeDatabase()
@@ -37,6 +40,10 @@ namespace NoPasaranFC.Database
             
             var command = connection.CreateCommand();
             command.CommandText = @"
+                CREATE TABLE IF NOT EXISTS SchemaVersion (
+                    Version INTEGER PRIMARY KEY
+                );
+                
                 CREATE TABLE IF NOT EXISTS Teams (
                     Id INTEGER PRIMARY KEY AUTOINCREMENT,
                     Name TEXT NOT NULL,
@@ -110,6 +117,86 @@ namespace NoPasaranFC.Database
             command.ExecuteNonQuery();
         }
         
+        private void RunMigrations()
+        {
+            using var connection = new SqliteConnection(ConnectionString);
+            connection.Open();
+            
+            int currentVersion = GetSchemaVersion(connection);
+            
+            // Apply migrations in order
+            if (currentVersion < 1)
+            {
+                // Migration 1: Initial schema (already created by InitializeDatabase)
+                SetSchemaVersion(connection, 1);
+                currentVersion = 1;
+            }
+            
+            if (currentVersion < 2)
+            {
+                // Migration 2: Add PlayerPicture column to Players table
+                ApplyMigration2_AddPlayerPicture(connection);
+                SetSchemaVersion(connection, 2);
+                currentVersion = 2;
+            }
+            
+            // Add future migrations here:
+            // if (currentVersion < 3) { ... }
+        }
+        
+        private int GetSchemaVersion(SqliteConnection connection)
+        {
+            var command = connection.CreateCommand();
+            command.CommandText = "SELECT MAX(Version) FROM SchemaVersion";
+            
+            try
+            {
+                var result = command.ExecuteScalar();
+                if (result == null || result == DBNull.Value)
+                    return 0;
+                return Convert.ToInt32(result);
+            }
+            catch
+            {
+                return 0;
+            }
+        }
+        
+        private void SetSchemaVersion(SqliteConnection connection, int version)
+        {
+            var command = connection.CreateCommand();
+            command.CommandText = "INSERT OR REPLACE INTO SchemaVersion (Version) VALUES (@version)";
+            command.Parameters.AddWithValue("@version", version);
+            command.ExecuteNonQuery();
+        }
+        
+        private void ApplyMigration2_AddPlayerPicture(SqliteConnection connection)
+        {
+            // Check if column already exists
+            var checkCommand = connection.CreateCommand();
+            checkCommand.CommandText = "PRAGMA table_info(Players)";
+            
+            bool columnExists = false;
+            using (var reader = checkCommand.ExecuteReader())
+            {
+                while (reader.Read())
+                {
+                    if (reader.GetString(1) == "PlayerPicture")
+                    {
+                        columnExists = true;
+                        break;
+                    }
+                }
+            }
+            
+            if (!columnExists)
+            {
+                var alterCommand = connection.CreateCommand();
+                alterCommand.CommandText = "ALTER TABLE Players ADD COLUMN PlayerPicture TEXT";
+                alterCommand.ExecuteNonQuery();
+            }
+        }
+        
         public void SaveTeam(Team team)
         {
             using var connection = new SqliteConnection(ConnectionString);
@@ -173,8 +260,8 @@ namespace NoPasaranFC.Database
             {
                 // New player without ID
                 command.CommandText = @"
-                    INSERT INTO Players (TeamId, Name, Position, Speed, Shooting, Passing, Defending, Agility, Technique, Stamina, IsStarting, ShirtNumber, CelebrationIds)
-                    VALUES (@teamId, @name, @position, @speed, @shooting, @passing, @defending, @agility, @technique, @stamina, @isStarting, @shirtNumber, @celebrationIds);
+                    INSERT INTO Players (TeamId, Name, Position, Speed, Shooting, Passing, Defending, Agility, Technique, Stamina, IsStarting, ShirtNumber, CelebrationIds, PlayerPicture)
+                    VALUES (@teamId, @name, @position, @speed, @shooting, @passing, @defending, @agility, @technique, @stamina, @isStarting, @shirtNumber, @celebrationIds, @playerPicture);
                     SELECT last_insert_rowid();
                 ";
                 command.Parameters.AddWithValue("@teamId", player.TeamId);
@@ -191,6 +278,8 @@ namespace NoPasaranFC.Database
                 command.Parameters.AddWithValue("@shirtNumber", player.ShirtNumber);
                 command.Parameters.AddWithValue("@celebrationIds",
                     player.CelebrationIds != null ? JsonSerializer.Serialize(player.CelebrationIds) : (object)DBNull.Value);
+                command.Parameters.AddWithValue("@playerPicture", 
+                    string.IsNullOrEmpty(player.PlayerPicture) ? (object)DBNull.Value : player.PlayerPicture);
 
                 player.Id = Convert.ToInt32(command.ExecuteScalar());
             }
@@ -198,8 +287,8 @@ namespace NoPasaranFC.Database
             {
                 // Player with ID - use INSERT OR REPLACE
                 command.CommandText = @"
-                    INSERT OR REPLACE INTO Players (Id, TeamId, Name, Position, Speed, Shooting, Passing, Defending, Agility, Technique, Stamina, IsStarting, ShirtNumber, CelebrationIds)
-                    VALUES (@id, @teamId, @name, @position, @speed, @shooting, @passing, @defending, @agility, @technique, @stamina, @isStarting, @shirtNumber, @celebrationIds);
+                    INSERT OR REPLACE INTO Players (Id, TeamId, Name, Position, Speed, Shooting, Passing, Defending, Agility, Technique, Stamina, IsStarting, ShirtNumber, CelebrationIds, PlayerPicture)
+                    VALUES (@id, @teamId, @name, @position, @speed, @shooting, @passing, @defending, @agility, @technique, @stamina, @isStarting, @shirtNumber, @celebrationIds, @playerPicture);
                 ";
                 command.Parameters.AddWithValue("@id", player.Id);
                 command.Parameters.AddWithValue("@teamId", player.TeamId);
@@ -216,6 +305,8 @@ namespace NoPasaranFC.Database
                 command.Parameters.AddWithValue("@shirtNumber", player.ShirtNumber);
                 command.Parameters.AddWithValue("@celebrationIds",
                     player.CelebrationIds != null ? JsonSerializer.Serialize(player.CelebrationIds) : (object)DBNull.Value);
+                command.Parameters.AddWithValue("@playerPicture", 
+                    string.IsNullOrEmpty(player.PlayerPicture) ? (object)DBNull.Value : player.PlayerPicture);
 
                 command.ExecuteNonQuery();
             }
@@ -285,7 +376,8 @@ namespace NoPasaranFC.Database
                     IsStarting = reader.IsDBNull(11) ? false : reader.GetInt32(11) == 1,
                     ShirtNumber = reader.IsDBNull(12) ? 0 : reader.GetInt32(12),
                     CelebrationIds = reader.IsDBNull(13) ? null :
-                        JsonSerializer.Deserialize<List<string>>(reader.GetString(13))
+                        JsonSerializer.Deserialize<List<string>>(reader.GetString(13)),
+                    PlayerPicture = reader.FieldCount > 14 && !reader.IsDBNull(14) ? reader.GetString(14) : null
                 };
                 players.Add(player);
             }
