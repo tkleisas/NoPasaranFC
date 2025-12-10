@@ -95,6 +95,9 @@ namespace NoPasaranFC.Models
         // Celebration system
         public List<string> CelebrationIds { get; set; } // Player-specific celebration IDs (null/empty = use team/generic)
         
+        // Player picture (base64 encoded PNG, 128x128 pixels)
+        public string PlayerPicture { get; set; }
+        
         // AI Controller (not serialized to database)
         [System.Text.Json.Serialization.JsonIgnore]
         public object AIController { get; set; } // Using object to avoid circular dependency
