@@ -101,23 +101,23 @@ namespace NoPasaranFC.Screens
                 // Main menu navigation (keyboard, gamepad, or touch)
                 var menuOptions = GetMenuOptions();
                 
-                // Touch/Joystick navigation
+                // Touch/Joystick navigation (threshold 0.3 for responsiveness)
                 Vector2 joystickDir = touchUI.JoystickDirection;
-                bool menuDown = _input.IsMenuDownPressed() || (touchUI.Enabled && joystickDir.Y > 0.5f && _joystickMenuCooldown <= 0);
-                bool menuUp = _input.IsMenuUpPressed() || (touchUI.Enabled && joystickDir.Y < -0.5f && _joystickMenuCooldown <= 0);
+                bool menuDown = _input.IsMenuDownPressed() || (touchUI.Enabled && joystickDir.Y > 0.3f && _joystickMenuCooldown <= 0);
+                bool menuUp = _input.IsMenuUpPressed() || (touchUI.Enabled && joystickDir.Y < -0.3f && _joystickMenuCooldown <= 0);
                 
                 if (menuDown)
                 {
                     _selectedOption = (_selectedOption + 1) % menuOptions.Length;
                     Gameplay.AudioManager.Instance.PlaySoundEffect("menu_move");
-                    _joystickMenuCooldown = 0.2f; // Cooldown to prevent rapid scrolling
+                    _joystickMenuCooldown = 0.15f; // Faster cooldown for snappier navigation
                 }
                 
                 if (menuUp)
                 {
                     _selectedOption = (_selectedOption - 1 + menuOptions.Length) % menuOptions.Length;
                     Gameplay.AudioManager.Instance.PlaySoundEffect("menu_move");
-                    _joystickMenuCooldown = 0.2f;
+                    _joystickMenuCooldown = 0.15f;
                 }
                 
                 // Update cooldown
@@ -160,27 +160,27 @@ namespace NoPasaranFC.Screens
             }
             else
             {
-                // Options menu navigation
+                // Options menu navigation (threshold 0.3 for responsiveness)
                 Vector2 joystickDir = touchUI.JoystickDirection;
-                bool menuDown = _input.IsMenuDownPressed() || (touchUI.Enabled && joystickDir.Y > 0.5f && _joystickMenuCooldown <= 0);
-                bool menuUp = _input.IsMenuUpPressed() || (touchUI.Enabled && joystickDir.Y < -0.5f && _joystickMenuCooldown <= 0);
+                bool menuDown = _input.IsMenuDownPressed() || (touchUI.Enabled && joystickDir.Y > 0.3f && _joystickMenuCooldown <= 0);
+                bool menuUp = _input.IsMenuUpPressed() || (touchUI.Enabled && joystickDir.Y < -0.3f && _joystickMenuCooldown <= 0);
                 bool menuLeft = (keyState.IsKeyDown(Keys.Left) && !_previousKeyState.IsKeyDown(Keys.Left)) || 
-                               (touchUI.Enabled && joystickDir.X < -0.5f && _joystickMenuCooldown <= 0);
+                               (touchUI.Enabled && joystickDir.X < -0.3f && _joystickMenuCooldown <= 0);
                 bool menuRight = (keyState.IsKeyDown(Keys.Right) && !_previousKeyState.IsKeyDown(Keys.Right)) ||
-                                (touchUI.Enabled && joystickDir.X > 0.5f && _joystickMenuCooldown <= 0);
+                                (touchUI.Enabled && joystickDir.X > 0.3f && _joystickMenuCooldown <= 0);
                 
                 if (menuUp)
                 {
                     _optionsSelectedItem = (_optionsSelectedItem - 1 + 5) % 5;
                     Gameplay.AudioManager.Instance.PlaySoundEffect("menu_move");
-                    _joystickMenuCooldown = 0.2f;
+                    _joystickMenuCooldown = 0.15f;
                 }
                 
                 if (menuDown)
                 {
                     _optionsSelectedItem = (_optionsSelectedItem + 1) % 5;
                     Gameplay.AudioManager.Instance.PlaySoundEffect("menu_move");
-                    _joystickMenuCooldown = 0.2f;
+                    _joystickMenuCooldown = 0.15f;
                 }
                 
                 if (_joystickMenuCooldown > 0)

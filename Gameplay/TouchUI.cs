@@ -71,12 +71,21 @@ namespace NoPasaranFC.Gameplay
                 
                 Vector2 dir = _joystickPosition - _joystickCenter;
                 float length = dir.Length();
-                if (length < 10f) return Vector2.Zero;
                 
-                // Normalize and scale
-                dir /= JoystickMaxDistance;
-                if (dir.Length() > 1f) dir.Normalize();
-                return dir;
+                // Reduced dead zone from 10f to 5f for better responsiveness
+                if (length < 5f) return Vector2.Zero;
+                
+                // Apply sensitivity curve for better control
+                // Small movements are amplified, large movements feel natural
+                float normalizedLength = Math.Min(length / JoystickMaxDistance, 1f);
+                
+                // Use a curve that gives more response at lower inputs
+                // This makes small joystick movements more responsive
+                float sensitivity = (float)Math.Pow(normalizedLength, 0.7f);
+                
+                // Normalize direction and apply sensitivity
+                dir.Normalize();
+                return dir * sensitivity;
             }
         }
         
@@ -127,22 +136,23 @@ namespace NoPasaranFC.Gameplay
         
         private void UpdateButtonAreas()
         {
-            int buttonSize = (int)(120 * UIScale);  // Increased from 100 to 120
+            int buttonSize = (int)(180 * UIScale);  // 50% larger (was 120)
             int padding = (int)(40 * UIScale);
-            int smallButtonSize = (int)(90 * UIScale);  // Increased from 70 to 85
+            int smallButtonSize = (int)(135 * UIScale);  // 50% larger (was 90)
             int verticalOffset = (int)(40 * UIScale);  // Move buttons up by 40 pixels
+            int aButtonLeftOffset = (int)(50 * UIScale);  // Move A button 50 pixels to the left
             
-            // Action button (A) - bottom right, largest
+            // Action button (A) - bottom right, largest, moved left 50px
             _actionButtonArea = new Rectangle(
-                ScreenWidth - buttonSize - padding,
+                ScreenWidth - (int)(buttonSize*1.5) - padding - aButtonLeftOffset,
                 ScreenHeight - buttonSize - padding - verticalOffset,
                 buttonSize,
                 buttonSize
             );
             
-            // Switch button (X) - above action button
+            // Switch button (X) - above action button, not aligned with A button
             _switchButtonArea = new Rectangle(
-                ScreenWidth - buttonSize - padding,
+                ScreenWidth - buttonSize - padding - aButtonLeftOffset,
                 ScreenHeight - buttonSize * 2 - padding * 2 - verticalOffset,
                 buttonSize,
                 buttonSize
@@ -199,10 +209,10 @@ namespace NoPasaranFC.Gameplay
                 {
                     _switchPressed = true;
                 }
-                // Virtual joystick - left half of screen
-                else if (touchPoint.X < ScreenWidth / 2)
+                // Virtual joystick - left half of screen (expanded to 60% for easier access)
+                else if (touchPoint.X < ScreenWidth * 0.6f)
                 {
-                    if (touch.State == TouchLocationState.Pressed && !_joystickActive)
+                    if ((touch.State == TouchLocationState.Pressed || touch.State == TouchLocationState.Moved) && !_joystickActive)
                     {
                         _joystickActive = true;
                         _joystickTouchId = touch.Id;
@@ -212,6 +222,7 @@ namespace NoPasaranFC.Gameplay
                     }
                     else if (touch.Id == _joystickTouchId && _joystickActive)
                     {
+                        // Immediate position update for responsiveness
                         _joystickPosition = touch.Position;
                         joystickTouchFound = true;
                     }
@@ -285,18 +296,23 @@ namespace NoPasaranFC.Gameplay
         {
             if (!Enabled || !_initialized) return;
             
-            Color buttonColor = new Color(255, 255, 255, 80);
-            Color buttonPressedColor = new Color(255, 255, 255, 160);
-            Color textColor = new Color(40, 40, 40, 255); // Dark text for visibility
+            // Transparent fill colors - use darker fill so white text is visible
+            Color buttonFillColor = new Color(0, 0, 0, 80);  // Dark transparent fill
+            Color buttonFillPressedColor = new Color(50, 100, 50, 120);  // Green tint when pressed
+            // Solid outline colors
+            Color outlineColor = new Color(255, 255, 255, 255);  // Solid white outline
+            Color outlinePressedColor = new Color(150, 255, 150, 255);  // Green tint when pressed
+            Color textColor = Color.White; // Solid white text for maximum visibility
             
             // Draw joystick
             float joystickScale = 1.5f; // 150% size
             if (_joystickActive)
             {
-                // Outer circle
-                DrawFilledCircle(spriteBatch, _joystickCenter, JoystickMaxDistance * UIScale * joystickScale, new Color(80, 80, 80, 60));
+                // Outer circle - transparent fill with outline
+                DrawFilledCircle(spriteBatch, _joystickCenter, JoystickMaxDistance * UIScale * joystickScale, new Color(80, 80, 80, 20));
+                DrawCircleOutline(spriteBatch, _joystickCenter, JoystickMaxDistance * UIScale * joystickScale, new Color(150, 150, 150, 180), 3);
                 
-                // Thumb
+                // Thumb - more visible
                 Vector2 thumbPos = _joystickPosition;
                 Vector2 dir = thumbPos - _joystickCenter;
                 float maxDist = JoystickMaxDistance * UIScale * 0.8f;
@@ -305,56 +321,70 @@ namespace NoPasaranFC.Gameplay
                     dir = Vector2.Normalize(dir) * maxDist;
                     thumbPos = _joystickCenter + dir;
                 }
-                DrawFilledCircle(spriteBatch, thumbPos, 60 * UIScale * joystickScale, new Color(200, 200, 200, 120));
+                DrawFilledCircle(spriteBatch, thumbPos, 60 * UIScale * joystickScale, new Color(200, 200, 200, 80));
+                DrawCircleOutline(spriteBatch, thumbPos, 60 * UIScale * joystickScale, outlineColor, 3);
             }
             else
             {
-                // Draw joystick hint
+                // Draw joystick hint - transparent fill with outline
                 Vector2 hintPos = new Vector2(
                     20 * UIScale + 120 * UIScale * joystickScale,
                     ScreenHeight - 20 * UIScale - 120 * UIScale * joystickScale
                 );
-                DrawFilledCircle(spriteBatch, hintPos, 90 * UIScale * joystickScale, new Color(80, 80, 80, 40));
+                DrawFilledCircle(spriteBatch, hintPos, 90 * UIScale * joystickScale, new Color(80, 80, 80, 15));
+                DrawCircleOutline(spriteBatch, hintPos, 90 * UIScale * joystickScale, new Color(150, 150, 150, 120), 3);
             }
             
-            // Draw action button (A)
-            Color actionColor = _actionPressed ? buttonPressedColor : buttonColor;
-            DrawFilledCircle(spriteBatch, 
-                new Vector2(_actionButtonArea.Center.X, _actionButtonArea.Center.Y), 
-                _actionButtonArea.Width / 2, actionColor);
+            // Draw action button (A) - transparent fill with solid outline
+            Color actionFill = _actionPressed ? buttonFillPressedColor : buttonFillColor;
+            Color actionOutline = _actionPressed ? outlinePressedColor : outlineColor;
+            Vector2 actionCenter = new Vector2(_actionButtonArea.Center.X, _actionButtonArea.Center.Y);
+            float actionRadius = _actionButtonArea.Width / 2;
+            DrawFilledCircle(spriteBatch, actionCenter, actionRadius, actionFill);
+            DrawCircleOutline(spriteBatch, actionCenter, actionRadius, actionOutline, 4);
             DrawButtonLabel(spriteBatch, font, "A", _actionButtonArea, textColor);
             
             // Draw back/menu button (B) - top right with hold progress indicator
-            Color backColor = _backButtonHeld ? buttonPressedColor : (_backPressed ? new Color(200, 200, 100, 120) : buttonColor);
+            Color backFill = _backButtonHeld ? buttonFillPressedColor : (_backPressed ? new Color(50, 50, 0, 100) : buttonFillColor);
+            Color backOutline = _backButtonHeld ? outlinePressedColor : outlineColor;
             Vector2 backCenter = new Vector2(_backButtonArea.Center.X, _backButtonArea.Center.Y);
             float backRadius = _backButtonArea.Width / 2;
-            DrawFilledCircle(spriteBatch, backCenter, backRadius, backColor);
+            DrawFilledCircle(spriteBatch, backCenter, backRadius, backFill);
+            DrawCircleOutline(spriteBatch, backCenter, backRadius, backOutline, 4);
             
             // Draw hold progress ring
             if (_backPressed && !_backButtonHeld)
             {
                 float progress = BackButtonHoldProgress;
-                Color progressColor = new Color(255, 200, 0, 180);
+                Color progressColor = new Color(255, 200, 0, 220);
                 DrawProgressRing(spriteBatch, backCenter, backRadius + 5, backRadius + 12, progress, progressColor);
             }
             DrawButtonLabel(spriteBatch, font, "B", _backButtonArea, textColor);
             
-            // Draw switch button (X)
-            Color switchColor = _switchPressed ? buttonPressedColor : buttonColor;
-            DrawFilledCircle(spriteBatch, 
-                new Vector2(_switchButtonArea.Center.X, _switchButtonArea.Center.Y), 
-                _switchButtonArea.Width / 2, switchColor);
+            // Draw switch button (X) - transparent fill with solid outline
+            Color switchFill = _switchPressed ? buttonFillPressedColor : buttonFillColor;
+            Color switchOutline = _switchPressed ? outlinePressedColor : outlineColor;
+            Vector2 switchCenter = new Vector2(_switchButtonArea.Center.X, _switchButtonArea.Center.Y);
+            float switchRadius = _switchButtonArea.Width / 2;
+            DrawFilledCircle(spriteBatch, switchCenter, switchRadius, switchFill);
+            DrawCircleOutline(spriteBatch, switchCenter, switchRadius, switchOutline, 4);
             DrawButtonLabel(spriteBatch, font, "X", _switchButtonArea, textColor);
         }
         
         private void DrawButtonLabel(SpriteBatch spriteBatch, SpriteFont font, string text, Rectangle area, Color color)
         {
-            float scale = UIScale * 1.5f; // Larger text for visibility
+            float scale = UIScale * 2f; // Larger text for visibility
             Vector2 textSize = font.MeasureString(text);
             Vector2 pos = new Vector2(
                 area.Center.X - (textSize.X * scale) / 2,
                 area.Center.Y - (textSize.Y * scale) / 2
             );
+            
+            // Draw shadow for better contrast
+            Vector2 shadowOffset = new Vector2(2 * UIScale, 2 * UIScale);
+            spriteBatch.DrawString(font, text, pos + shadowOffset, Color.Black, 0f, Vector2.Zero, scale, SpriteEffects.None, 0f);
+            
+            // Draw text
             spriteBatch.DrawString(font, text, pos, color, 0f, Vector2.Zero, scale, SpriteEffects.None, 0f);
         }
         
@@ -372,6 +402,33 @@ namespace NoPasaranFC.Gameplay
                 );
                 spriteBatch.Draw(_pixel, rect, color);
             }
+        }
+        
+        private void DrawCircleOutline(SpriteBatch spriteBatch, Vector2 center, float radius, Color color, int thickness)
+        {
+            // Draw circle outline using line segments
+            int segments = 64;
+            for (int i = 0; i < segments; i++)
+            {
+                float angle1 = (float)(i * 2 * Math.PI / segments);
+                float angle2 = (float)((i + 1) * 2 * Math.PI / segments);
+                
+                Vector2 p1 = center + new Vector2((float)Math.Cos(angle1) * radius, (float)Math.Sin(angle1) * radius);
+                Vector2 p2 = center + new Vector2((float)Math.Cos(angle2) * radius, (float)Math.Sin(angle2) * radius);
+                
+                DrawThickLine(spriteBatch, p1, p2, color, thickness);
+            }
+        }
+        
+        private void DrawThickLine(SpriteBatch spriteBatch, Vector2 start, Vector2 end, Color color, int thickness)
+        {
+            Vector2 edge = end - start;
+            float angle = (float)Math.Atan2(edge.Y, edge.X);
+            float length = edge.Length();
+            
+            spriteBatch.Draw(_pixel,
+                new Rectangle((int)start.X, (int)start.Y, (int)length, thickness),
+                null, color, angle, new Vector2(0, thickness / 2f), SpriteEffects.None, 0);
         }
         
         private void DrawProgressRing(SpriteBatch spriteBatch, Vector2 center, float innerRadius, float outerRadius, float progress, Color color)

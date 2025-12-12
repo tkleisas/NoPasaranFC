@@ -79,10 +79,10 @@ namespace NoPasaranFC.Screens
             _input.Update();
             var touchUI = Gameplay.TouchUI.Instance;
             
-            // Touch/Joystick navigation with cooldown
+            // Touch/Joystick navigation with cooldown (threshold 0.3 for responsiveness)
             Vector2 joystickDir = touchUI.JoystickDirection;
-            bool menuDown = _input.IsMenuDownPressed() || (touchUI.Enabled && joystickDir.Y > 0.5f && _joystickMenuCooldown <= 0);
-            bool menuUp = _input.IsMenuUpPressed() || (touchUI.Enabled && joystickDir.Y < -0.5f && _joystickMenuCooldown <= 0);
+            bool menuDown = _input.IsMenuDownPressed() || (touchUI.Enabled && joystickDir.Y > 0.3f && _joystickMenuCooldown <= 0);
+            bool menuUp = _input.IsMenuUpPressed() || (touchUI.Enabled && joystickDir.Y < -0.3f && _joystickMenuCooldown <= 0);
             
             // Update cooldown
             if (_joystickMenuCooldown > 0)
@@ -412,6 +412,8 @@ namespace NoPasaranFC.Screens
         private void DrawFormationPreview(SpriteBatch spriteBatch, SpriteFont font, int screenWidth, int screenHeight)
         {
             int previewX = screenWidth - 420;
+            // If it is android then move the preview box up a bit to avoid touch buttons
+            previewX = PlatformHelper.IsAndroid ? previewX - 150 : previewX;
             int previewY = 90;
             int previewWidth = 330;
             int previewHeight = 380;

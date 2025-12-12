@@ -161,18 +161,18 @@ namespace NoPasaranFC.Screens
             var keyState = Keyboard.GetState();
             var touchUI = Gameplay.TouchUI.Instance;
             
-            // Touch/Joystick navigation with cooldown
+            // Touch/Joystick navigation with cooldown (threshold 0.3 for responsiveness)
             Vector2 joystickDir = touchUI.JoystickDirection;
             bool menuDown = (keyState.IsKeyDown(Keys.Down) && !_previousKeyState.IsKeyDown(Keys.Down)) || 
                            _input.IsMenuDownPressed() || 
-                           (touchUI.Enabled && joystickDir.Y > 0.5f && _joystickMenuCooldown <= 0);
+                           (touchUI.Enabled && joystickDir.Y > 0.3f && _joystickMenuCooldown <= 0);
             bool menuUp = (keyState.IsKeyDown(Keys.Up) && !_previousKeyState.IsKeyDown(Keys.Up)) || 
                          _input.IsMenuUpPressed() || 
-                         (touchUI.Enabled && joystickDir.Y < -0.5f && _joystickMenuCooldown <= 0);
+                         (touchUI.Enabled && joystickDir.Y < -0.3f && _joystickMenuCooldown <= 0);
             bool menuLeft = (keyState.IsKeyDown(Keys.Left) && !_previousKeyState.IsKeyDown(Keys.Left)) ||
-                           (touchUI.Enabled && joystickDir.X < -0.5f && _joystickMenuCooldown <= 0);
+                           (touchUI.Enabled && joystickDir.X < -0.3f && _joystickMenuCooldown <= 0);
             bool menuRight = (keyState.IsKeyDown(Keys.Right) && !_previousKeyState.IsKeyDown(Keys.Right)) ||
-                            (touchUI.Enabled && joystickDir.X > 0.5f && _joystickMenuCooldown <= 0);
+                            (touchUI.Enabled && joystickDir.X > 0.3f && _joystickMenuCooldown <= 0);
             
             // Update cooldown
             if (_joystickMenuCooldown > 0)
