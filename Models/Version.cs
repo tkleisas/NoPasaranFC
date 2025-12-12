@@ -4,7 +4,7 @@ namespace NoPasaranFC.Models
     {
         public const string MAJOR = "1";
         public const string MINOR = "2";
-        public const string PATCH = "2";
+        public const string PATCH = "3";
         
         // COMMIT_HASH is defined in the auto-generated GitCommitHash.cs file
         
