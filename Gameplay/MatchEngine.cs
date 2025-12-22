@@ -79,8 +79,9 @@ namespace NoPasaranFC.Gameplay
         
         // Ball physics
         private const float BallFriction = 0.95f;
-        private const float BallPossessionDistance = 80f; // Scaled for larger sprites
-        private const float BallKickDistance = 35f; // Reduced from 50f for tighter control
+        private const float BallPossessionDistance = 20f; // Small - actual sprites smaller than boundary
+        private const float BallKickDistance = 5f; // Very tight control, accounts for transparent pixels
+        private const float BallShootDistance = 70f; // Distance for charged shots (must be > collision distance ~56px)
         private const float TackleDistance = 70f; // Scaled for larger sprites
         private const float TackleSuccessBase = 40f; // Base tackle success %
         private const float Gravity = 1200f; // Gravity for ball vertical movement
@@ -651,7 +652,7 @@ namespace NoPasaranFC.Gameplay
                 float distToBall = Vector2.Distance(_controlledPlayer.FieldPosition, BallPosition);
                 
                 // Handle shoot button for charging shot or tackle
-                if (isShootKeyDown && distToBall < BallKickDistance * 2f && BallHeight < 100f)
+                if (isShootKeyDown && distToBall < BallShootDistance && BallHeight < 100f)
                 {
                     // Near ball - charge shot (no angle check here, allow from any angle when charging)
                     if (!_wasShootButtonDown)
@@ -666,7 +667,7 @@ namespace NoPasaranFC.Gameplay
                 else if (_wasShootButtonDown && !isShootKeyDown)
                 {
                     // Button released
-                    if (distToBall < BallKickDistance * 2f && BallHeight < 100f)
+                    if (distToBall < BallShootDistance && BallHeight < 100f)
                     {
                         // Near ball - shoot! (no angle check for charged shots)
                         PerformShoot(moveDirection);
@@ -749,7 +750,8 @@ namespace NoPasaranFC.Gameplay
                             // If controlled player is near ball and moving, kick it (with angle check and cooldown)
                             // Don't kick if ball is in the air (prevents headbutting glitch)
                             // Don't kick during countdown
-                            if (CurrentState == MatchState.Playing && moveDirection.Length() > 0.1f && BallHeight < 100f && CanPlayerKickBall(_controlledPlayer, moveDirection, BallKickDistance))
+                            // Don't auto-kick if player is charging a shot
+                            if (CurrentState == MatchState.Playing && moveDirection.Length() > 0.1f && BallHeight < 100f && !isShootKeyDown && CanPlayerKickBall(_controlledPlayer, moveDirection, BallKickDistance))
                             {
                                 // Check cooldown to prevent continuous juggling
                                 float timeSinceLastKick = (float)MatchTime - _controlledPlayer.LastKickTime;
@@ -937,7 +939,7 @@ namespace NoPasaranFC.Gameplay
                 if (CurrentState == MatchState.Playing && baseVelocity.LengthSquared() > 0.01f && BallHeight < 100f)
                 {
                     float distToBall = Vector2.Distance(player.FieldPosition, BallPosition);
-                    if (distToBall < BallKickDistance * 1.5f)
+                    if (distToBall < BallShootDistance * 0.6f)
                     {
                         Vector2 moveDirection = Vector2.Normalize(baseVelocity);
                         
