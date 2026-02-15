@@ -86,6 +86,7 @@ Manage and play as **NO PASARAN!** in an 8-team championship. Control one player
 
 ### 🔊 Audio System
 - **Music Tracks**: Menu, match, and victory music (looping)
+No Pasaran main theme ("Εμπρός Νό Πασαράν!") by comrade Kyriakos
 - **Sound Effects**: 
   - Menu navigation (move, select, back)
   - Match sounds (whistle start/end, kick, tackle, goal)
