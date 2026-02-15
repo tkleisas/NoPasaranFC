@@ -52,7 +52,7 @@ namespace NoPasaranFC.Gameplay
             TryLoadSoundEffect("crowd_aww", "Audio/SFX/crowd_aww");
             
             // Try to load music (gracefully handle missing files)
-            TryLoadSong("menu_music", "Audio/Music/menu");
+            TryLoadSong("menu_music", "Audio/Music/empros_no_pasaran");
             TryLoadSong("match_music", "Audio/Music/match");
             TryLoadSong("victory_music", "Audio/Music/victory");
         }
