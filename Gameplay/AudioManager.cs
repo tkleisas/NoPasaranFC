@@ -132,11 +132,23 @@ namespace NoPasaranFC.Gameplay
                 if (_currentSongName == name && MediaPlayer.State == MediaState.Playing)
                     return;
                 
-                _currentSong = song;
-                _currentSongName = name;
-                MediaPlayer.IsRepeating = loop;
-                MediaPlayer.Volume = MusicVolume;
-                MediaPlayer.Play(song);
+                try
+                {
+                    _currentSong = song;
+                    _currentSongName = name;
+                    MediaPlayer.IsRepeating = loop;
+                    MediaPlayer.Volume = MusicVolume;
+                    MediaPlayer.Play(song);
+                }
+                catch (Exception ex)
+                {
+                    // On Android, MediaPlayer.Play can throw if the file is missing
+                    // even though Content.Load<Song> succeeded (lazy file resolution)
+                    System.Diagnostics.Debug.WriteLine($"Failed to play music '{name}': {ex.Message}");
+                    _songs.Remove(name);
+                    _currentSong = null;
+                    _currentSongName = null;
+                }
             }
         }
 

@@ -35,6 +35,11 @@
     <Compile Include="Activity1.cs" />
   </ItemGroup>
 
+  <!-- Reference the Android-specific MGCB file to build content for Android platform -->
+  <ItemGroup>
+    <MonoGameContentReference Include="..\Content\Content.Android.mgcb" />
+  </ItemGroup>
+
   <!-- Use pre-built content for Android (avoid MGCB rebuild issues) -->
   <!-- Exclude any .db database files - database is created at runtime by seeder -->
   <ItemGroup>
