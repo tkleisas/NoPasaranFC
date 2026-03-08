@@ -71,7 +71,7 @@ namespace NoPasaranFC.Gameplay
 
         public AIContext BuildAIContext(Player player)
         {
-            bool isHomeTeam = player.Team != null && player.Team.Name == _engine.HomeTeam.Name;
+            bool isHomeTeam = player.Team != null && player.Team == _engine.HomeTeam;
             var myTeam = isHomeTeam ? _engine.HomeTeam : _engine.AwayTeam;
             var opponentTeam = isHomeTeam ? _engine.AwayTeam : _engine.HomeTeam;
 
@@ -178,7 +178,7 @@ namespace NoPasaranFC.Gameplay
                 HasBallPossession = hasControl,
                 OpponentGoalCenter = opponentGoalCenterFinal,
                 OwnGoalCenter = ownGoalCenter,
-                IsPlayerTeam = isHomeTeam,
+                IsPlayerTeam = player.Team != null && player.Team.IsPlayerControlled,
                 IsHomeTeam = isHomeTeam,
                 Random = _engine.SharedRandom,
                 ClosestToBall = GetPlayerClosestToBall(),
@@ -342,6 +342,10 @@ namespace NoPasaranFC.Gameplay
 
         public bool ShouldPlayerChaseBall(Player player)
         {
+            // GK never chases ball via this method — GoalkeeperState handles its own ball pursuit
+            if (player.Position == PlayerPosition.Goalkeeper)
+                return false;
+
             var team = player.Team;
             var activeTeammates = team.Players
                 .Where(p => p.IsStarting && !p.IsKnockedDown && p.Position != PlayerPosition.Goalkeeper)
@@ -353,9 +357,6 @@ namespace NoPasaranFC.Gameplay
                 .ToList();
 
             int playerRank = teamDistances.FindIndex(x => x.Player == player);
-
-            if (player.Position == PlayerPosition.Goalkeeper)
-                return true;
 
             return playerRank == 0;
         }

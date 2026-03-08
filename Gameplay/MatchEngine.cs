@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using Microsoft.Xna.Framework;
 using NoPasaranFC.Models;
@@ -159,6 +160,40 @@ namespace NoPasaranFC.Gameplay
             CountdownNumber = 3;
             
             InitializePositions();
+            LogMatchDiagnostics();
+        }
+        
+        private void LogMatchDiagnostics()
+        {
+            try
+            {
+                using var writer = new StreamWriter("match_debug.txt", false, System.Text.Encoding.UTF8);
+                writer.WriteLine($"=== Match Start: {_homeTeam.Name} (HOME) vs {_awayTeam.Name} (AWAY) ===");
+                writer.WriteLine($"Home IsPlayerControlled: {_homeTeam.IsPlayerControlled}");
+                writer.WriteLine($"Away IsPlayerControlled: {_awayTeam.IsPlayerControlled}");
+                writer.WriteLine($"Field: {FieldWidth}x{FieldHeight}, Margin: {StadiumMargin}");
+                writer.WriteLine($"Left Goal X: {StadiumMargin}, Right Goal X: {StadiumMargin + FieldWidth}");
+                writer.WriteLine();
+
+                void LogTeam(Team team, string label)
+                {
+                    writer.WriteLine($"--- {label}: {team.Name} (Id={team.Id}) ---");
+                    foreach (var p in team.Players.Where(pp => pp.IsStarting))
+                    {
+                        bool isHome = p.Team == _homeTeam;
+                        writer.WriteLine($"  [{p.ShirtNumber}] {p.Name} Pos={p.Position} Role={p.Role} " +
+                            $"FieldPos=({p.FieldPosition.X:F0},{p.FieldPosition.Y:F0}) " +
+                            $"HomePos=({p.HomePosition.X:F0},{p.HomePosition.Y:F0}) " +
+                            $"Team={p.Team?.Name ?? "NULL"} isHome={isHome} " +
+                            $"AIState={((p.AIController as AIController)?.GetCurrentStateName() ?? "N/A")}");
+                    }
+                    writer.WriteLine();
+                }
+
+                LogTeam(_homeTeam, "HOME TEAM");
+                LogTeam(_awayTeam, "AWAY TEAM");
+            }
+            catch { /* Don't crash on diagnostics failure */ }
         }
         
         public void SetCelebrationResources(Microsoft.Xna.Framework.Graphics.SpriteFont font, 
@@ -183,13 +218,16 @@ namespace NoPasaranFC.Gameplay
             foreach (var player in _awayTeam.Players)
                 player.IsControlled = false;
             
-            // Find the first starting player from controlled team
+            // Find the first starting non-GK player from controlled team
             var controlledTeamPlayers = _homeTeam.IsPlayerControlled ? 
                 _homeTeam.Players.Where(p => p.IsStarting).ToList() : 
                 _awayTeam.Players.Where(p => p.IsStarting).ToList();
             if (controlledTeamPlayers.Any())
             {
-                _controlledPlayer = controlledTeamPlayers[0];
+                // Prefer a midfielder or forward as initial controlled player (skip GK)
+                _controlledPlayer = controlledTeamPlayers.FirstOrDefault(p => p.Position == PlayerPosition.Midfielder)
+                    ?? controlledTeamPlayers.FirstOrDefault(p => p.Position != PlayerPosition.Goalkeeper)
+                    ?? controlledTeamPlayers[0];
                 _controlledPlayer.IsControlled = true;
             }
             
@@ -199,8 +237,11 @@ namespace NoPasaranFC.Gameplay
         
         private void SetupTeamPositions(Team team, bool isHome)
         {
-            // Get only starting players
-            var startingPlayers = team.Players.Where(p => p.IsStarting).ToList();
+            // Get starting players sorted by position to match 4-4-2 formation:
+            // GK first, then DEF, MID, FWD — ensures correct AI state assignment
+            var startingPlayers = team.Players.Where(p => p.IsStarting)
+                .OrderBy(p => p.Position)
+                .ToList();
             if (startingPlayers.Count < 11) return;
             
             float xOffset = StadiumMargin;
@@ -214,9 +255,10 @@ namespace NoPasaranFC.Gameplay
             float attackX = isHome ? xOffset + FieldWidth * 0.6f : xOffset + FieldWidth * 0.4f;
             float goalX = isHome ? xOffset + 50f : xOffset + FieldWidth - 50f;
             
-            // Goalkeeper
+            // Goalkeeper — also set Position to ensure AIController creates GoalkeeperState
             startingPlayers[0].FieldPosition = new Vector2(goalX, centerY);
             startingPlayers[0].HomePosition = new Vector2(goalX, centerY);
+            startingPlayers[0].Position = PlayerPosition.Goalkeeper;
             startingPlayers[0].Role = PlayerRole.Goalkeeper;
             
             // Defenders (4) - spread vertically with specific roles
@@ -226,6 +268,7 @@ namespace NoPasaranFC.Gameplay
             {
                 startingPlayers[1 + i].FieldPosition = new Vector2(defenseX, yOffset + FieldHeight * defenderY[i]);
                 startingPlayers[1 + i].HomePosition = new Vector2(defenseX, yOffset + FieldHeight * defenderY[i]);
+                startingPlayers[1 + i].Position = PlayerPosition.Defender;
                 startingPlayers[1 + i].Role = defenderRoles[i];
             }
             
@@ -236,16 +279,19 @@ namespace NoPasaranFC.Gameplay
             {
                 startingPlayers[5 + i].FieldPosition = new Vector2(midfieldX, yOffset + FieldHeight * midfielderY[i]);
                 startingPlayers[5 + i].HomePosition = new Vector2(midfieldX, yOffset + FieldHeight * midfielderY[i]);
+                startingPlayers[5 + i].Position = PlayerPosition.Midfielder;
                 startingPlayers[5 + i].Role = midfielderRoles[i];
             }
             
             // Forwards (2)
             startingPlayers[9].FieldPosition = new Vector2(attackX, yOffset + FieldHeight * 0.33f);
             startingPlayers[9].HomePosition = new Vector2(attackX, yOffset + FieldHeight * 0.33f);
+            startingPlayers[9].Position = PlayerPosition.Forward;
             startingPlayers[9].Role = PlayerRole.Striker;
             
             startingPlayers[10].FieldPosition = new Vector2(attackX, yOffset + FieldHeight * 0.67f);
             startingPlayers[10].HomePosition = new Vector2(attackX, yOffset + FieldHeight * 0.67f);
+            startingPlayers[10].Position = PlayerPosition.Forward;
             startingPlayers[10].Role = PlayerRole.Striker;
             
             // Initialize AI controllers for all starting players

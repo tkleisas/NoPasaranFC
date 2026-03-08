@@ -1551,9 +1551,13 @@ namespace NoPasaranFC.Screens
                 DrawCircle(spriteBatch, pos, 70f, posColor * 0.5f, 2f);
                 
                 // Player state text
+                bool playerIsHome = player.Team == _homeTeam;
+                string teamDir = playerIsHome ? "H→" : "←A";
+                string posLabel = player.Position.ToString().Substring(0, 2).ToUpper();
+                
                 if (isControlled)
                 {
-                    string debugText = $"CTRL\nV:{player.Velocity.Length():F0}";
+                    string debugText = $"CTRL {teamDir}\n{posLabel} V:{player.Velocity.Length():F0}";
                     spriteBatch.DrawString(font, debugText, pos + new Vector2(-30, -100), 
                         Color.Yellow, 0f, Vector2.Zero, 0.6f, SpriteEffects.None, 0f);
                 }
@@ -1571,9 +1575,10 @@ namespace NoPasaranFC.Screens
                                      distToBall > 300f ? 25f : 0f;
                     int totalThreshold = (int)(baseThreshold + ballBonus);
                     
-                    string debugText = $"{aiState}\nT:{totalThreshold}px\nD:{(int)distToBall}";
+                    string debugText = $"{teamDir} {posLabel}\n{aiState}\nD:{(int)distToBall}";
+                    Color textColor = playerIsHome ? Color.Cyan : Color.Orange;
                     spriteBatch.DrawString(font, debugText, pos + new Vector2(-40, -100), 
-                        Color.Cyan, 0f, Vector2.Zero, 0.5f, SpriteEffects.None, 0f);
+                        textColor, 0f, Vector2.Zero, 0.5f, SpriteEffects.None, 0f);
                 }
                 
                 // Draw trajectory visualization (trajectories are internal to DribblingState)
