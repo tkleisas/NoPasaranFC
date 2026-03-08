@@ -94,6 +94,10 @@ namespace NoPasaranFC.Gameplay
 
             var activeOpponents = opponentTeam.Players.Where(p => p.IsStarting && !p.IsKnockedDown).ToList();
 
+            Vector2 opponentGoalCenter = isHomeTeam
+                ? new Vector2(MatchEngine.StadiumMargin + MatchEngine.FieldWidth, MatchEngine.StadiumMargin + MatchEngine.FieldHeight / 2)
+                : new Vector2(MatchEngine.StadiumMargin, MatchEngine.StadiumMargin + MatchEngine.FieldHeight / 2);
+
             foreach (var teammate in myTeam.Players.Where(p => p.IsStarting && !p.IsKnockedDown && p != player))
             {
                 float dist = Vector2.Distance(player.FieldPosition, teammate.FieldPosition);
@@ -103,14 +107,43 @@ namespace NoPasaranFC.Gameplay
                     nearestTeammate = teammate;
                 }
 
-                Vector2 opponentGoalCenter = isHomeTeam
-                    ? new Vector2(MatchEngine.StadiumMargin + MatchEngine.FieldWidth, MatchEngine.StadiumMargin + MatchEngine.FieldHeight / 2)
-                    : new Vector2(MatchEngine.StadiumMargin, MatchEngine.StadiumMargin + MatchEngine.FieldHeight / 2);
+                // Multi-factor pass target scoring
                 float distToGoal = Vector2.Distance(teammate.FieldPosition, opponentGoalCenter);
-                float passScore = 1000f - distToGoal;
+                float passScore = 0f;
 
+                // Closer to opponent goal is better (normalized 0-1000)
+                passScore += 1000f - distToGoal;
+
+                // Prefer teammates at medium distance (not too close, not too far)
+                if (dist > AIConstants.MinPassDistance && dist < 1200f)
+                    passScore += 300f; // In ideal pass range
+                else if (dist >= 1200f && dist < AIConstants.MaxPassDistance)
+                    passScore += 100f; // Acceptable long pass
+                else
+                    passScore -= 200f; // Too close or too far
+
+                // Bonus for open/unmarked teammates
+                float nearestDefDist = float.MaxValue;
+                foreach (var opp in activeOpponents)
+                {
+                    float oppDist = Vector2.Distance(teammate.FieldPosition, opp.FieldPosition);
+                    if (oppDist < nearestDefDist) nearestDefDist = oppDist;
+                }
+                if (nearestDefDist > 250f)
+                    passScore += 400f; // Wide open
+                else if (nearestDefDist > 150f)
+                    passScore += 200f; // Reasonably open
+
+                // Prefer forwards and attacking midfielders
+                if (teammate.Position == PlayerPosition.Forward)
+                    passScore += 200f;
+                else if (teammate.Position == PlayerPosition.Midfielder &&
+                    (teammate.Role == PlayerRole.AttackingMidfielder || teammate.Role == PlayerRole.LeftWinger || teammate.Role == PlayerRole.RightWinger))
+                    passScore += 100f;
+
+                // Heavy penalty if pass path is blocked
                 if (IsPathBlocked(player.FieldPosition, teammate.FieldPosition, activeOpponents, 60f))
-                    passScore -= 5000f;
+                    passScore -= 3000f;
 
                 if (passScore > bestPassScore)
                 {

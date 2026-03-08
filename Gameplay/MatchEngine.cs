@@ -946,7 +946,7 @@ namespace NoPasaranFC.Gameplay
                 ClampToField(ref pos);
                 player.FieldPosition = pos;
                 
-                // AI dribbling: Kick ball automatically when close and moving (similar to player control)
+                // AI dribbling: Kick ball automatically when close and moving
                 // Don't kick during countdown
                 if (CurrentState == MatchState.Playing && baseVelocity.LengthSquared() > 0.01f && BallHeight < 100f)
                 {
@@ -955,17 +955,29 @@ namespace NoPasaranFC.Gameplay
                     {
                         Vector2 moveDirection = Vector2.Normalize(baseVelocity);
                         
-                        // SIMPLIFIED: Just kick the ball in movement direction when close
-                        // No position checks - allows backheel kicks, side kicks, etc.
-                        // This eliminates oscillation caused by positioning requirements
+                        // Blend movement direction with goal direction for smarter dribbling
+                        bool isHome = player.Team == HomeTeam;
+                        Vector2 goalCenter = isHome
+                            ? new Vector2(StadiumMargin + FieldWidth, StadiumMargin + FieldHeight / 2f)
+                            : new Vector2(StadiumMargin, StadiumMargin + FieldHeight / 2f);
+                        Vector2 toGoal = goalCenter - player.FieldPosition;
+                        if (toGoal.LengthSquared() > 0.01f)
+                            toGoal.Normalize();
+                        
+                        // 40% toward goal, 60% movement direction — keeps dribble feel but progresses attack
+                        Vector2 kickDir = moveDirection * 0.6f + toGoal * 0.4f;
+                        if (kickDir.LengthSquared() > 0.01f)
+                            kickDir.Normalize();
+                        else
+                            kickDir = moveDirection;
+
                         float timeSinceLastKick = (float)MatchTime - player.LastKickTime;
                         if (timeSinceLastKick >= AutoKickCooldown)
                         {
-                            // Kick ball in movement direction
                             float staminaStatMultiplier = GetStaminaStatMultiplier(player);
                             float kickPower = (player.Shooting / 8f + 6f) * staminaStatMultiplier * _aiBehaviorManager.GetAIDifficultyModifier();
-                            BallVelocity = moveDirection * kickPower * player.Speed * 1.0f;
-                            BallVerticalVelocity = 15f; // Very low kick for dribbling
+                            BallVelocity = kickDir * kickPower * player.Speed * 1.0f;
+                            BallVerticalVelocity = 15f;
                             _lastPlayerTouchedBall = player;
                             player.LastKickTime = (float)MatchTime;
                         }

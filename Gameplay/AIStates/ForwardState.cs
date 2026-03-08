@@ -40,7 +40,6 @@ namespace NoPasaranFC.Gameplay.AIStates
             float attackingX;
             if (teamHasBall)
             {
-                // Faster forwards push deeper (Speed stat influence)
                 float depth = 0.85f + speedRatio * 0.05f;
                 attackingX = context.IsHomeTeam ?
                     MatchEngine.StadiumMargin + MatchEngine.FieldWidth * depth :
@@ -48,56 +47,52 @@ namespace NoPasaranFC.Gameplay.AIStates
             }
             else
             {
+                // Stay higher even when not in possession — don't drop back to center
                 attackingX = context.IsHomeTeam ?
-                    MatchEngine.StadiumMargin + MatchEngine.FieldWidth * 0.75f :
-                    MatchEngine.StadiumMargin + MatchEngine.FieldWidth * 0.25f;
+                    MatchEngine.StadiumMargin + MatchEngine.FieldWidth * 0.70f :
+                    MatchEngine.StadiumMargin + MatchEngine.FieldWidth * 0.30f;
             }
 
+            // Lower lerp toward ball — forwards should stay in attacking positions, not drift to center
             float lerpFactor;
             if (teamHasBall && ballInOpponentHalf)
-                lerpFactor = 0.6f * diffMult;
+                lerpFactor = 0.25f * diffMult;  // Only slightly influenced by ball in attack
             else if (teamHasBall)
-                lerpFactor = 0.3f * diffMult;
+                lerpFactor = 0.15f * diffMult;  // Stay in position, don't drop back
             else
-                lerpFactor = 0.5f * diffMult;
+                lerpFactor = 0.30f * diffMult;  // Slightly track ball when defending
 
             Vector2 attackingPosition = new Vector2(attackingX, player.HomePosition.Y);
-            Vector2 target = Vector2.Lerp(attackingPosition, context.BallPosition, MathHelper.Clamp(lerpFactor, 0f, 0.75f));
+            Vector2 target = Vector2.Lerp(attackingPosition, context.BallPosition, MathHelper.Clamp(lerpFactor, 0f, 0.45f));
 
-            // Forward runs: when teammate has ball nearby, make a run behind the defense
+            // Forward runs: when any teammate has ball, make a run toward goal
             if (teamHasBall && context.ClosestToBall != null && context.ClosestToBall.Id != player.Id)
             {
                 float teammateDistToBall = Vector2.Distance(context.ClosestToBall.FieldPosition, context.BallPosition);
-                if (teammateDistToBall < 100f) // Teammate has control of ball
+                if (teammateDistToBall < 150f) // Teammate has reasonable control
                 {
-                    float ballCarrierDistToMe = Vector2.Distance(context.ClosestToBall.FieldPosition, player.FieldPosition);
-                    if (ballCarrierDistToMe < AIConstants.ForwardRunTriggerDistance && ballInOpponentHalf)
-                    {
-                        // Find space behind defensive line
-                        float runDepth = AIConstants.ForwardRunDepth + speedRatio * 0.05f;
-                        float runX = context.IsHomeTeam ?
-                            MatchEngine.StadiumMargin + MatchEngine.FieldWidth * runDepth :
-                            MatchEngine.StadiumMargin + MatchEngine.FieldWidth * (1f - runDepth);
+                    // Forward runs trigger: much more generous — any teammate with ball
+                    float runDepth = AIConstants.ForwardRunDepth + speedRatio * 0.05f;
+                    float runX = context.IsHomeTeam ?
+                        MatchEngine.StadiumMargin + MatchEngine.FieldWidth * runDepth :
+                        MatchEngine.StadiumMargin + MatchEngine.FieldWidth * (1f - runDepth);
 
-                        // Find open lane (away from defenders)
-                        float bestY = FindOpenLane(player, context, runX);
-                        Vector2 runTarget = new Vector2(runX, bestY);
-                        target = Vector2.Lerp(target, runTarget, 0.6f * diffMult);
-                    }
+                    float bestY = FindOpenLane(player, context, runX);
+                    Vector2 runTarget = new Vector2(runX, bestY);
+                    // Stronger pull toward run target
+                    target = Vector2.Lerp(target, runTarget, 0.5f * diffMult);
                 }
             }
 
             // Role differentiation
             if (player.Role == PlayerRole.Striker || player.Role == PlayerRole.CenterForward)
             {
-                // Strikers: stay central, spread vertically
                 float centerY = MatchEngine.StadiumMargin + MatchEngine.FieldHeight / 2;
                 float spreadOffset = (player.ShirtNumber % 2 == 0) ? 250f : -250f;
                 target.Y = MathHelper.Lerp(target.Y, centerY + spreadOffset, 0.5f);
             }
             else if (player.Role == PlayerRole.LeftWinger)
             {
-                // Wingers: hug touchline, sprint forward
                 target.Y = AdjustYForLane(target.Y, MatchEngine.StadiumMargin + MatchEngine.FieldHeight * 0.15f, 0.6f);
             }
             else if (player.Role == PlayerRole.RightWinger)

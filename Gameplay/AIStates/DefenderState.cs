@@ -44,6 +44,7 @@ namespace NoPasaranFC.Gameplay.AIStates
             float diffMult = AIBehaviorManager.GetPositioningMultiplier();
 
             bool opponentHasBall = context.ClosestToBall != null && context.ClosestToBall.TeamId != player.TeamId;
+            bool teamHasBall = context.ClosestToBall != null && context.ClosestToBall.TeamId == player.TeamId;
             float distanceBallToOwnGoal = Vector2.Distance(context.BallPosition, context.OwnGoalCenter);
 
             // Threat-based lerp factor, scaled by Defending stat and difficulty
@@ -56,7 +57,26 @@ namespace NoPasaranFC.Gameplay.AIStates
             else
                 lerpFactor = GetDistanceBasedLerpFactor(distanceToBall, 0.45f, 0.30f, 0.20f, 0.12f) + lerpBonus * 0.5f;
 
-            Vector2 target = Vector2.Lerp(player.HomePosition, context.BallPosition, MathHelper.Clamp(lerpFactor, 0f, 0.85f));
+            // Base position: push forward when team has ball in attacking half
+            Vector2 basePos = player.HomePosition;
+            if (teamHasBall && context.IsAttackingHalf)
+            {
+                // Defenders push up to ~45% when team attacks (maintain compact shape)
+                float pushX = context.IsHomeTeam ?
+                    MatchEngine.StadiumMargin + MatchEngine.FieldWidth * 0.45f :
+                    MatchEngine.StadiumMargin + MatchEngine.FieldWidth * 0.55f;
+                basePos.X = MathHelper.Lerp(player.HomePosition.X, pushX, 0.5f);
+            }
+            else if (teamHasBall)
+            {
+                // Even in own half, push slightly forward
+                float pushX = context.IsHomeTeam ?
+                    MatchEngine.StadiumMargin + MatchEngine.FieldWidth * 0.35f :
+                    MatchEngine.StadiumMargin + MatchEngine.FieldWidth * 0.65f;
+                basePos.X = MathHelper.Lerp(player.HomePosition.X, pushX, 0.3f);
+            }
+
+            Vector2 target = Vector2.Lerp(basePos, context.BallPosition, MathHelper.Clamp(lerpFactor, 0f, 0.85f));
 
             // Man-marking: track nearest opponent when they're in our defensive zone
             if (opponentHasBall && context.Opponents != null)
@@ -64,9 +84,7 @@ namespace NoPasaranFC.Gameplay.AIStates
                 Player nearestAttacker = FindNearestAttackerInZone(player, context);
                 if (nearestAttacker != null)
                 {
-                    // Position between attacker and our goal
                     Vector2 markPosition = Vector2.Lerp(nearestAttacker.FieldPosition, context.OwnGoalCenter, 0.15f);
-                    // Blend marking with ball tracking
                     float markWeight = MathHelper.Clamp(defendingRatio * 0.6f * diffMult, 0.1f, 0.5f);
                     target = Vector2.Lerp(target, markPosition, markWeight);
                 }

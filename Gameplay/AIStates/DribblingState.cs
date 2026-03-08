@@ -118,12 +118,13 @@ namespace NoPasaranFC.Gameplay.AIStates
 
         private AIStateType? EvaluatePassOpportunity(Player player, AIContext context)
         {
-            if (context.BestPassTarget == null)
+            Player passTarget = context.BestPassTarget ?? context.NearestTeammate;
+            if (passTarget == null)
                 return null;
 
             float distanceToGoal = Vector2.Distance(player.FieldPosition, context.OpponentGoalCenter);
-            float distToTeammate = Vector2.Distance(player.FieldPosition, context.BestPassTarget.FieldPosition);
-            float teammateDistToGoal = Vector2.Distance(context.BestPassTarget.FieldPosition, context.OpponentGoalCenter);
+            float distToTeammate = Vector2.Distance(player.FieldPosition, passTarget.FieldPosition);
+            float teammateDistToGoal = Vector2.Distance(passTarget.FieldPosition, context.OpponentGoalCenter);
             float myDistToGoal = distanceToGoal;
 
             bool teammateAheadOfMe = teammateDistToGoal < myDistToGoal - 30f;
@@ -146,7 +147,7 @@ namespace NoPasaranFC.Gameplay.AIStates
             bool isDefender = player.Position == PlayerPosition.Defender;
             bool isMidfielder = player.Position == PlayerPosition.Midfielder;
             bool isForward = player.Position == PlayerPosition.Forward;
-            bool isTeammateForward = context.BestPassTarget.Position == PlayerPosition.Forward;
+            bool isTeammateForward = passTarget.Position == PlayerPosition.Forward;
 
             if (isDefender && validPassRange)
             {

@@ -58,24 +58,27 @@ namespace NoPasaranFC.Gameplay.AIStates
 
             if (teamHasBall && ballInOpponentHalf)
             {
+                // Push much further forward when attacking
                 float forwardX = context.IsHomeTeam ?
-                    MatchEngine.StadiumMargin + MatchEngine.FieldWidth * (isAttackingMidfielder ? 0.80f : 0.70f) :
-                    MatchEngine.StadiumMargin + MatchEngine.FieldWidth * (isAttackingMidfielder ? 0.20f : 0.30f);
+                    MatchEngine.StadiumMargin + MatchEngine.FieldWidth * (isAttackingMidfielder ? 0.82f : 0.72f) :
+                    MatchEngine.StadiumMargin + MatchEngine.FieldWidth * (isAttackingMidfielder ? 0.18f : 0.28f);
                 basePosition = new Vector2(forwardX, player.HomePosition.Y);
-                lerpFactor = GetDistanceBasedLerpFactor(distanceToBall, 0.6f, 0.5f, 0.4f, 0.3f) * diffMult;
+                // Lower lerp toward ball — maintain attacking shape instead of clustering
+                lerpFactor = GetDistanceBasedLerpFactor(distanceToBall, 0.35f, 0.25f, 0.18f, 0.10f) * diffMult;
             }
             else if (teamHasBall)
             {
+                // Push forward even in own half
                 float forwardX = context.IsHomeTeam ?
-                    MatchEngine.StadiumMargin + MatchEngine.FieldWidth * (isAttackingMidfielder ? 0.70f : 0.60f) :
-                    MatchEngine.StadiumMargin + MatchEngine.FieldWidth * (isAttackingMidfielder ? 0.30f : 0.40f);
+                    MatchEngine.StadiumMargin + MatchEngine.FieldWidth * (isAttackingMidfielder ? 0.72f : 0.62f) :
+                    MatchEngine.StadiumMargin + MatchEngine.FieldWidth * (isAttackingMidfielder ? 0.28f : 0.38f);
                 basePosition = new Vector2(forwardX, player.HomePosition.Y);
-                lerpFactor = GetDistanceBasedLerpFactor(distanceToBall, 0.5f, 0.4f, 0.3f, 0.2f) * diffMult;
+                lerpFactor = GetDistanceBasedLerpFactor(distanceToBall, 0.30f, 0.22f, 0.15f, 0.10f) * diffMult;
             }
             else
             {
                 basePosition = player.HomePosition;
-                lerpFactor = GetDistanceBasedLerpFactor(distanceToBall, 0.50f, 0.35f, 0.25f, 0.15f) * diffMult;
+                lerpFactor = GetDistanceBasedLerpFactor(distanceToBall, 0.35f, 0.25f, 0.18f, 0.10f) * diffMult;
             }
 
             Vector2 target = Vector2.Lerp(basePosition, context.BallPosition, MathHelper.Clamp(lerpFactor, 0f, 0.75f));
