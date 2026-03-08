@@ -180,8 +180,8 @@ namespace NoPasaranFC.Screens
             // Shoot/Tackle (X key, A button, or touch A)
             bool isShootKeyDown = _input.IsShootButtonDown() || touchUI.IsActionPressed;
             
-            // Pass (Z key, B button)
-            bool isPassKeyDown = _input.IsPassButtonDown();
+            // Pass (Z key, B button, or touch Y)
+            bool isPassKeyDown = _input.IsPassButtonDown() || touchUI.IsPassPressed;
             
             _matchEngine.Update(gameTime, moveDirection, isShootKeyDown, isPassKeyDown);
             

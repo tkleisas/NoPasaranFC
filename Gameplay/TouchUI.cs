@@ -34,6 +34,7 @@ namespace NoPasaranFC.Gameplay
         private Rectangle _actionButtonArea;  // A button (confirm/shoot)
         private Rectangle _backButtonArea;    // B button (back/cancel)
         private Rectangle _switchButtonArea;  // X button (switch player)
+        private Rectangle _passButtonArea;    // Y button (pass)
         
         // Button states
         private bool _actionPressed;
@@ -42,6 +43,8 @@ namespace NoPasaranFC.Gameplay
         private bool _backPreviousPressed;
         private bool _switchPressed;
         private bool _switchPreviousPressed;
+        private bool _passPressed;
+        private bool _passPreviousPressed;
         
         // Back button hold timer (0.3 second hold required)
         private float _backButtonHoldTime;
@@ -59,6 +62,8 @@ namespace NoPasaranFC.Gameplay
         public bool IsBackJustPressed => _backButtonHeld && !_backPreviousPressed;
         public bool IsSwitchPressed => _switchPressed;
         public bool IsSwitchJustPressed => _switchPressed && !_switchPreviousPressed;
+        public bool IsPassPressed => _passPressed;
+        public bool IsPassJustPressed => _passPressed && !_passPreviousPressed;
         
         // Back button hold progress (0.0 to 1.0)
         public float BackButtonHoldProgress => _backPressed ? Math.Min(_backButtonHoldTime / BackButtonHoldThreshold, 1f) : 0f;
@@ -150,7 +155,15 @@ namespace NoPasaranFC.Gameplay
                 buttonSize
             );
             
-            // Switch button (X) - above action button, not aligned with A button
+            // Pass button (Y) - left of action button (diamond layout)
+            _passButtonArea = new Rectangle(
+                _actionButtonArea.X - buttonSize - padding / 2,
+                _actionButtonArea.Y,
+                buttonSize,
+                buttonSize
+            );
+            
+            // Switch button (X) - above action button
             _switchButtonArea = new Rectangle(
                 ScreenWidth - buttonSize - padding - aButtonLeftOffset,
                 ScreenHeight - buttonSize * 2 - padding * 2 - verticalOffset,
@@ -183,12 +196,14 @@ namespace NoPasaranFC.Gameplay
             _actionPreviousPressed = _actionPressed;
             _backPreviousPressed = _backButtonHeld;
             _switchPreviousPressed = _switchPressed;
+            _passPreviousPressed = _passPressed;
             
             _currentTouchState = TouchPanel.GetState();
             
             _actionPressed = false;
             bool backTouched = false;
             _switchPressed = false;
+            _passPressed = false;
             
             bool joystickTouchFound = false;
             
@@ -208,6 +223,10 @@ namespace NoPasaranFC.Gameplay
                 else if (_switchButtonArea.Contains(touchPoint))
                 {
                     _switchPressed = true;
+                }
+                else if (_passButtonArea.Contains(touchPoint))
+                {
+                    _passPressed = true;
                 }
                 // Virtual joystick - left half of screen (expanded to 60% for easier access)
                 else if (touchPoint.X < ScreenWidth * 0.6f)
@@ -369,6 +388,15 @@ namespace NoPasaranFC.Gameplay
             DrawFilledCircle(spriteBatch, switchCenter, switchRadius, switchFill);
             DrawCircleOutline(spriteBatch, switchCenter, switchRadius, switchOutline, 4);
             DrawButtonLabel(spriteBatch, font, "X", _switchButtonArea, textColor);
+            
+            // Draw pass button (Y) - left of action button
+            Color passFill = _passPressed ? buttonFillPressedColor : buttonFillColor;
+            Color passOutline = _passPressed ? outlinePressedColor : outlineColor;
+            Vector2 passCenter = new Vector2(_passButtonArea.Center.X, _passButtonArea.Center.Y);
+            float passRadius = _passButtonArea.Width / 2;
+            DrawFilledCircle(spriteBatch, passCenter, passRadius, passFill);
+            DrawCircleOutline(spriteBatch, passCenter, passRadius, passOutline, 4);
+            DrawButtonLabel(spriteBatch, font, "Y", _passButtonArea, textColor);
         }
         
         private void DrawButtonLabel(SpriteBatch spriteBatch, SpriteFont font, string text, Rectangle area, Color color)
