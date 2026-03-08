@@ -22,7 +22,7 @@ namespace NoPasaranFC.Gameplay.AIStates
             player.Stamina = System.Math.Min(100, player.Stamina + 2f * deltaTime);
             
             // At kickoff (first 5 seconds after kickoff), all players rush to ball
-            bool justAfterKickoff = context.TimeSinceKickoff < 5f;
+            bool justAfterKickoff = context.TimeSinceKickoff < AIConstants.KickoffDuration;
             
             // Transition logic
             if (justAfterKickoff || (context.ShouldChaseBall && context.DistanceToBall < 800f))

@@ -18,7 +18,7 @@ namespace NoPasaranFC.Gameplay.AIStates
         public override AIStateType Update(Player player, AIContext context, float deltaTime)
         {
             // At kickoff (first 5 seconds after kickoff), all players rush to ball
-            bool justAfterKickoff = context.TimeSinceKickoff < 5f;
+            bool justAfterKickoff = context.TimeSinceKickoff < AIConstants.KickoffDuration;
             
             // Check if should chase ball
             if (justAfterKickoff || (context.ShouldChaseBall && context.DistanceToBall < 600f))
@@ -38,7 +38,7 @@ namespace NoPasaranFC.Gameplay.AIStates
             if (distanceToHome > 0)
             {
                 toHome.Normalize();
-                float speed = player.Speed * 2.5f; // Base speed
+                float speed = player.Speed * AIConstants.BaseSpeedMultiplier;
                 player.Velocity = toHome * speed; // Set velocity - MatchEngine will apply multipliers and update position
             }
             else

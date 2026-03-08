@@ -14,6 +14,18 @@ namespace NoPasaranFC.Gameplay
         private Player _controlledPlayer;
         private Player _lastPlayerTouchedBall;
         private Random _random;
+        private AIBehaviorManager _aiBehaviorManager;
+
+        // Internal accessors for AIBehaviorManager
+        internal Team HomeTeam => _homeTeam;
+        internal Team AwayTeam => _awayTeam;
+        internal Random SharedRandom => _random;
+        internal float TimeSinceKickoff => _timeSinceKickoff;
+        internal Player LastPlayerTouchedBall
+        {
+            get => _lastPlayerTouchedBall;
+            set => _lastPlayerTouchedBall = value;
+        }
 
         // Referee
         public Vector2 RefereePosition { get; set; }
@@ -105,6 +117,7 @@ namespace NoPasaranFC.Gameplay
             _homeTeam = homeTeam;
             _awayTeam = awayTeam;
             _random = new Random();
+            _aiBehaviorManager = new AIBehaviorManager(this);
             
             // Set team references for all players
             foreach (var player in homeTeam.Players)
@@ -243,10 +256,9 @@ namespace NoPasaranFC.Gameplay
                 var aiController = player.AIController as AIController;
                 if (aiController != null)
                 {
-                    // Capture the current player for the callback
                     var capturedPlayer = player;
-                    aiController.RegisterPassCallback((targetPosition, power) => AIPassBall(capturedPlayer, targetPosition, power));
-                    aiController.RegisterShootCallback((targetPosition, power) => AIShootBall(capturedPlayer, targetPosition, power));
+                    aiController.RegisterPassCallback((targetPosition, power) => _aiBehaviorManager.AIPassBall(capturedPlayer, targetPosition, power));
+                    aiController.RegisterShootCallback((targetPosition, power) => _aiBehaviorManager.AIShootBall(capturedPlayer, targetPosition, power));
                 }
             }
         }
@@ -908,7 +920,7 @@ namespace NoPasaranFC.Gameplay
             if (player.AIController is AIController aiController)
             {
                 // Build context for AI
-                var context = BuildAIContext(player);
+                var context = _aiBehaviorManager.BuildAIContext(player);
                 
                 // Update AI controller (states set player.Velocity with base speed)
                 aiController.Update(context, deltaTime);
@@ -918,7 +930,7 @@ namespace NoPasaranFC.Gameplay
                 
                 // Apply game settings and difficulty multipliers to AI velocity
                 float staminaMultiplier = GetStaminaSpeedMultiplier(player);
-                float difficultyMultiplier = GetAIDifficultyModifier();
+                float difficultyMultiplier = _aiBehaviorManager.GetAIDifficultyModifier();
                 float settingsMultiplier = GameSettings.Instance.PlayerSpeedMultiplier;
                 
                 // Apply all multipliers to velocity and update position
@@ -951,7 +963,7 @@ namespace NoPasaranFC.Gameplay
                         {
                             // Kick ball in movement direction
                             float staminaStatMultiplier = GetStaminaStatMultiplier(player);
-                            float kickPower = (player.Shooting / 8f + 6f) * staminaStatMultiplier * GetAIDifficultyModifier();
+                            float kickPower = (player.Shooting / 8f + 6f) * staminaStatMultiplier * _aiBehaviorManager.GetAIDifficultyModifier();
                             BallVelocity = moveDirection * kickPower * player.Speed * 1.0f;
                             BallVerticalVelocity = 15f; // Very low kick for dribbling
                             _lastPlayerTouchedBall = player;
@@ -966,223 +978,6 @@ namespace NoPasaranFC.Gameplay
                 // (This should not happen in normal gameplay)
                 player.Velocity = Vector2.Zero;
                 player.Stamina = Math.Min(100, player.Stamina + StaminaRecoveryPerSecond * deltaTime);
-            }
-        }
-        
-        private AIContext BuildAIContext(Player player)
-        {
-            // Use Name comparison for robustness as requested
-            bool isHomeTeam = player.Team != null && player.Team.Name == _homeTeam.Name;
-            var myTeam = isHomeTeam ? _homeTeam : _awayTeam; 
-            var opponentTeam = isHomeTeam ? _awayTeam : _homeTeam;
-            
-            // Find nearest opponent and teammate
-            Player nearestOpponent = null;
-            float nearestOpponentDist = float.MaxValue;
-            foreach (var opponent in opponentTeam.Players.Where(p => p.IsStarting && !p.IsKnockedDown))
-            {
-                float dist = Vector2.Distance(player.FieldPosition, opponent.FieldPosition);
-                if (dist < nearestOpponentDist)
-                {
-                    nearestOpponentDist = dist;
-                    nearestOpponent = opponent;
-                }
-            }
-            
-            Player nearestTeammate = null;
-            float nearestTeammateDist = float.MaxValue;
-            Player bestPassTarget = null;
-            float bestPassScore = float.MinValue;
-            
-            // Get list of active opponents for blocking checks
-            var activeOpponents = opponentTeam.Players.Where(p => p.IsStarting && !p.IsKnockedDown).ToList();
-
-            foreach (var teammate in myTeam.Players.Where(p => p.IsStarting && !p.IsKnockedDown && p != player))
-            {
-                float dist = Vector2.Distance(player.FieldPosition, teammate.FieldPosition);
-                if (dist < nearestTeammateDist)
-                {
-                    nearestTeammateDist = dist;
-                    nearestTeammate = teammate;
-                }
-                
-                // Calculate pass score (closer to opponent goal = better)
-                Vector2 opponentGoalCenter = isHomeTeam ? 
-                    new Vector2(StadiumMargin + FieldWidth, StadiumMargin + FieldHeight / 2) :
-                    new Vector2(StadiumMargin, StadiumMargin + FieldHeight / 2);
-                float distToGoal = Vector2.Distance(teammate.FieldPosition, opponentGoalCenter);
-                float passScore = 1000f - distToGoal; // Lower distance to goal = higher score
-                
-                // Check if pass path is blocked by opponent
-                if (IsPathBlocked(player.FieldPosition, teammate.FieldPosition, activeOpponents, 60f))
-                {
-                    passScore -= 5000f; // Heavy penalty for blocked path
-                }
-                
-                if (passScore > bestPassScore)
-                {
-                    bestPassScore = passScore;
-                    bestPassTarget = teammate;
-                }
-            }
-            
-            float distanceToBall = Vector2.Distance(player.FieldPosition, BallPosition);
-            bool hasControl = _lastPlayerTouchedBall == player && distanceToBall < 80f;
-            bool shouldChaseBall = ShouldPlayerChaseBall(player);
-            
-            Vector2 ownGoalCenter = isHomeTeam ? 
-                new Vector2(StadiumMargin, StadiumMargin + FieldHeight / 2) :
-                new Vector2(StadiumMargin + FieldWidth, StadiumMargin + FieldHeight / 2);
-                
-            Vector2 opponentGoalCenterFinal = isHomeTeam ? 
-                new Vector2(StadiumMargin + FieldWidth, StadiumMargin + FieldHeight / 2) :
-                new Vector2(StadiumMargin, StadiumMargin + FieldHeight / 2);
-            
-            bool ballInDefensiveHalf = IsBallInHalf(player.Team.Name);
-            bool ballInAttackingHalf = !ballInDefensiveHalf;
-            
-            return new AIContext
-            {
-                BallPosition = BallPosition,
-                BallVelocity = BallVelocity,
-                BallHeight = BallHeight,
-                NearestOpponent = nearestOpponent,
-                NearestTeammate = nearestTeammate,
-                BestPassTarget = bestPassTarget,
-                DistanceToBall = distanceToBall,
-                HasBallPossession = hasControl,
-                OpponentGoalCenter = opponentGoalCenterFinal,
-                OwnGoalCenter = ownGoalCenter,
-                IsPlayerTeam = isHomeTeam,
-                IsHomeTeam = isHomeTeam,
-                Random = _random,
-                ClosestToBall = GetPlayerClosestToBall(),
-                ShouldChaseBall = shouldChaseBall,
-                MatchTime = MatchTime,
-                TimeSinceKickoff = _timeSinceKickoff,
-                IsDefensiveHalf = ballInDefensiveHalf,
-                IsAttackingHalf = ballInAttackingHalf,
-                Teammates = myTeam.Players.Where(p => p.IsStarting && !p.IsKnockedDown && p != player).ToList(),
-                Opponents = opponentTeam.Players.Where(p => p.IsStarting && !p.IsKnockedDown).ToList()
-            };
-        }
-
-        private bool IsPathBlocked(Vector2 start, Vector2 end, List<Player> obstacles, float threshold = 50f)
-        {
-            Vector2 direction = end - start;
-            float distance = direction.Length();
-            
-            if (distance < 0.01f) return false;
-            
-            direction.Normalize();
-            
-            foreach (var obstacle in obstacles)
-            {
-                // Project obstacle position onto the line segment
-                Vector2 toObstacle = obstacle.FieldPosition - start;
-                float projection = Vector2.Dot(toObstacle, direction);
-                
-                // Check if projection is within the segment
-                if (projection > 0 && projection < distance)
-                {
-                    // Calculate perpendicular distance
-                    Vector2 closestPoint = start + direction * projection;
-                    float distToLine = Vector2.Distance(obstacle.FieldPosition, closestPoint);
-                    
-                    if (distToLine < threshold)
-                    {
-                        return true;
-                    }
-                }
-            }
-            
-            return false;
-        }
-
-        private void AIPassBall(Player passer, Vector2 targetPosition, float power)
-        {
-            // Callback for passing state
-            if (BallHeight < 100f)
-            {
-                Vector2 passDirection = targetPosition - BallPosition;
-                float passDistance = passDirection.Length();
-                
-                if (passDistance > 0)
-                {
-                    passDirection.Normalize();
-                    
-                    // Determine which team the passer belongs to
-                    bool passerIsHomeTeam = _homeTeam.Players.Any(p => p.Id == passer.Id);
-                    Team opposingTeam = passerIsHomeTeam ? _awayTeam : _homeTeam;
-                    
-                    // Check if there are defenders in the path (lofted pass detection)
-                    bool needsLoftedPass = false;
-                    int defendersInPath = 0;
-                    
-                    foreach (var opponent in opposingTeam.Players.Where(p => p.IsStarting && !p.IsKnockedDown))
-                    {
-                        // Check if opponent is in the pass corridor
-                        Vector2 toOpponent = opponent.FieldPosition - BallPosition;
-                        float dotProduct = Vector2.Dot(toOpponent, passDirection);
-                        
-                        // Opponent is ahead in pass direction
-                        if (dotProduct > 0 && dotProduct < passDistance)
-                        {
-                            // Check perpendicular distance from pass line
-                            Vector2 projectedPoint = BallPosition + passDirection * dotProduct;
-                            float perpDistance = Vector2.Distance(opponent.FieldPosition, projectedPoint);
-                            
-                            // If opponent is close to pass line (within 150 pixels)
-                            if (perpDistance < 150f)
-                            {
-                                defendersInPath++;
-                            }
-                        }
-                    }
-                    
-                    // Use lofted pass if 2+ defenders in path or pass is very long
-                    needsLoftedPass = defendersInPath >= 2 || passDistance > 800f;
-                    
-                    float passPower = (passer.Passing / 10f + power * 5f) * GetStaminaStatMultiplier(passer);
-                    BallVelocity = passDirection * passPower * passer.Speed;
-                    
-                    // Lofted pass: higher arc, goes over defenders
-                    if (needsLoftedPass)
-                    {
-                        // Higher vertical velocity based on distance
-                        BallVerticalVelocity = 200f + (passDistance / 10f);
-                        // Reduce horizontal speed slightly for the arc
-                        BallVelocity *= 0.85f;
-                    }
-                    else
-                    {
-                        // Ground pass: low trajectory
-                        BallVerticalVelocity = 30f;
-                    }
-                    
-                    _lastPlayerTouchedBall = passer;
-                    passer.LastKickTime = (float)MatchTime;
-                    AudioManager.Instance.PlaySoundEffect("kick_ball", needsLoftedPass ? 0.6f : 0.4f, allowRetrigger: false);
-                }
-            }
-        }
-        
-        private void AIShootBall(Player shooter, Vector2 targetPosition, float power)
-        {
-            // Callback for shooting state
-            if (BallHeight < 100f)
-            {
-                Vector2 shootDirection = targetPosition - BallPosition;
-                if (shootDirection.LengthSquared() > 0)
-                {
-                    shootDirection.Normalize();
-                    float shootPower = (shooter.Shooting / 8f + power * 10f) * GetStaminaStatMultiplier(shooter);
-                    BallVelocity = shootDirection * shootPower * shooter.Speed;
-                    BallVerticalVelocity = 100f + (float)_random.NextDouble() * 200f;
-                    _lastPlayerTouchedBall = shooter;
-                    shooter.LastKickTime = (float)MatchTime;
-                    AudioManager.Instance.PlaySoundEffect("kick_ball", 0.7f, allowRetrigger: false);
-                }
             }
         }
         
@@ -1455,7 +1250,7 @@ namespace NoPasaranFC.Gameplay
             // This makes the gameplay more realistic and gives player control
         }
         
-        private bool IsBallInHalf(string teamName)
+        internal bool IsBallInHalf(string teamName)
         {
             float centerX = StadiumMargin + FieldWidth / 2;
             bool isHomeTeam = teamName == _homeTeam.Name;
@@ -2134,97 +1929,6 @@ namespace NoPasaranFC.Gameplay
             }
         }
         
-        private bool ShouldPlayerChaseBall(Player player)
-        {
-            // Prevent clustering: only allow closest player per team to actively chase the ball
-            // The 2nd closest should support but not rush directly to ball
-            
-            var team = player.Team;
-            
-            // Get all non-knocked-down, non-goalkeeper teammates
-            var activeTeammates = team.Players
-                .Where(p => p.IsStarting && !p.IsKnockedDown && p.Position != PlayerPosition.Goalkeeper)
-                .ToList();
-            
-            // Get distances to ball for all teammates
-            var teamDistances = activeTeammates
-                .Select(p => new { Player = p, Distance = Vector2.Distance(p.FieldPosition, BallPosition) })
-                .OrderBy(x => x.Distance)
-                .ToList();
-            
-            // Find current player's rank
-            int playerRank = teamDistances.FindIndex(x => x.Player == player);
-            
-            // Goalkeeper can always chase if ball is close
-            if (player.Position == PlayerPosition.Goalkeeper)
-            {
-                return true; // Goalkeeper logic already has its own distance check
-            }
-            
-            // Only the closest non-goalkeeper player should actively chase
-            // The 2nd closest will support but with different positioning (handled elsewhere)
-            return playerRank == 0;
-        }
-        
-        private Player GetPlayerClosestToBall()
-        {
-            Player closest = null;
-            float closestDist = float.MaxValue;
-            
-            foreach (var player in _homeTeam.Players.Where(p => p.IsStarting && !p.IsKnockedDown)
-                .Concat(_awayTeam.Players.Where(p => p.IsStarting && !p.IsKnockedDown)))
-            {
-                float dist = Vector2.Distance(player.FieldPosition, BallPosition);
-                if (dist < closestDist)
-                {
-                    closestDist = dist;
-                    closest = player;
-                }
-            }
-            
-            return closest;
-        }
-        
-        private Vector2 ApplyTeammateAvoidance(Player player, Vector2 desiredDirection)
-        {
-            // Apply separation force to avoid clustering with teammates
-            var team = player.Team;
-            Vector2 separationForce = Vector2.Zero;
-            int nearbyCount = 0;
-            
-            foreach (var teammate in team.Players.Where(p => p.IsStarting && p != player && !p.IsKnockedDown))
-            {
-                float distanceToTeammate = Vector2.Distance(player.FieldPosition, teammate.FieldPosition);
-                
-                if (distanceToTeammate < PlayerPersonalSpace && distanceToTeammate > 0.1f)
-                {
-                    // Push away from nearby teammates
-                    Vector2 awayFromTeammate = player.FieldPosition - teammate.FieldPosition;
-                    awayFromTeammate.Normalize();
-                    
-                    // Stronger force when closer
-                    float strength = 1f - (distanceToTeammate / PlayerPersonalSpace);
-                    separationForce += awayFromTeammate * strength;
-                    nearbyCount++;
-                }
-            }
-            
-            if (nearbyCount > 0)
-            {
-                separationForce /= nearbyCount; // Average the force
-                
-                // Blend desired direction with separation force (70% desired, 30% separation)
-                Vector2 blendedDirection = desiredDirection * 0.7f + separationForce * 0.3f;
-                if (blendedDirection.Length() > 0.01f)
-                {
-                    blendedDirection.Normalize();
-                    return blendedDirection;
-                }
-            }
-            
-            return desiredDirection;
-        }
-        
         private bool CanPlayerKickBall(Player player, Vector2 playerDirection, float maxDistance)
         {
             // Check if ball is within kick distance
@@ -2442,33 +2146,8 @@ namespace NoPasaranFC.Gameplay
             }
         }
         
-        // Difficulty modifiers for AI
-        private float GetAIDifficultyModifier()
-        {
-            int difficulty = GameSettings.Instance.Difficulty;
-            return difficulty switch
-            {
-                0 => 0.7f,  // Easy: AI 30% worse
-                1 => 1.0f,  // Normal: No change
-                2 => 1.3f,  // Hard: AI 30% better
-                _ => 1.0f
-            };
-        }
-        
-        private float GetAIReactionTimeMultiplier()
-        {
-            int difficulty = GameSettings.Instance.Difficulty;
-            return difficulty switch
-            {
-                0 => 1.5f,  // Easy: AI reacts 50% slower
-                1 => 1.0f,  // Normal: Normal reactions
-                2 => 0.7f,  // Hard: AI reacts 30% faster
-                _ => 1.0f
-            };
-        }
-        
         // Stamina effects
-        private float GetStaminaSpeedMultiplier(Player player)
+        internal float GetStaminaSpeedMultiplier(Player player)
         {
             if (player.Stamina < LowStaminaThreshold)
             {
@@ -2479,7 +2158,7 @@ namespace NoPasaranFC.Gameplay
             return 1.0f;
         }
         
-        private float GetStaminaStatMultiplier(Player player)
+        internal float GetStaminaStatMultiplier(Player player)
         {
             if (player.Stamina < LowStaminaThreshold)
             {

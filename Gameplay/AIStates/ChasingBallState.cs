@@ -30,33 +30,17 @@ namespace NoPasaranFC.Gameplay.AIStates
             }
             
             // If ball too far, give up
-            if (context.DistanceToBall > 1000f)
+            if (context.DistanceToBall > AIConstants.ChaseBallGiveUpDistance)
             {
                 return AIStateType.Positioning;
             }
-            
-            // CRITICAL: If opponent has clear possession and is very close to ball, back off to defensive position
-            // REMOVED: We want to steal the ball!
-            /*
-            if (context.NearestOpponent != null)
-            {
-                float opponentDistToBall = Vector2.Distance(context.NearestOpponent.FieldPosition, context.BallPosition);
-                float myDistToBall = context.DistanceToBall;
-                
-                // If opponent is significantly closer (50+ units) and very close to ball (< 120), stop contesting
-                if (opponentDistToBall < 120f && myDistToBall > opponentDistToBall + 50f)
-                {
-                    return AIStateType.Positioning;
-                }
-            }
-            */
             
             // Simple, direct ball chasing - just go to the ball
             Vector2 toBall = context.BallPosition - player.FieldPosition;
             if (toBall.LengthSquared() > 0)
             {
                 toBall.Normalize();
-                float speed = player.Speed * 2.5f;
+                float speed = player.Speed * AIConstants.BaseSpeedMultiplier;
                 player.Velocity = toBall * speed; // Set velocity - MatchEngine will apply multipliers and update position
                 
                 // Set AI target position to ball for debug visualization

@@ -43,10 +43,10 @@ namespace NoPasaranFC.Gameplay.AIStates
             // Move away from nearest boundary (reduced trigger distance for better repositioning)
             Vector2 avoidDirection = Vector2.Zero;
             
-            if (leftDist < 250f) avoidDirection.X += 1f; // Move right
-            if (rightDist < 250f) avoidDirection.X -= 1f; // Move left
-            if (topDist < 250f) avoidDirection.Y += 1f; // Move down
-            if (bottomDist < 250f) avoidDirection.Y -= 1f; // Move up
+            if (leftDist < AIConstants.SidelineAvoidanceMargin) avoidDirection.X += 1f; // Move right
+            if (rightDist < AIConstants.SidelineAvoidanceMargin) avoidDirection.X -= 1f; // Move left
+            if (topDist < AIConstants.SidelineAvoidanceMargin) avoidDirection.Y += 1f; // Move down
+            if (bottomDist < AIConstants.SidelineAvoidanceMargin) avoidDirection.Y -= 1f; // Move up
             
             // Also add direction towards center
             Vector2 toCenter = fieldCenter - player.FieldPosition;
@@ -76,10 +76,10 @@ namespace NoPasaranFC.Gameplay.AIStates
             
             // Check if safe now (reduced margin to allow repositioning near sideline)
             // Exit earlier so player can reposition along the sideline
-            float leftMargin = MatchEngine.StadiumMargin + 250f;
-            float rightMargin = MatchEngine.TotalWidth - MatchEngine.StadiumMargin - 250f;
-            float topMargin = MatchEngine.StadiumMargin + 250f;
-            float bottomMargin = MatchEngine.TotalHeight - MatchEngine.StadiumMargin - 250f;
+            float leftMargin = MatchEngine.StadiumMargin + AIConstants.SidelineAvoidanceMargin;
+            float rightMargin = MatchEngine.TotalWidth - MatchEngine.StadiumMargin - AIConstants.SidelineAvoidanceMargin;
+            float topMargin = MatchEngine.StadiumMargin + AIConstants.SidelineAvoidanceMargin;
+            float bottomMargin = MatchEngine.TotalHeight - MatchEngine.StadiumMargin - AIConstants.SidelineAvoidanceMargin;
             
             bool isSafe = player.FieldPosition.X > leftMargin && player.FieldPosition.X < rightMargin &&
                          player.FieldPosition.Y > topMargin && player.FieldPosition.Y < bottomMargin;
