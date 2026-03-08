@@ -1,3 +1,4 @@
+using System.Linq;
 using Microsoft.Xna.Framework;
 using NoPasaranFC.Models;
 
@@ -15,7 +16,9 @@ namespace NoPasaranFC.Gameplay.AIStates
                 (context.BallPosition.X > MatchEngine.StadiumMargin + MatchEngine.FieldWidth * 0.5f) :
                 (context.BallPosition.X < MatchEngine.StadiumMargin + MatchEngine.FieldWidth * 0.5f);
 
-            if (teamHasBall && ballInOpponentHalf && context.DistanceToBall < AIConstants.ForwardAggressiveChaseDistance)
+            float diffMult = AIBehaviorManager.GetPositioningMultiplier();
+
+            if (teamHasBall && ballInOpponentHalf && context.DistanceToBall < AIConstants.ForwardAggressiveChaseDistance * diffMult)
                 return AIStateType.ChasingBall;
 
             if (IsKickoffChase(context) || (context.ShouldChaseBall && context.DistanceToBall < AIConstants.ForwardCloseChaseDistance))
@@ -31,12 +34,17 @@ namespace NoPasaranFC.Gameplay.AIStates
                 (context.BallPosition.X > MatchEngine.StadiumMargin + MatchEngine.FieldWidth * 0.5f) :
                 (context.BallPosition.X < MatchEngine.StadiumMargin + MatchEngine.FieldWidth * 0.5f);
 
+            float diffMult = AIBehaviorManager.GetPositioningMultiplier();
+            float speedRatio = player.Speed / AIConstants.MaxStatValue;
+
             float attackingX;
             if (teamHasBall)
             {
+                // Faster forwards push deeper (Speed stat influence)
+                float depth = 0.85f + speedRatio * 0.05f;
                 attackingX = context.IsHomeTeam ?
-                    MatchEngine.StadiumMargin + MatchEngine.FieldWidth * 0.85f :
-                    MatchEngine.StadiumMargin + MatchEngine.FieldWidth * 0.15f;
+                    MatchEngine.StadiumMargin + MatchEngine.FieldWidth * depth :
+                    MatchEngine.StadiumMargin + MatchEngine.FieldWidth * (1f - depth);
             }
             else
             {
@@ -47,32 +55,97 @@ namespace NoPasaranFC.Gameplay.AIStates
 
             float lerpFactor;
             if (teamHasBall && ballInOpponentHalf)
-                lerpFactor = 0.6f;
+                lerpFactor = 0.6f * diffMult;
             else if (teamHasBall)
-                lerpFactor = 0.3f;
+                lerpFactor = 0.3f * diffMult;
             else
-                lerpFactor = 0.5f;
+                lerpFactor = 0.5f * diffMult;
 
             Vector2 attackingPosition = new Vector2(attackingX, player.HomePosition.Y);
-            Vector2 target = Vector2.Lerp(attackingPosition, context.BallPosition, lerpFactor);
+            Vector2 target = Vector2.Lerp(attackingPosition, context.BallPosition, MathHelper.Clamp(lerpFactor, 0f, 0.75f));
 
-            // Prevent clustering - spread forwards
+            // Forward runs: when teammate has ball nearby, make a run behind the defense
+            if (teamHasBall && context.ClosestToBall != null && context.ClosestToBall.Id != player.Id)
+            {
+                float teammateDistToBall = Vector2.Distance(context.ClosestToBall.FieldPosition, context.BallPosition);
+                if (teammateDistToBall < 100f) // Teammate has control of ball
+                {
+                    float ballCarrierDistToMe = Vector2.Distance(context.ClosestToBall.FieldPosition, player.FieldPosition);
+                    if (ballCarrierDistToMe < AIConstants.ForwardRunTriggerDistance && ballInOpponentHalf)
+                    {
+                        // Find space behind defensive line
+                        float runDepth = AIConstants.ForwardRunDepth + speedRatio * 0.05f;
+                        float runX = context.IsHomeTeam ?
+                            MatchEngine.StadiumMargin + MatchEngine.FieldWidth * runDepth :
+                            MatchEngine.StadiumMargin + MatchEngine.FieldWidth * (1f - runDepth);
+
+                        // Find open lane (away from defenders)
+                        float bestY = FindOpenLane(player, context, runX);
+                        Vector2 runTarget = new Vector2(runX, bestY);
+                        target = Vector2.Lerp(target, runTarget, 0.6f * diffMult);
+                    }
+                }
+            }
+
+            // Role differentiation
             if (player.Role == PlayerRole.Striker || player.Role == PlayerRole.CenterForward)
             {
+                // Strikers: stay central, spread vertically
                 float centerY = MatchEngine.StadiumMargin + MatchEngine.FieldHeight / 2;
                 float spreadOffset = (player.ShirtNumber % 2 == 0) ? 250f : -250f;
                 target.Y = MathHelper.Lerp(target.Y, centerY + spreadOffset, 0.5f);
             }
             else if (player.Role == PlayerRole.LeftWinger)
             {
-                target.Y = AdjustYForLane(target.Y, MatchEngine.StadiumMargin + MatchEngine.FieldHeight * 0.2f, 0.6f);
+                // Wingers: hug touchline, sprint forward
+                target.Y = AdjustYForLane(target.Y, MatchEngine.StadiumMargin + MatchEngine.FieldHeight * 0.15f, 0.6f);
             }
             else if (player.Role == PlayerRole.RightWinger)
             {
-                target.Y = AdjustYForLane(target.Y, MatchEngine.StadiumMargin + MatchEngine.FieldHeight * 0.8f, 0.6f);
+                target.Y = AdjustYForLane(target.Y, MatchEngine.StadiumMargin + MatchEngine.FieldHeight * 0.85f, 0.6f);
             }
 
             return target;
+        }
+
+        /// <summary>
+        /// Finds the Y position with most open space at a given X depth.
+        /// </summary>
+        private float FindOpenLane(Player player, AIContext context, float atX)
+        {
+            if (context.Opponents == null || context.Opponents.Count == 0)
+                return player.HomePosition.Y;
+
+            float bestY = player.HomePosition.Y;
+            float bestScore = float.MinValue;
+            float fieldTop = MatchEngine.StadiumMargin + AIConstants.FieldMargin;
+            float fieldBottom = MatchEngine.StadiumMargin + MatchEngine.FieldHeight - AIConstants.FieldMargin;
+
+            // Test 5 candidate Y positions
+            for (int i = 0; i < 5; i++)
+            {
+                float candidateY = MathHelper.Lerp(fieldTop, fieldBottom, (i + 0.5f) / 5f);
+                Vector2 candidatePos = new Vector2(atX, candidateY);
+
+                float minDefDist = float.MaxValue;
+                foreach (var opp in context.Opponents.Where(o => o.IsStarting && !o.IsKnockedDown && o.Position == PlayerPosition.Defender))
+                {
+                    float dist = Vector2.Distance(opp.FieldPosition, candidatePos);
+                    if (dist < minDefDist)
+                        minDefDist = dist;
+                }
+
+                // Score: prefer positions far from defenders and closer to our current Y
+                float proximityPenalty = System.Math.Abs(candidateY - player.HomePosition.Y) * 0.1f;
+                float score = minDefDist - proximityPenalty;
+                if (score > bestScore)
+                {
+                    bestScore = score;
+                    bestY = candidateY;
+                }
+            }
+
+            return bestY;
         }
     }
 }

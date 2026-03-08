@@ -19,6 +19,56 @@ namespace NoPasaranFC.Gameplay
             _engine = engine;
         }
 
+        // --- Difficulty helpers (used by AI states via AIContext) ---
+
+        /// <summary>Returns decision interval multiplier based on difficulty.</summary>
+        public static float GetDecisionMultiplier()
+        {
+            int difficulty = GameSettings.Instance.Difficulty;
+            return difficulty switch
+            {
+                0 => AIConstants.DifficultyEasyDecisionMult,
+                2 => AIConstants.DifficultyHardDecisionMult,
+                _ => AIConstants.DifficultyNormalDecisionMult
+            };
+        }
+
+        /// <summary>Returns accuracy multiplier (lower = more accurate).</summary>
+        public static float GetAccuracyMultiplier()
+        {
+            int difficulty = GameSettings.Instance.Difficulty;
+            return difficulty switch
+            {
+                0 => AIConstants.DifficultyEasyAccuracyMult,
+                2 => AIConstants.DifficultyHardAccuracyMult,
+                _ => AIConstants.DifficultyNormalAccuracyMult
+            };
+        }
+
+        /// <summary>Returns probability multiplier for pass/shoot decisions.</summary>
+        public static float GetProbabilityMultiplier()
+        {
+            int difficulty = GameSettings.Instance.Difficulty;
+            return difficulty switch
+            {
+                0 => AIConstants.DifficultyEasyProbMult,
+                2 => AIConstants.DifficultyHardProbMult,
+                _ => AIConstants.DifficultyNormalProbMult
+            };
+        }
+
+        /// <summary>Returns positioning quality multiplier for lerp factors.</summary>
+        public static float GetPositioningMultiplier()
+        {
+            int difficulty = GameSettings.Instance.Difficulty;
+            return difficulty switch
+            {
+                0 => AIConstants.DifficultyEasyLerpMult,
+                2 => AIConstants.DifficultyHardLerpMult,
+                _ => AIConstants.DifficultyNormalLerpMult
+            };
+        }
+
         public AIContext BuildAIContext(Player player)
         {
             bool isHomeTeam = player.Team != null && player.Team.Name == _engine.HomeTeam.Name;
@@ -163,10 +213,28 @@ namespace NoPasaranFC.Gameplay
                 }
             }
 
+            // Technique stat improves lofted pass decision (high Technique = smarter choice)
+            float techniqueInfluence = passer.Technique / AIConstants.MaxStatValue;
             needsLoftedPass = defendersInPath >= 2 || passDistance > 800f;
+            // Low Technique players sometimes loft unnecessarily or fail to loft when needed
+            if (techniqueInfluence < 0.5f && _engine.SharedRandom.NextDouble() < 0.2)
+                needsLoftedPass = !needsLoftedPass;
+
+            // Passing stat affects accuracy: add direction error inversely proportional to stat
+            float passStatRatio = passer.Passing / AIConstants.MaxStatValue;
+            float maxError = AIConstants.PassMaxDirectionError * (1f - passStatRatio * AIConstants.PassStatInfluence);
+            maxError *= GetAccuracyMultiplier();
+            float directionError = (float)(_engine.SharedRandom.NextDouble() - 0.5) * 2f * maxError;
+
+            // Rotate pass direction by error angle
+            float cos = (float)Math.Cos(directionError);
+            float sin = (float)Math.Sin(directionError);
+            Vector2 adjustedDirection = new Vector2(
+                passDirection.X * cos - passDirection.Y * sin,
+                passDirection.X * sin + passDirection.Y * cos);
 
             float passPower = (passer.Passing / 10f + power * 5f) * _engine.GetStaminaStatMultiplier(passer);
-            _engine.BallVelocity = passDirection * passPower * passer.Speed;
+            _engine.BallVelocity = adjustedDirection * passPower * passer.Speed;
 
             if (needsLoftedPass)
             {
@@ -191,8 +259,24 @@ namespace NoPasaranFC.Gameplay
             if (shootDirection.LengthSquared() <= 0) return;
 
             shootDirection.Normalize();
+
+            // Shooting stat affects accuracy: better shooters have tighter spread
+            float shootStatRatio = shooter.Shooting / AIConstants.MaxStatValue;
+            float offsetReduction = shootStatRatio * AIConstants.ShotStatInfluence;
+            float maxOffset = AIConstants.ShotBaseOffset * (1f - offsetReduction) * GetAccuracyMultiplier();
+
+            // Apply Y offset (perpendicular to shot direction)
+            float yOffset = (float)(_engine.SharedRandom.NextDouble() - 0.5) * maxOffset;
+            Vector2 perpendicular = new Vector2(-shootDirection.Y, shootDirection.X);
+            Vector2 adjustedTarget = targetPosition + perpendicular * yOffset;
+            Vector2 adjustedDirection = adjustedTarget - _engine.BallPosition;
+            if (adjustedDirection.LengthSquared() > 0)
+                adjustedDirection.Normalize();
+            else
+                adjustedDirection = shootDirection;
+
             float shootPower = (shooter.Shooting / 8f + power * 10f) * _engine.GetStaminaStatMultiplier(shooter);
-            _engine.BallVelocity = shootDirection * shootPower * shooter.Speed;
+            _engine.BallVelocity = adjustedDirection * shootPower * shooter.Speed;
             _engine.BallVerticalVelocity = 100f + (float)_engine.SharedRandom.NextDouble() * 200f;
             _engine.LastPlayerTouchedBall = shooter;
             shooter.LastKickTime = (float)_engine.MatchTime;

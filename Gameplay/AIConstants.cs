@@ -48,13 +48,13 @@ namespace NoPasaranFC.Gameplay
         public const float ShootLongDistance = 800f;
         public const float ShootVeryLongDistance = 1000f;
 
-        // Shooting probabilities
+        // Shooting probabilities (base - scaled by difficulty)
         public const double ShootCloseChance = 0.95;
         public const double ShootMediumChance = 0.80;
         public const double ShootLongChance = 0.50;
         public const double ShootVeryLongChance = 0.20;
 
-        // Passing probabilities by role
+        // Passing probabilities by role (base - scaled by difficulty)
         public const double DefenderForwardPassChance = 0.98;
         public const double DefenderLateralPassChance = 0.70;
         public const double MidfielderForwardPassChance = 0.95;
@@ -95,5 +95,57 @@ namespace NoPasaranFC.Gameplay
         public const float GKGoalWidth = 534f;
         public const float GKPenaltyPadding = 50f;
         public const float GKBallChaseDistance = 250f;
+        public const float GKShotDetectionSpeed = 400f;
+        public const float GKDiveBurstMultiplier = 4.0f;
+        public const float GKBallTrackingLerp = 0.5f;
+
+        // --- Difficulty scaling ---
+        // Decision interval multipliers (applied to DecisionInterval)
+        public const float DifficultyEasyDecisionMult = 1.5f;    // Slower decisions
+        public const float DifficultyNormalDecisionMult = 1.0f;
+        public const float DifficultyHardDecisionMult = 0.7f;     // Faster decisions
+
+        // Accuracy offset scaling (lower = more accurate)
+        public const float DifficultyEasyAccuracyMult = 1.6f;     // Wide shots/passes
+        public const float DifficultyNormalAccuracyMult = 1.0f;
+        public const float DifficultyHardAccuracyMult = 0.5f;     // Precise shots/passes
+
+        // Probability scaling (multiplied into pass/shoot chances)
+        public const float DifficultyEasyProbMult = 0.7f;         // Worse decisions
+        public const float DifficultyNormalProbMult = 1.0f;
+        public const float DifficultyHardProbMult = 1.15f;        // Better decisions
+
+        // Positioning quality (lerp factor multiplier)
+        public const float DifficultyEasyLerpMult = 0.75f;        // Sluggish tracking
+        public const float DifficultyNormalLerpMult = 1.0f;
+        public const float DifficultyHardLerpMult = 1.25f;        // Tight tracking
+
+        // Stat influence ranges for shot accuracy
+        // Shot Y offset = BaseOffset * (1 - Shooting/MaxStat * StatInfluence) * DifficultyAccuracyMult
+        public const float ShotBaseOffset = 440f;
+        public const float ShotStatInfluence = 0.6f;  // At Shooting=100, offset reduced by 60%
+        public const float MaxStatValue = 100f;
+
+        // Stat influence for pass accuracy (direction error in radians)
+        public const float PassMaxDirectionError = 0.15f;  // ~8.6 degrees max error
+        public const float PassStatInfluence = 0.8f;       // At Passing=100, error reduced by 80%
+
+        // Defending stat influence
+        public const float DefendingThreatRangeBonus = 200f;  // Extra range at Defending=100
+        public const float DefendingLerpBonus = 0.15f;        // Extra lerp at Defending=100
+
+        // Marking behavior
+        public const float MarkingActivationDistance = 1500f;  // Start marking when opponent this close to goal
+        public const float MarkingOffsetDistance = 80f;        // Stand between opponent and own goal
+
+        // Defensive line
+        public const float DefensiveLineWeight = 0.3f;  // How much defenders conform to average X
+
+        // Forward runs
+        public const float ForwardRunTriggerDistance = 500f;  // Teammate must be this close with ball
+        public const float ForwardRunDepth = 0.90f;           // How far forward to run (% of field)
+
+        // Chasing prediction
+        public const float ChasePredictionTime = 0.3f;  // Seconds ahead to predict ball position
     }
 }

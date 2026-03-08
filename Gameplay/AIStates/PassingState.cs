@@ -95,12 +95,14 @@ namespace NoPasaranFC.Gameplay.AIStates
                             Vector2 idealPosition = context.BallPosition - (passDirection * 60f);
                             Vector2 toIdealPos = idealPosition - player.FieldPosition;
                             
-                            if (toIdealPos.LengthSquared() > 50f) // More than ~7 units away
+                            if (toIdealPos.LengthSquared() > 50f)
                             {
                                 toIdealPos.Normalize();
-                                float repositionSpeed = player.Speed * 2.5f;
+                                // Passing stat affects repositioning speed for passes
+                                float passingRatio = player.Passing / AIConstants.MaxStatValue;
+                                float repositionSpeed = player.Speed * (2.0f + passingRatio * 0.8f);
                                 player.Velocity = toIdealPos * repositionSpeed;
-                                return AIStateType.Passing; // Stay in passing state while repositioning
+                                return AIStateType.Passing;
                             }
                         }
                     }

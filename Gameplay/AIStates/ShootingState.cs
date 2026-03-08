@@ -27,11 +27,13 @@ namespace NoPasaranFC.Gameplay.AIStates
                 return AIStateType.Positioning;
             }
 
-            // Calculate desired shot direction
+            // Shooting stat affects aim accuracy: high Shooting = tighter spread
+            float shootStatRatio = player.Shooting / AIConstants.MaxStatValue;
+            float offsetReduction = shootStatRatio * AIConstants.ShotStatInfluence;
+            float maxOffset = AIConstants.ShotBaseOffset * (1f - offsetReduction) * AIBehaviorManager.GetAccuracyMultiplier();
+
             Vector2 target = context.OpponentGoalCenter;
-            // Increased variation: ±220 pixels (goal is ±267, so this uses ~82% of goal width)
-            // This encourages more corner shots and makes them harder to save
-            target.Y += (float)(context.Random.NextDouble() - 0.5) * 440f; // Random vertical offset (-220 to +220)
+            target.Y += (float)(context.Random.NextDouble() - 0.5) * maxOffset;
             
             Vector2 shotDirection = target - context.BallPosition;
             float distance = shotDirection.Length();
@@ -59,8 +61,10 @@ namespace NoPasaranFC.Gameplay.AIStates
                     // Good shooting position: player behind ball (dot > 0.3) and close
                     if (dotProduct > 0.3f && distToBall < 70f)
                     {
-                        // Distance-based power: closer = more power
-                        float power = MathHelper.Clamp(0.6f + (1000f - distance) / 1000f * 0.4f, 0.6f, 1f);
+                        // Power scales with Shooting stat and distance
+                        float basePower = MathHelper.Clamp(0.6f + (1000f - distance) / 1000f * 0.4f, 0.6f, 1f);
+                        float statBonus = shootStatRatio * 0.15f; // Up to 15% more power at max Shooting
+                        float power = MathHelper.Clamp(basePower + statBonus, 0.6f, 1.15f);
                         OnShootBall?.Invoke(target, power);
                         _hasExecutedShot = true;
                         return AIStateType.Positioning;

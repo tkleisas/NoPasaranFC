@@ -35,16 +35,28 @@ namespace NoPasaranFC.Gameplay.AIStates
                 return AIStateType.Positioning;
             }
             
-            // Simple, direct ball chasing - just go to the ball
-            Vector2 toBall = context.BallPosition - player.FieldPosition;
-            if (toBall.LengthSquared() > 0)
+            // Predict ball's future position based on velocity and player Agility
+            // High Agility = better prediction = more efficient pursuit
+            float agilityRatio = player.Agility / AIConstants.MaxStatValue;
+            float predictionTime = AIConstants.ChasePredictionTime * (0.3f + 0.7f * agilityRatio);
+            predictionTime *= (1f / AIBehaviorManager.GetDecisionMultiplier()); // Better prediction on hard
+            
+            Vector2 predictedBallPos = context.BallPosition + context.BallVelocity * predictionTime;
+            
+            // Clamp prediction to field bounds
+            predictedBallPos.X = MathHelper.Clamp(predictedBallPos.X,
+                MatchEngine.StadiumMargin, MatchEngine.StadiumMargin + MatchEngine.FieldWidth);
+            predictedBallPos.Y = MathHelper.Clamp(predictedBallPos.Y,
+                MatchEngine.StadiumMargin, MatchEngine.StadiumMargin + MatchEngine.FieldHeight);
+
+            Vector2 toTarget = predictedBallPos - player.FieldPosition;
+            if (toTarget.LengthSquared() > 0)
             {
-                toBall.Normalize();
+                toTarget.Normalize();
                 float speed = player.Speed * AIConstants.BaseSpeedMultiplier;
-                player.Velocity = toBall * speed; // Set velocity - MatchEngine will apply multipliers and update position
+                player.Velocity = toTarget * speed;
                 
-                // Set AI target position to ball for debug visualization
-                player.AITargetPosition = context.BallPosition;
+                player.AITargetPosition = predictedBallPos;
                 player.AITargetPositionSet = true;
             }
             

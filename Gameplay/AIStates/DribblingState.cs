@@ -7,6 +7,7 @@ namespace NoPasaranFC.Gameplay.AIStates
     public class DribblingState : AIState
     {
         private float _decisionTimer = 0f;
+        private float _effectiveDecisionInterval;
         private bool _isOrbiting = false;
         private float _orbitTimer = 0f;
         private float _orbitDurationVariation = 0f;
@@ -16,11 +17,17 @@ namespace NoPasaranFC.Gameplay.AIStates
         public DribblingState()
         {
             Type = AIStateType.Dribbling;
+            _effectiveDecisionInterval = AIConstants.DecisionInterval;
         }
 
         public override void Enter(Player player, AIContext context)
         {
             _decisionTimer = 0f;
+
+            // Decision interval: Agility makes decisions faster, difficulty also affects
+            float agilityRatio = player.Agility / AIConstants.MaxStatValue;
+            float agilitySpeedup = 1f - agilityRatio * 0.3f; // Up to 30% faster at max Agility
+            _effectiveDecisionInterval = AIConstants.DecisionInterval * agilitySpeedup * AIBehaviorManager.GetDecisionMultiplier();
 
             float distToBall = Vector2.Distance(player.FieldPosition, context.BallPosition);
             if (distToBall > 200f)
@@ -45,8 +52,8 @@ namespace NoPasaranFC.Gameplay.AIStates
             if (boundaryResult.HasValue)
                 return boundaryResult.Value;
 
-            // Decision making on timer
-            if (_decisionTimer >= AIConstants.DecisionInterval)
+            // Decision making on timer (scaled by Agility and difficulty)
+            if (_decisionTimer >= _effectiveDecisionInterval)
             {
                 _decisionTimer = 0f;
 
@@ -122,6 +129,9 @@ namespace NoPasaranFC.Gameplay.AIStates
             bool teammateAheadOfMe = teammateDistToGoal < myDistToGoal - 30f;
             bool validPassRange = distToTeammate > AIConstants.MinPassDistance && distToTeammate < AIConstants.MaxPassDistance;
 
+            // Difficulty scales decision quality
+            float probMult = AIBehaviorManager.GetProbabilityMultiplier();
+
             bool underPressure = false;
             if (context.NearestOpponent != null)
             {
@@ -140,9 +150,9 @@ namespace NoPasaranFC.Gameplay.AIStates
 
             if (isDefender && validPassRange)
             {
-                if (teammateAheadOfMe && context.Random.NextDouble() < AIConstants.DefenderForwardPassChance)
+                if (teammateAheadOfMe && context.Random.NextDouble() < AIConstants.DefenderForwardPassChance * probMult)
                     return AIStateType.Passing;
-                if (context.Random.NextDouble() < AIConstants.DefenderLateralPassChance)
+                if (context.Random.NextDouble() < AIConstants.DefenderLateralPassChance * probMult)
                     return AIStateType.Passing;
             }
 
@@ -150,20 +160,20 @@ namespace NoPasaranFC.Gameplay.AIStates
             {
                 if (isTeammateForward && teammateAheadOfMe && distToTeammate > 400f)
                     return AIStateType.Passing;
-                if (teammateAheadOfMe && context.Random.NextDouble() < AIConstants.MidfielderForwardPassChance)
+                if (teammateAheadOfMe && context.Random.NextDouble() < AIConstants.MidfielderForwardPassChance * probMult)
                     return AIStateType.Passing;
-                if (context.Random.NextDouble() < AIConstants.MidfielderLateralPassChance)
+                if (context.Random.NextDouble() < AIConstants.MidfielderLateralPassChance * probMult)
                     return AIStateType.Passing;
             }
 
             if (isForward && validPassRange)
             {
-                if (distanceToGoal < 350f && context.Random.NextDouble() < 0.85)
+                if (distanceToGoal < 350f && context.Random.NextDouble() < 0.85 * probMult)
                     return AIStateType.Shooting;
                 if (teammateAheadOfMe && (myDistToGoal - teammateDistToGoal) > 150f
-                    && context.Random.NextDouble() < AIConstants.ForwardPassWhenTeammateCloserChance)
+                    && context.Random.NextDouble() < AIConstants.ForwardPassWhenTeammateCloserChance * probMult)
                     return AIStateType.Passing;
-                if (context.Random.NextDouble() < AIConstants.ForwardDefaultPassChance)
+                if (context.Random.NextDouble() < AIConstants.ForwardDefaultPassChance * probMult)
                     return AIStateType.Passing;
             }
 
@@ -173,16 +183,17 @@ namespace NoPasaranFC.Gameplay.AIStates
         private AIStateType? EvaluateShootOpportunity(Player player, AIContext context)
         {
             float distanceToGoal = Vector2.Distance(player.FieldPosition, context.OpponentGoalCenter);
+            float probMult = AIBehaviorManager.GetProbabilityMultiplier();
 
             if (distanceToGoal < AIConstants.ShootAlwaysDistance)
                 return AIStateType.Shooting;
-            if (distanceToGoal < AIConstants.ShootCloseDistance && context.Random.NextDouble() < AIConstants.ShootCloseChance)
+            if (distanceToGoal < AIConstants.ShootCloseDistance && context.Random.NextDouble() < AIConstants.ShootCloseChance * probMult)
                 return AIStateType.Shooting;
-            if (distanceToGoal < AIConstants.ShootMediumDistance && context.Random.NextDouble() < AIConstants.ShootMediumChance)
+            if (distanceToGoal < AIConstants.ShootMediumDistance && context.Random.NextDouble() < AIConstants.ShootMediumChance * probMult)
                 return AIStateType.Shooting;
-            if (distanceToGoal < AIConstants.ShootLongDistance && context.Random.NextDouble() < AIConstants.ShootLongChance)
+            if (distanceToGoal < AIConstants.ShootLongDistance && context.Random.NextDouble() < AIConstants.ShootLongChance * probMult)
                 return AIStateType.Shooting;
-            if (distanceToGoal < AIConstants.ShootVeryLongDistance && context.Random.NextDouble() < AIConstants.ShootVeryLongChance)
+            if (distanceToGoal < AIConstants.ShootVeryLongDistance && context.Random.NextDouble() < AIConstants.ShootVeryLongChance * probMult)
                 return AIStateType.Shooting;
 
             return null;
