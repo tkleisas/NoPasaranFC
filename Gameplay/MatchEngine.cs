@@ -1003,14 +1003,18 @@ namespace NoPasaranFC.Gameplay
                 // Animation uses velocity direction, not magnitude, so this is fine
                 player.Velocity = baseVelocity;
                 
-                // Clamp player to field
+                // Clamp player to field — allow wider margin for AI near ball
                 Vector2 pos = player.FieldPosition;
-                ClampToField(ref pos);
+                float distToBallForClamp = Vector2.Distance(player.FieldPosition, BallPosition);
+                bool nearBall = distToBallForClamp < 200f;
+                ClampToField(ref pos, nearBall ? 250f : 100f);
                 player.FieldPosition = pos;
                 
                 // AI dribbling: Kick ball automatically when close and moving
-                // Don't kick during countdown
-                if (CurrentState == MatchState.Playing && baseVelocity.LengthSquared() > 0.01f && BallHeight < 100f)
+                // Don't kick during countdown or when in Passing/Shooting state (those handle their own kicks)
+                string currentAIState = aiController.GetCurrentStateName();
+                bool isExecutingKick = currentAIState == "Passing" || currentAIState == "Shooting";
+                if (!isExecutingKick && CurrentState == MatchState.Playing && baseVelocity.LengthSquared() > 0.01f && BallHeight < 100f)
                 {
                     float distToBall = Vector2.Distance(player.FieldPosition, BallPosition);
                     if (distToBall < BallShootDistance * 0.75f)
@@ -1023,11 +1027,15 @@ namespace NoPasaranFC.Gameplay
                             ? new Vector2(StadiumMargin + FieldWidth, StadiumMargin + FieldHeight / 2f)
                             : new Vector2(StadiumMargin, StadiumMargin + FieldHeight / 2f);
                         Vector2 toGoal = goalCenter - player.FieldPosition;
+                        float distToGoal = toGoal.Length();
                         if (toGoal.LengthSquared() > 0.01f)
                             toGoal.Normalize();
                         
-                        // 40% toward goal, 60% movement direction — keeps dribble feel but progresses attack
-                        Vector2 kickDir = moveDirection * 0.6f + toGoal * 0.4f;
+                        // Scale goal weight by proximity: close to goal → kick AT goal, far → dribble feel
+                        float goalWeight = distToGoal < 400f ? 0.9f
+                                         : distToGoal < 800f ? 0.7f
+                                         : 0.4f;
+                        Vector2 kickDir = moveDirection * (1f - goalWeight) + toGoal * goalWeight;
                         if (kickDir.LengthSquared() > 0.01f)
                             kickDir.Normalize();
                         else
@@ -1509,19 +1517,16 @@ namespace NoPasaranFC.Gameplay
             AudioManager.Instance.PlaySoundEffect("kick_ball", 0.5f + powerScale * 0.2f, allowRetrigger: false);
         }
         
-        private void ClampToField(ref Vector2 position)
+        private void ClampToField(ref Vector2 position, float outOfBoundsMargin = 100f)
         {
-            // Allow players to go 100px outside the field boundaries
-            const float OutOfBoundsMargin = 100f;
-            
             // GOAL ENTRY LOGIC:
             // If within the vertical range of the goal, allow X to go deeper (into the net)
             float goalTop = StadiumMargin + (FieldHeight - GoalWidth) / 2;
             float goalBottom = goalTop + GoalWidth;
             bool inGoalWidth = position.Y >= goalTop && position.Y <= goalBottom;
             
-            float minX = StadiumMargin - OutOfBoundsMargin;
-            float maxX = StadiumMargin + FieldWidth + OutOfBoundsMargin;
+            float minX = StadiumMargin - outOfBoundsMargin;
+            float maxX = StadiumMargin + FieldWidth + outOfBoundsMargin;
             
             if (inGoalWidth)
             {
@@ -1531,7 +1536,7 @@ namespace NoPasaranFC.Gameplay
             }
             
             position.X = MathHelper.Clamp(position.X, minX, maxX);
-            position.Y = MathHelper.Clamp(position.Y, StadiumMargin - OutOfBoundsMargin, StadiumMargin + FieldHeight + OutOfBoundsMargin);
+            position.Y = MathHelper.Clamp(position.Y, StadiumMargin - outOfBoundsMargin, StadiumMargin + FieldHeight + outOfBoundsMargin);
         }
         
         private void ClampBallToField()
