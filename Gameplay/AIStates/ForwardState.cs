@@ -40,38 +40,37 @@ namespace NoPasaranFC.Gameplay.AIStates
             float attackingX;
             if (teamHasBall)
             {
-                float depth = 0.85f + speedRatio * 0.05f;
+                float depth = 0.85f + speedRatio * 0.07f;
                 attackingX = context.IsHomeTeam ?
                     MatchEngine.StadiumMargin + MatchEngine.FieldWidth * depth :
                     MatchEngine.StadiumMargin + MatchEngine.FieldWidth * (1f - depth);
             }
             else
             {
-                // Stay higher even when not in possession — don't drop back to center
+                // Stay higher even when not in possession
                 attackingX = context.IsHomeTeam ?
                     MatchEngine.StadiumMargin + MatchEngine.FieldWidth * 0.70f :
                     MatchEngine.StadiumMargin + MatchEngine.FieldWidth * 0.30f;
             }
 
-            // Lower lerp toward ball — forwards should stay in attacking positions, not drift to center
+            // Reduced ball lerp — forwards should hold attacking positions
             float lerpFactor;
             if (teamHasBall && ballInOpponentHalf)
-                lerpFactor = 0.25f * diffMult;  // Only slightly influenced by ball in attack
+                lerpFactor = 0.12f * diffMult;
             else if (teamHasBall)
-                lerpFactor = 0.15f * diffMult;  // Stay in position, don't drop back
+                lerpFactor = 0.10f * diffMult;
             else
-                lerpFactor = 0.30f * diffMult;  // Slightly track ball when defending
+                lerpFactor = 0.20f * diffMult;
 
             Vector2 attackingPosition = new Vector2(attackingX, player.HomePosition.Y);
-            Vector2 target = Vector2.Lerp(attackingPosition, context.BallPosition, MathHelper.Clamp(lerpFactor, 0f, 0.45f));
+            Vector2 target = Vector2.Lerp(attackingPosition, context.BallPosition, MathHelper.Clamp(lerpFactor, 0f, 0.35f));
 
             // Forward runs: when any teammate has ball, make a run toward goal
             if (teamHasBall && context.ClosestToBall != null && context.ClosestToBall.Id != player.Id)
             {
                 float teammateDistToBall = Vector2.Distance(context.ClosestToBall.FieldPosition, context.BallPosition);
-                if (teammateDistToBall < 150f) // Teammate has reasonable control
+                if (teammateDistToBall < AIConstants.ForwardRunTriggerDistance)
                 {
-                    // Forward runs trigger: much more generous — any teammate with ball
                     float runDepth = AIConstants.ForwardRunDepth + speedRatio * 0.05f;
                     float runX = context.IsHomeTeam ?
                         MatchEngine.StadiumMargin + MatchEngine.FieldWidth * runDepth :
@@ -79,16 +78,15 @@ namespace NoPasaranFC.Gameplay.AIStates
 
                     float bestY = FindOpenLane(player, context, runX);
                     Vector2 runTarget = new Vector2(runX, bestY);
-                    // Stronger pull toward run target
-                    target = Vector2.Lerp(target, runTarget, 0.5f * diffMult);
+                    target = Vector2.Lerp(target, runTarget, 0.65f * diffMult);
                 }
             }
 
-            // Role differentiation
+            // Role differentiation — wider spread for strikers
             if (player.Role == PlayerRole.Striker || player.Role == PlayerRole.CenterForward)
             {
                 float centerY = MatchEngine.StadiumMargin + MatchEngine.FieldHeight / 2;
-                float spreadOffset = (player.ShirtNumber % 2 == 0) ? 250f : -250f;
+                float spreadOffset = (player.ShirtNumber % 2 == 0) ? 350f : -350f;
                 target.Y = MathHelper.Lerp(target.Y, centerY + spreadOffset, 0.5f);
             }
             else if (player.Role == PlayerRole.LeftWinger)
@@ -116,10 +114,10 @@ namespace NoPasaranFC.Gameplay.AIStates
             float fieldTop = MatchEngine.StadiumMargin + AIConstants.FieldMargin;
             float fieldBottom = MatchEngine.StadiumMargin + MatchEngine.FieldHeight - AIConstants.FieldMargin;
 
-            // Test 5 candidate Y positions
-            for (int i = 0; i < 5; i++)
+            // Test 9 candidate Y positions for better lane selection
+            for (int i = 0; i < 9; i++)
             {
-                float candidateY = MathHelper.Lerp(fieldTop, fieldBottom, (i + 0.5f) / 5f);
+                float candidateY = MathHelper.Lerp(fieldTop, fieldBottom, (i + 0.5f) / 9f);
                 Vector2 candidatePos = new Vector2(atX, candidateY);
 
                 float minDefDist = float.MaxValue;

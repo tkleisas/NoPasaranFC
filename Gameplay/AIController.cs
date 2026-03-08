@@ -14,7 +14,7 @@ namespace NoPasaranFC.Gameplay
         private AIContext _context;
         private Random _playerRandom; // Unique random instance per player
         
-        public AIController(Player player)
+        public AIController(Player player, MatchEngine engine)
         {
             _player = player;
             _context = new AIContext();
@@ -30,8 +30,8 @@ namespace NoPasaranFC.Gameplay
                 { AIStateType.ChasingBall, new ChasingBallState() },
                 { AIStateType.Dribbling, new DribblingState() },
                 { AIStateType.AvoidingSideline, new AvoidingSidelineState() },
-                { AIStateType.Passing, new PassingState() },
-                { AIStateType.Shooting, new ShootingState() },
+                { AIStateType.Passing, new PassingState(engine) },
+                { AIStateType.Shooting, new ShootingState(engine) },
                 { AIStateType.Celebration, new CelebrationRunState() },
                 { AIStateType.CelebrationChase, new CelebrationChaseState() }
             };

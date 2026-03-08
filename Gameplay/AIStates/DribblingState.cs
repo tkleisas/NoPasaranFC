@@ -146,8 +146,8 @@ namespace NoPasaranFC.Gameplay.AIStates
                 underPressure = distToOpponent < AIConstants.PressureDistance;
             }
 
-            // Always pass under pressure (unless in shooting range)
-            if (underPressure && validPassRange && distanceToGoal > AIConstants.ShootCloseDistance)
+            // Always pass under pressure (unless in close shooting range)
+            if (underPressure && validPassRange && distanceToGoal > 300f)
                 return AIStateType.Passing;
 
             bool isDefender = player.Position == PlayerPosition.Defender;

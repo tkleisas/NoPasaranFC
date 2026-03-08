@@ -297,7 +297,7 @@ namespace NoPasaranFC.Gameplay
             // Initialize AI controllers for all starting players
             foreach (var player in startingPlayers)
             {
-                player.AIController = new AIController(player);
+                player.AIController = new AIController(player, this);
                 
                 // Register callbacks for AI actions
                 var aiController = player.AIController as AIController;
@@ -1013,7 +1013,7 @@ namespace NoPasaranFC.Gameplay
                 if (CurrentState == MatchState.Playing && baseVelocity.LengthSquared() > 0.01f && BallHeight < 100f)
                 {
                     float distToBall = Vector2.Distance(player.FieldPosition, BallPosition);
-                    if (distToBall < BallShootDistance * 0.6f)
+                    if (distToBall < BallShootDistance * 0.75f)
                     {
                         Vector2 moveDirection = Vector2.Normalize(baseVelocity);
                         

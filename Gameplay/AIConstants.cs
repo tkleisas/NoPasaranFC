@@ -12,20 +12,21 @@ namespace NoPasaranFC.Gameplay
         public const float BaseSpeedMultiplier = 2.5f;
         public const float ForwardSpeedBoost = 1.2f;
         public const float OrbitSpeedMultiplier = 3.0f;
-        public const float PlayerPersonalSpace = 80f;
+        public const float PlayerPersonalSpace = 120f;
+        public const float PersonalSpaceBlend = 0.25f;
 
         // Kickoff behavior
         public const float KickoffDuration = 5f;
         public const float KickoffChaseDistance = 500f;
 
         // Target update (anti-oscillation)
-        public const float TargetUpdateThreshold = 50f;
+        public const float TargetUpdateThreshold = 30f;
 
         // Field boundary margins
         public const float FieldMargin = 150f;
-        public const float BoundaryRepulsionTrigger = 300f;
-        public const float BoundaryRepulsionStrength = 1.0f;
-        public const float BoundaryBlendWeight = 0.6f;
+        public const float BoundaryRepulsionTrigger = 200f;
+        public const float BoundaryRepulsionStrength = 0.8f;
+        public const float BoundaryBlendWeight = 0.35f;
         public const float SidelineAvoidanceMargin = 250f;
 
         // Dribbling
@@ -37,9 +38,9 @@ namespace NoPasaranFC.Gameplay
         public const float OpponentAvoidanceDistance = 200f;
 
         // Passing thresholds
-        public const float MinPassDistance = 80f;
-        public const float MaxPassDistance = 2500f;
-        public const float PressureDistance = 300f;
+        public const float MinPassDistance = 50f;
+        public const float MaxPassDistance = 3500f;
+        public const float PressureDistance = 350f;
 
         // Shooting distance thresholds
         public const float ShootAlwaysDistance = 200f;
@@ -142,8 +143,8 @@ namespace NoPasaranFC.Gameplay
         public const float DefensiveLineWeight = 0.3f;  // How much defenders conform to average X
 
         // Forward runs
-        public const float ForwardRunTriggerDistance = 500f;  // Teammate must be this close with ball
-        public const float ForwardRunDepth = 0.90f;           // How far forward to run (% of field)
+        public const float ForwardRunTriggerDistance = 300f;  // Teammate must be this close with ball
+        public const float ForwardRunDepth = 0.92f;           // How far forward to run (% of field)
 
         // Chasing prediction
         public const float ChasePredictionTime = 0.3f;  // Seconds ahead to predict ball position

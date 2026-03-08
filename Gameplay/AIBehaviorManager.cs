@@ -111,16 +111,17 @@ namespace NoPasaranFC.Gameplay
                 float distToGoal = Vector2.Distance(teammate.FieldPosition, opponentGoalCenter);
                 float passScore = 0f;
 
-                // Closer to opponent goal is better (normalized 0-1000)
-                passScore += 1000f - distToGoal;
+                // Goal progress (normalized by field dimensions to avoid dominating)
+                float normalizedGoalDist = distToGoal / (MatchEngine.FieldWidth + 1f);
+                passScore += (1f - normalizedGoalDist) * 600f;
 
                 // Prefer teammates at medium distance (not too close, not too far)
                 if (dist > AIConstants.MinPassDistance && dist < 1200f)
-                    passScore += 300f; // In ideal pass range
+                    passScore += 300f;
                 else if (dist >= 1200f && dist < AIConstants.MaxPassDistance)
-                    passScore += 100f; // Acceptable long pass
+                    passScore += 100f;
                 else
-                    passScore -= 200f; // Too close or too far
+                    passScore -= 200f;
 
                 // Bonus for open/unmarked teammates
                 float nearestDefDist = float.MaxValue;
@@ -129,21 +130,21 @@ namespace NoPasaranFC.Gameplay
                     float oppDist = Vector2.Distance(teammate.FieldPosition, opp.FieldPosition);
                     if (oppDist < nearestDefDist) nearestDefDist = oppDist;
                 }
-                if (nearestDefDist > 250f)
-                    passScore += 400f; // Wide open
-                else if (nearestDefDist > 150f)
-                    passScore += 200f; // Reasonably open
+                if (nearestDefDist > 200f)
+                    passScore += 400f;
+                else if (nearestDefDist > 120f)
+                    passScore += 200f;
 
                 // Prefer forwards and attacking midfielders
                 if (teammate.Position == PlayerPosition.Forward)
-                    passScore += 200f;
+                    passScore += 250f;
                 else if (teammate.Position == PlayerPosition.Midfielder &&
                     (teammate.Role == PlayerRole.AttackingMidfielder || teammate.Role == PlayerRole.LeftWinger || teammate.Role == PlayerRole.RightWinger))
-                    passScore += 100f;
+                    passScore += 120f;
 
-                // Heavy penalty if pass path is blocked
-                if (IsPathBlocked(player.FieldPosition, teammate.FieldPosition, activeOpponents, 60f))
-                    passScore -= 3000f;
+                // Penalty if pass path is blocked (reduced from extreme -3000)
+                if (IsPathBlocked(player.FieldPosition, teammate.FieldPosition, activeOpponents, 40f))
+                    passScore -= 1500f;
 
                 if (passScore > bestPassScore)
                 {
@@ -358,7 +359,15 @@ namespace NoPasaranFC.Gameplay
 
             int playerRank = teamDistances.FindIndex(x => x.Player == player);
 
-            return playerRank == 0;
+            // Primary chaser: closest player always chases
+            if (playerRank == 0)
+                return true;
+
+            // Support chaser: 2nd closest chases if they're close enough to the ball
+            if (playerRank == 1 && teamDistances[1].Distance < 400f)
+                return true;
+
+            return false;
         }
 
         public Player GetPlayerClosestToBall()

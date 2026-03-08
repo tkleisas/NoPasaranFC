@@ -8,14 +8,17 @@ namespace NoPasaranFC.Gameplay.AIStates
         public delegate void PassBallHandler(Vector2 targetPosition, float power);
         public event PassBallHandler OnPassBall;
 
-        public PassingState()
+        private readonly MatchEngine _engine;
+
+        public PassingState(MatchEngine engine)
         {
             Type = AIStateType.Passing;
+            _engine = engine;
         }
 
         private bool _hasExecutedPass = false;
         private float _repositionTimer = 0f;
-        private const float MaxRepositionTime = 0.6f;
+        private const float MaxRepositionTime = 1.2f;
 
         public override void Enter(Player player, AIContext context)
         {
@@ -26,9 +29,12 @@ namespace NoPasaranFC.Gameplay.AIStates
         public override AIStateType Update(Player player, AIContext context, float deltaTime)
         {
             if (_hasExecutedPass)
-            {
                 return AIStateType.Positioning;
-            }
+
+            // Validate ball possession — abort if we lost the ball
+            float distCheck = Vector2.Distance(player.FieldPosition, context.BallPosition);
+            if (_engine.LastPlayerTouchedBall != player || distCheck > 120f)
+                return AIStateType.ChasingBall;
 
             _repositionTimer += deltaTime;
 
@@ -37,12 +43,13 @@ namespace NoPasaranFC.Gameplay.AIStates
             if (passTarget == null)
                 return AIStateType.Positioning;
 
-            // Predict target's future position
+            // Predict target's future position using stat-based pass speed estimate
             Vector2 targetCurrentPos = passTarget.FieldPosition;
             Vector2 targetVelocity = passTarget.Velocity;
             float distanceToTarget = Vector2.Distance(context.BallPosition, targetCurrentPos);
-            float estimatedPassSpeed = 400f;
-            float travelTime = distanceToTarget / estimatedPassSpeed;
+            float estimatedPassSpeed = (player.Passing / 10f + 4f) * player.Speed;
+            float travelTime = estimatedPassSpeed > 0 ? distanceToTarget / estimatedPassSpeed : 1f;
+            travelTime = MathHelper.Clamp(travelTime, 0f, 1.5f);
             Vector2 predictedPosition = targetCurrentPos + (targetVelocity * travelTime);
 
             Vector2 passDirection = predictedPosition - context.BallPosition;
@@ -57,10 +64,10 @@ namespace NoPasaranFC.Gameplay.AIStates
             if (_repositionTimer > MaxRepositionTime)
             {
                 float distToBall = Vector2.Distance(player.FieldPosition, context.BallPosition);
-                if (distToBall < 100f)
+                if (distToBall < 120f)
                 {
                     float power = CalculatePassPower(distance);
-                    OnPassBall?.Invoke(predictedPosition, power * 0.85f); // Slightly weaker forced pass
+                    OnPassBall?.Invoke(predictedPosition, power * 0.85f);
                     _hasExecutedPass = true;
                     return AIStateType.Positioning;
                 }
@@ -71,13 +78,19 @@ namespace NoPasaranFC.Gameplay.AIStates
             float playerDistToBall = playerToBall.Length();
             
             if (playerDistToBall < 0.01f)
+            {
+                // Standing on the ball — just pass
+                float power = CalculatePassPower(distance);
+                OnPassBall?.Invoke(predictedPosition, power);
+                _hasExecutedPass = true;
                 return AIStateType.Positioning;
+            }
 
             playerToBall.Normalize();
             float dotProduct = Vector2.Dot(playerToBall, passDirection);
             
-            // Relaxed passing position: lower dot threshold and wider distance
-            if (dotProduct > 0.1f && playerDistToBall < 90f)
+            // Execute pass when roughly aligned and close enough
+            if (dotProduct > 0.0f && playerDistToBall < 100f)
             {
                 float power = CalculatePassPower(distance);
                 OnPassBall?.Invoke(predictedPosition, power);
@@ -86,15 +99,14 @@ namespace NoPasaranFC.Gameplay.AIStates
             }
             else
             {
-                // Reposition behind ball
+                // Reposition behind ball with controlled speed
                 Vector2 idealPosition = context.BallPosition - (passDirection * 50f);
                 Vector2 toIdealPos = idealPosition - player.FieldPosition;
                 
                 if (toIdealPos.LengthSquared() > 25f)
                 {
                     toIdealPos.Normalize();
-                    float passingRatio = player.Passing / AIConstants.MaxStatValue;
-                    float repositionSpeed = player.Speed * (2.5f + passingRatio * 0.8f);
+                    float repositionSpeed = player.Speed * 1.8f;
                     player.Velocity = toIdealPos * repositionSpeed;
                     return AIStateType.Passing;
                 }

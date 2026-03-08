@@ -1,3 +1,4 @@
+using System.Linq;
 using Microsoft.Xna.Framework;
 using NoPasaranFC.Models;
 
@@ -128,7 +129,7 @@ namespace NoPasaranFC.Gameplay.AIStates
         }
 
         /// <summary>
-        /// Shared movement logic: dead zone check, boundary repulsion, velocity set.
+        /// Shared movement logic: dead zone check, boundary repulsion, teammate avoidance, velocity set.
         /// </summary>
         protected AIStateType MoveTowardTarget(Player player, Vector2 target, float deltaTime)
         {
@@ -162,7 +163,12 @@ namespace NoPasaranFC.Gameplay.AIStates
                     }
                 }
 
-                float speed = player.Speed * AIConstants.BaseSpeedMultiplier * GetSpeedMultiplier();
+                // Teammate avoidance: prevent clustering
+                direction = ApplyTeammateRepulsion(player, direction);
+
+                // Decelerate when approaching target to avoid overshooting
+                float speedScale = distance < 80f ? distance / 80f : 1f;
+                float speed = player.Speed * AIConstants.BaseSpeedMultiplier * GetSpeedMultiplier() * MathHelper.Clamp(speedScale, 0.3f, 1f);
                 player.Velocity = direction * speed;
                 player.Stamina = System.Math.Max(0, player.Stamina - GetStaminaDrainRate() * deltaTime);
             }
@@ -172,6 +178,44 @@ namespace NoPasaranFC.Gameplay.AIStates
             }
 
             return AIStateType.Positioning;
+        }
+
+        /// <summary>
+        /// Applies repulsion from nearby teammates to prevent clustering.
+        /// </summary>
+        protected Vector2 ApplyTeammateRepulsion(Player player, Vector2 direction)
+        {
+            if (player.Team == null) return direction;
+
+            Vector2 separationForce = Vector2.Zero;
+            int nearbyCount = 0;
+            float personalSpace = AIConstants.PlayerPersonalSpace;
+
+            foreach (var teammate in player.Team.Players.Where(p => p.IsStarting && p != player && !p.IsKnockedDown))
+            {
+                float dist = Vector2.Distance(player.FieldPosition, teammate.FieldPosition);
+                if (dist < personalSpace && dist > 0.1f)
+                {
+                    Vector2 away = player.FieldPosition - teammate.FieldPosition;
+                    away.Normalize();
+                    float strength = 1f - (dist / personalSpace);
+                    separationForce += away * strength;
+                    nearbyCount++;
+                }
+            }
+
+            if (nearbyCount > 0)
+            {
+                separationForce /= nearbyCount;
+                Vector2 blended = direction * (1f - AIConstants.PersonalSpaceBlend) + separationForce * AIConstants.PersonalSpaceBlend;
+                if (blended.LengthSquared() > 0.01f)
+                {
+                    blended.Normalize();
+                    return blended;
+                }
+            }
+
+            return direction;
         }
 
         /// <summary>

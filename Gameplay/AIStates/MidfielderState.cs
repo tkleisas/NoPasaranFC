@@ -58,32 +58,29 @@ namespace NoPasaranFC.Gameplay.AIStates
 
             if (teamHasBall && ballInOpponentHalf)
             {
-                // Push much further forward when attacking
                 float forwardX = context.IsHomeTeam ?
                     MatchEngine.StadiumMargin + MatchEngine.FieldWidth * (isAttackingMidfielder ? 0.82f : 0.72f) :
                     MatchEngine.StadiumMargin + MatchEngine.FieldWidth * (isAttackingMidfielder ? 0.18f : 0.28f);
                 basePosition = new Vector2(forwardX, player.HomePosition.Y);
-                // Lower lerp toward ball — maintain attacking shape instead of clustering
-                lerpFactor = GetDistanceBasedLerpFactor(distanceToBall, 0.35f, 0.25f, 0.18f, 0.10f) * diffMult;
+                lerpFactor = GetDistanceBasedLerpFactor(distanceToBall, 0.20f, 0.15f, 0.10f, 0.05f) * diffMult;
             }
             else if (teamHasBall)
             {
-                // Push forward even in own half
                 float forwardX = context.IsHomeTeam ?
                     MatchEngine.StadiumMargin + MatchEngine.FieldWidth * (isAttackingMidfielder ? 0.72f : 0.62f) :
                     MatchEngine.StadiumMargin + MatchEngine.FieldWidth * (isAttackingMidfielder ? 0.28f : 0.38f);
                 basePosition = new Vector2(forwardX, player.HomePosition.Y);
-                lerpFactor = GetDistanceBasedLerpFactor(distanceToBall, 0.30f, 0.22f, 0.15f, 0.10f) * diffMult;
+                lerpFactor = GetDistanceBasedLerpFactor(distanceToBall, 0.18f, 0.12f, 0.08f, 0.05f) * diffMult;
             }
             else
             {
                 basePosition = player.HomePosition;
-                lerpFactor = GetDistanceBasedLerpFactor(distanceToBall, 0.35f, 0.25f, 0.18f, 0.10f) * diffMult;
+                lerpFactor = GetDistanceBasedLerpFactor(distanceToBall, 0.22f, 0.15f, 0.10f, 0.05f) * diffMult;
             }
 
-            Vector2 target = Vector2.Lerp(basePosition, context.BallPosition, MathHelper.Clamp(lerpFactor, 0f, 0.75f));
+            Vector2 target = Vector2.Lerp(basePosition, context.BallPosition, MathHelper.Clamp(lerpFactor, 0f, 0.50f));
 
-            // Support offset: triangle formation to create passing lanes
+            // Support offset: wider spread to create passing lanes
             if (distanceToBall > 200f && teamHasBall)
             {
                 Vector2 directionToBall = context.BallPosition - basePosition;
@@ -98,7 +95,7 @@ namespace NoPasaranFC.Gameplay.AIStates
                     if (player.Role == PlayerRole.CentralMidfielder)
                         offsetDir = (player.Id % 2 == 0) ? 1f : -1f;
 
-                    target += perpendicular * offsetDir * 150f;
+                    target += perpendicular * offsetDir * 280f;
                 }
             }
 
@@ -106,22 +103,20 @@ namespace NoPasaranFC.Gameplay.AIStates
             if (!teamHasBall && context.NearestOpponent != null && context.IsDefensiveHalf)
             {
                 float distToOpponent = Vector2.Distance(player.FieldPosition, context.NearestOpponent.FieldPosition);
-                float passingStatRatio = player.Passing / AIConstants.MaxStatValue;
                 float pressRange = 400f * diffMult;
                 if (distToOpponent < pressRange)
                 {
-                    // Move toward space between opponent and ball
                     Vector2 pressTarget = Vector2.Lerp(context.NearestOpponent.FieldPosition, context.BallPosition, 0.4f);
-                    float pressWeight = 0.3f * diffMult;
+                    float pressWeight = 0.25f * diffMult;
                     target = Vector2.Lerp(target, pressTarget, pressWeight);
                 }
             }
 
-            // Wing midfielders stay wider
+            // Wing midfielders stay wider — stronger lane anchoring
             if (player.Role == PlayerRole.LeftMidfielder || player.Role == PlayerRole.LeftWinger)
-                target.Y = AdjustYForLane(target.Y, MatchEngine.StadiumMargin + MatchEngine.FieldHeight * 0.15f, 0.4f);
+                target.Y = AdjustYForLane(target.Y, MatchEngine.StadiumMargin + MatchEngine.FieldHeight * 0.20f, 0.55f);
             else if (player.Role == PlayerRole.RightMidfielder || player.Role == PlayerRole.RightWinger)
-                target.Y = AdjustYForLane(target.Y, MatchEngine.StadiumMargin + MatchEngine.FieldHeight * 0.85f, 0.4f);
+                target.Y = AdjustYForLane(target.Y, MatchEngine.StadiumMargin + MatchEngine.FieldHeight * 0.80f, 0.55f);
 
             return target;
         }
