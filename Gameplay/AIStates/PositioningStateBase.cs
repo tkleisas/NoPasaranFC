@@ -29,7 +29,7 @@ namespace NoPasaranFC.Gameplay.AIStates
 
             Vector2 newTarget = CalculateTargetPosition(player, context);
             newTarget = ApplyAntiOscillation(player, newTarget);
-            newTarget = ClampToField(newTarget);
+            // No hard clamp — boundary repulsion in MoveTowardTarget handles edge avoidance softly
 
             player.AITargetPosition = newTarget;
             player.AITargetPositionSet = true;
@@ -93,7 +93,8 @@ namespace NoPasaranFC.Gameplay.AIStates
         }
 
         /// <summary>
-        /// Calculates boundary repulsion force to keep players away from edges.
+        /// <summary>
+        /// Calculates gradient boundary repulsion — stronger when closer to edge.
         /// </summary>
         protected Vector2 GetBoundaryRepulsion(Vector2 position)
         {
@@ -106,10 +107,11 @@ namespace NoPasaranFC.Gameplay.AIStates
             float trigger = AIConstants.BoundaryRepulsionTrigger;
             float strength = AIConstants.BoundaryRepulsionStrength;
 
-            if (leftDist < trigger) repulsion.X += strength;
-            if (rightDist < trigger) repulsion.X -= strength;
-            if (topDist < trigger) repulsion.Y += strength;
-            if (bottomDist < trigger) repulsion.Y -= strength;
+            // Gradient: repulsion scales from 0 at trigger distance to full strength at edge
+            if (leftDist < trigger) repulsion.X += strength * (1f - leftDist / trigger);
+            if (rightDist < trigger) repulsion.X -= strength * (1f - rightDist / trigger);
+            if (topDist < trigger) repulsion.Y += strength * (1f - topDist / trigger);
+            if (bottomDist < trigger) repulsion.Y -= strength * (1f - bottomDist / trigger);
 
             return repulsion;
         }

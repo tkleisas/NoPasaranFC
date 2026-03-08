@@ -102,12 +102,18 @@ namespace NoPasaranFC.Gameplay.AIStates
             Vector2 repulsion = Vector2.Zero;
             float margin = AIConstants.DribbleBoundaryMargin;
 
-            if (player.FieldPosition.X < MatchEngine.StadiumMargin + margin) repulsion.X = 1f;
-            if (player.FieldPosition.X > MatchEngine.TotalWidth - MatchEngine.StadiumMargin - margin) repulsion.X = -1f;
-            if (player.FieldPosition.Y < MatchEngine.StadiumMargin + margin) repulsion.Y = 1f;
-            if (player.FieldPosition.Y > MatchEngine.TotalHeight - MatchEngine.StadiumMargin - margin) repulsion.Y = -1f;
+            float leftDist = player.FieldPosition.X - MatchEngine.StadiumMargin;
+            float rightDist = MatchEngine.TotalWidth - MatchEngine.StadiumMargin - player.FieldPosition.X;
+            float topDist = player.FieldPosition.Y - MatchEngine.StadiumMargin;
+            float bottomDist = MatchEngine.TotalHeight - MatchEngine.StadiumMargin - player.FieldPosition.Y;
 
-            if (repulsion.LengthSquared() > 0)
+            // Gradient repulsion — stronger when closer to edge
+            if (leftDist < margin) repulsion.X = 1f - leftDist / margin;
+            if (rightDist < margin) repulsion.X = -(1f - rightDist / margin);
+            if (topDist < margin) repulsion.Y = 1f - topDist / margin;
+            if (bottomDist < margin) repulsion.Y = -(1f - bottomDist / margin);
+
+            if (repulsion.LengthSquared() > 0.01f)
             {
                 repulsion.Normalize();
                 player.Velocity = repulsion * (player.Speed * AIConstants.BaseSpeedMultiplier);

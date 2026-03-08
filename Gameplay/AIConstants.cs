@@ -23,9 +23,9 @@ namespace NoPasaranFC.Gameplay
 
         // Field boundary margins
         public const float FieldMargin = 150f;
-        public const float BoundaryRepulsionTrigger = 200f;
-        public const float BoundaryRepulsionStrength = 0.5f;
-        public const float BoundaryBlendWeight = 0.4f;
+        public const float BoundaryRepulsionTrigger = 300f;
+        public const float BoundaryRepulsionStrength = 1.0f;
+        public const float BoundaryBlendWeight = 0.6f;
         public const float SidelineAvoidanceMargin = 250f;
 
         // Dribbling
