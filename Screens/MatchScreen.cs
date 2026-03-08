@@ -180,7 +180,10 @@ namespace NoPasaranFC.Screens
             // Shoot/Tackle (X key, A button, or touch A)
             bool isShootKeyDown = _input.IsShootButtonDown() || touchUI.IsActionPressed;
             
-            _matchEngine.Update(gameTime, moveDirection, isShootKeyDown);
+            // Pass (Z key, B button)
+            bool isPassKeyDown = _input.IsPassButtonDown();
+            
+            _matchEngine.Update(gameTime, moveDirection, isShootKeyDown, isPassKeyDown);
             
             // Switch player (Space, X button, or touch X)
             if (_input.IsSwitchPlayerPressed() || touchUI.IsSwitchJustPressed)

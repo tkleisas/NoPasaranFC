@@ -15,6 +15,7 @@ namespace NoPasaranFC.Gameplay
         private Player _lastPlayerTouchedBall;
         private Random _random;
         private AIBehaviorManager _aiBehaviorManager;
+        private float _lastAIKickFrameTime = -1f; // Prevents multiple AI kicks in same frame
 
         // Internal accessors for AIBehaviorManager
         internal Team HomeTeam => _homeTeam;
@@ -263,7 +264,7 @@ namespace NoPasaranFC.Gameplay
             }
         }
         
-        public void Update(GameTime gameTime, Vector2 moveDirection, bool isShootKeyDown)
+        public void Update(GameTime gameTime, Vector2 moveDirection, bool isShootKeyDown, bool isPassKeyDown = false)
         {
             float deltaTime = (float)gameTime.ElapsedGameTime.TotalSeconds;
             
@@ -305,7 +306,7 @@ namespace NoPasaranFC.Gameplay
                 
                 // Allow AI players to move into position during countdown
                 // Player can't kick the ball (moveDirection = Zero, isShootKeyDown = false)
-                UpdatePlayers(deltaTime, Vector2.Zero, false);
+                UpdatePlayers(deltaTime, Vector2.Zero, false, false);
                 
                 // Keep ball stationary during countdown
                 BallVelocity = Vector2.Zero;
@@ -612,7 +613,7 @@ namespace NoPasaranFC.Gameplay
             }
 
             // Update all players
-            UpdatePlayers(deltaTime, moveDirection, isShootKeyDown);
+            UpdatePlayers(deltaTime, moveDirection, isShootKeyDown, isPassKeyDown);
             
             // Ensure only the controlled player has IsControlled = true (safeguard)
             foreach (var player in _homeTeam.Players.Concat(_awayTeam.Players))
@@ -653,7 +654,7 @@ namespace NoPasaranFC.Gameplay
             }
         }
 
-        private void UpdatePlayers(float deltaTime, Vector2 moveDirection, bool isShootKeyDown)
+        private void UpdatePlayers(float deltaTime, Vector2 moveDirection, bool isShootKeyDown, bool isPassKeyDown)
         {
             // During celebration, all players use AI (including controlled player)
             bool celebrationActive = CurrentState == MatchState.GoalCelebration;
@@ -698,6 +699,21 @@ namespace NoPasaranFC.Gameplay
                 {
                     // Reset state when not pressing
                     _shootButtonHoldTime = 0f;
+                }
+                
+                // Handle pass button (Z key / B button)
+                if (isPassKeyDown && !isShootKeyDown && !_controlledPlayer.IsKnockedDown
+                    && CurrentState == MatchState.Playing && BallHeight < 100f)
+                {
+                    float passDist = Vector2.Distance(_controlledPlayer.FieldPosition, BallPosition);
+                    if (passDist < BallShootDistance)
+                    {
+                        float timeSinceLastKick = (float)MatchTime - _controlledPlayer.LastKickTime;
+                        if (timeSinceLastKick >= AutoKickCooldown)
+                        {
+                            PerformPass(moveDirection);
+                        }
+                    }
                 }
                 
                 // Handle knockdown for controlled player
@@ -972,7 +988,7 @@ namespace NoPasaranFC.Gameplay
                             kickDir = moveDirection;
 
                         float timeSinceLastKick = (float)MatchTime - player.LastKickTime;
-                        if (timeSinceLastKick >= AutoKickCooldown)
+                        if (timeSinceLastKick >= AutoKickCooldown && _lastAIKickFrameTime != (float)MatchTime)
                         {
                             float staminaStatMultiplier = GetStaminaStatMultiplier(player);
                             float kickPower = (player.Shooting / 8f + 6f) * staminaStatMultiplier * _aiBehaviorManager.GetAIDifficultyModifier();
@@ -980,6 +996,7 @@ namespace NoPasaranFC.Gameplay
                             BallVerticalVelocity = 15f;
                             _lastPlayerTouchedBall = player;
                             player.LastKickTime = (float)MatchTime;
+                            _lastAIKickFrameTime = (float)MatchTime;
                         }
                     }
                 }
@@ -1341,6 +1358,109 @@ namespace NoPasaranFC.Gameplay
             
             // Play kick sound (louder for shooting)
             AudioManager.Instance.PlaySoundEffect("kick_ball", 0.8f + power * 0.4f, allowRetrigger: false);
+        }
+        
+        private void PerformPass(Vector2 moveDirection)
+        {
+            // Find best pass target in the direction the player is facing
+            Player myTeam = _controlledPlayer.Team == _homeTeam ? null : null; // just for type
+            var teammates = (_controlledPlayer.Team == _homeTeam ? _homeTeam : _awayTeam)
+                .Players.Where(p => p.IsStarting && !p.IsKnockedDown && p != _controlledPlayer).ToList();
+            
+            if (teammates.Count == 0) return;
+
+            Vector2 passDir = moveDirection;
+            if (passDir.LengthSquared() < 0.01f)
+                passDir = _controlledPlayer.Velocity;
+            if (passDir.LengthSquared() < 0.01f)
+            {
+                // Default: pass toward opponent goal
+                bool isHome = _controlledPlayer.Team == _homeTeam;
+                passDir = isHome ? Vector2.UnitX : -Vector2.UnitX;
+            }
+            passDir.Normalize();
+
+            // Score each teammate: prefer those in pass direction, open, and at good distance
+            var opponentPlayers = (_controlledPlayer.Team == _homeTeam ? _awayTeam : _homeTeam)
+                .Players.Where(p => p.IsStarting && !p.IsKnockedDown).ToList();
+            
+            Player bestTarget = null;
+            float bestScore = float.MinValue;
+
+            foreach (var teammate in teammates)
+            {
+                Vector2 toTeammate = teammate.FieldPosition - _controlledPlayer.FieldPosition;
+                float dist = toTeammate.Length();
+                if (dist < 50f || dist > 2500f) continue;
+
+                toTeammate.Normalize();
+                float dot = Vector2.Dot(passDir, toTeammate);
+                
+                // Direction alignment score (heavily weighted)
+                float score = dot * 500f;
+                
+                // Distance score — prefer medium distance
+                if (dist > 150f && dist < 800f) score += 200f;
+                else if (dist >= 800f && dist < 1500f) score += 100f;
+                
+                // Openness — check nearest opponent to teammate
+                float nearestDefDist = float.MaxValue;
+                foreach (var opp in opponentPlayers)
+                {
+                    float oppDist = Vector2.Distance(teammate.FieldPosition, opp.FieldPosition);
+                    if (oppDist < nearestDefDist) nearestDefDist = oppDist;
+                }
+                if (nearestDefDist > 250f) score += 300f;
+                else if (nearestDefDist > 150f) score += 150f;
+
+                // Only consider teammates roughly in pass direction (at least 30° cone)
+                if (dot > -0.2f && score > bestScore)
+                {
+                    bestScore = score;
+                    bestTarget = teammate;
+                }
+            }
+
+            if (bestTarget == null)
+            {
+                // Fallback: nearest teammate
+                bestTarget = teammates.OrderBy(t => Vector2.Distance(t.FieldPosition, _controlledPlayer.FieldPosition)).First();
+            }
+
+            // Predict target position
+            float distance = Vector2.Distance(BallPosition, bestTarget.FieldPosition);
+            float passSpeed = 400f;
+            float travelTime = distance / passSpeed;
+            Vector2 predictedPos = bestTarget.FieldPosition + (bestTarget.Velocity * travelTime * 0.5f);
+
+            // Calculate pass direction and power
+            Vector2 toTarget = predictedPos - BallPosition;
+            if (toTarget.LengthSquared() < 0.01f) return;
+            toTarget.Normalize();
+
+            float staminaMultiplier = GetStaminaStatMultiplier(_controlledPlayer);
+            float passingRatio = _controlledPlayer.Passing / 100f;
+            float basePower = (6f + passingRatio * 4f) * staminaMultiplier;
+            
+            // Scale power with distance
+            float powerScale = MathHelper.Clamp(distance / 600f, 0.5f, 1.3f);
+            float finalPower = basePower * powerScale * _controlledPlayer.Speed;
+
+            // Apply slight direction error based on Passing stat (higher = more accurate)
+            float errorAngle = (1f - passingRatio) * 0.15f; // Max ±8.6° error for 0 Passing
+            float randomError = ((float)SharedRandom.NextDouble() - 0.5f) * 2f * errorAngle;
+            float cos = (float)Math.Cos(randomError);
+            float sin = (float)Math.Sin(randomError);
+            Vector2 finalDir = new Vector2(toTarget.X * cos - toTarget.Y * sin, toTarget.X * sin + toTarget.Y * cos);
+
+            _controlledPlayer.CurrentAnimationState = "shoot";
+            BallVelocity = finalDir * finalPower;
+            BallVerticalVelocity = distance > 600f ? 80f : 30f; // Lofted for long passes
+            _lastPlayerTouchedBall = _controlledPlayer;
+            _controlledPlayer.LastKickTime = (float)MatchTime;
+            _controlledPlayer.Stamina = Math.Max(0, _controlledPlayer.Stamina - 2f);
+            
+            AudioManager.Instance.PlaySoundEffect("kick_ball", 0.5f + powerScale * 0.2f, allowRetrigger: false);
         }
         
         private void ClampToField(ref Vector2 position)

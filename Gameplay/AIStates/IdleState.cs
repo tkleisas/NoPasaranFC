@@ -30,9 +30,10 @@ namespace NoPasaranFC.Gameplay.AIStates
                 return AIStateType.ChasingBall;
             }
             
-            // Return to position if too far (use larger threshold to prevent oscillation)
+            // Return to position if too far — use larger threshold (150px) to prevent oscillation
+            // PositioningState returns to Idle at StopDistance (30px), so 150px gap prevents flip-flopping
             float distanceToHome = Vector2.Distance(player.FieldPosition, player.HomePosition);
-            if (distanceToHome > 100f) // Reduced from 200f to reduce wandering
+            if (distanceToHome > 150f)
             {
                 return AIStateType.Positioning;
             }

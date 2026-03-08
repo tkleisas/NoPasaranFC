@@ -262,6 +262,18 @@ namespace NoPasaranFC.Gameplay
         }
         
         /// <summary>
+        /// Check if pass button is held down
+        /// Keyboard: Z | GamePad: B button
+        /// </summary>
+        public bool IsPassButtonDown()
+        {
+            bool keyDown = _currentKeyState.IsKeyDown(Keys.Z);
+            bool padDown = _currentPadState.IsConnected && _currentPadState.Buttons.B == ButtonState.Pressed;
+            
+            return keyDown || padDown;
+        }
+        
+        /// <summary>
         /// Check if switch player button was just pressed
         /// Keyboard: Space | GamePad: X button | Touch: Switch button
         /// </summary>

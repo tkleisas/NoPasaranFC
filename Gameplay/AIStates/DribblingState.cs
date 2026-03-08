@@ -276,9 +276,9 @@ namespace NoPasaranFC.Gameplay.AIStates
                     (float)context.MatchTime);
             }
 
-            // Exit orbit conditions
+            // Exit orbit conditions — use OR logic so any condition allows early exit
             bool trajectoryComplete = _orbitTrajectory == null || _orbitTrajectory.IsComplete(player.FieldPosition);
-            if (dotProduct > AIConstants.OrbitExitDotProduct && _orbitTimer <= 0f && trajectoryComplete)
+            if ((dotProduct > AIConstants.OrbitExitDotProduct) || (_orbitTimer <= 0f) || trajectoryComplete)
             {
                 _isOrbiting = false;
                 _orbitTrajectory = null;

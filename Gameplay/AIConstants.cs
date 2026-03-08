@@ -80,7 +80,7 @@ namespace NoPasaranFC.Gameplay
         // Orbit (DribblingState)
         public const float OrbitBaseTime = 0.2f;
         public const float OrbitVariationRange = 0.2f;
-        public const float OrbitBallMovementInvalidation = 100f;
+        public const float OrbitBallMovementInvalidation = 50f;
         public const float OrbitArcAngle = 180f;
         public const int OrbitWaypoints = 16;
         public const float OrbitExitDotProduct = 0.5f;
