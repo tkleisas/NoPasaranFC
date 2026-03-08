@@ -18,7 +18,7 @@ namespace NoPasaranFC.Gameplay.AIStates
 
         private bool _hasExecutedPass = false;
         private float _repositionTimer = 0f;
-        private const float MaxRepositionTime = 1.2f;
+        private const float MaxRepositionTime = 2.0f;
 
         public override void Enter(Player player, AIContext context)
         {
@@ -89,25 +89,25 @@ namespace NoPasaranFC.Gameplay.AIStates
             playerToBall.Normalize();
             float dotProduct = Vector2.Dot(playerToBall, passDirection);
             
-            // Execute pass when roughly aligned and close enough
-            if (dotProduct > 0.0f && playerDistToBall < 100f)
+            // Execute pass when close enough — any approach angle works
+            // Poor alignment reduces power (simulates awkward body position)
+            if (playerDistToBall < 100f)
             {
-                float power = CalculatePassPower(distance);
+                float alignmentFactor = MathHelper.Clamp((dotProduct + 1f) / 2f, 0.5f, 1f); // 0.5 at worst angle, 1.0 at perfect
+                float power = CalculatePassPower(distance) * alignmentFactor;
                 OnPassBall?.Invoke(predictedPosition, power);
                 _hasExecutedPass = true;
                 return AIStateType.Positioning;
             }
             else
             {
-                // Reposition behind ball with controlled speed
-                Vector2 idealPosition = context.BallPosition - (passDirection * 50f);
-                Vector2 toIdealPos = idealPosition - player.FieldPosition;
-                
-                if (toIdealPos.LengthSquared() > 25f)
+                // Move toward ball (not behind it — just get close)
+                Vector2 towardBall = context.BallPosition - player.FieldPosition;
+                if (towardBall.LengthSquared() > 0)
                 {
-                    toIdealPos.Normalize();
-                    float repositionSpeed = player.Speed * 1.8f;
-                    player.Velocity = toIdealPos * repositionSpeed;
+                    towardBall.Normalize();
+                    float repositionSpeed = player.Speed * 2.0f;
+                    player.Velocity = towardBall * repositionSpeed;
                     return AIStateType.Passing;
                 }
             }

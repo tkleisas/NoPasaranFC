@@ -32,7 +32,7 @@ namespace NoPasaranFC.Gameplay
         // Dribbling
         public const float DribbleBoundaryMargin = 200f;
         public const float DribbleEscapeMargin = 150f;
-        public const float DecisionInterval = 0.3f;
+        public const float DecisionInterval = 0.5f;
         public const float DribbleCloseDistance = 80f;
         public const float DribbleChaseDistance = 150f;
         public const float OpponentAvoidanceDistance = 200f;
@@ -55,13 +55,13 @@ namespace NoPasaranFC.Gameplay
         public const double ShootLongChance = 0.50;
         public const double ShootVeryLongChance = 0.20;
 
-        // Passing probabilities by role (base - scaled by difficulty)
-        public const double DefenderForwardPassChance = 0.98;
-        public const double DefenderLateralPassChance = 0.70;
-        public const double MidfielderForwardPassChance = 0.95;
-        public const double MidfielderLateralPassChance = 0.70;
+        // Passing probabilities by role (NOT scaled by difficulty — difficulty affects accuracy, not willingness)
+        public const double DefenderForwardPassChance = 0.95;
+        public const double DefenderLateralPassChance = 0.85;
+        public const double MidfielderForwardPassChance = 0.90;
+        public const double MidfielderLateralPassChance = 0.80;
         public const double ForwardPassWhenTeammateCloserChance = 0.90;
-        public const double ForwardDefaultPassChance = 0.50;
+        public const double ForwardDefaultPassChance = 0.75;
 
         // Ball chase distances
         public const float ChaseBallGiveUpDistance = 1000f;
@@ -143,7 +143,7 @@ namespace NoPasaranFC.Gameplay
         public const float DefensiveLineWeight = 0.3f;  // How much defenders conform to average X
 
         // Forward runs
-        public const float ForwardRunTriggerDistance = 300f;  // Teammate must be this close with ball
+        public const float ForwardRunTriggerDistance = 600f;  // Teammate must be this close with ball
         public const float ForwardRunDepth = 0.92f;           // How far forward to run (% of field)
 
         // Chasing prediction

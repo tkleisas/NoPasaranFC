@@ -115,13 +115,15 @@ namespace NoPasaranFC.Gameplay
                 float normalizedGoalDist = distToGoal / (MatchEngine.FieldWidth + 1f);
                 passScore += (1f - normalizedGoalDist) * 600f;
 
-                // Prefer teammates at medium distance (not too close, not too far)
-                if (dist > AIConstants.MinPassDistance && dist < 1200f)
-                    passScore += 300f;
-                else if (dist >= 1200f && dist < AIConstants.MaxPassDistance)
-                    passScore += 100f;
+                // Distance scoring: value all useful distances, prefer medium but don't punish long
+                if (dist > AIConstants.MinPassDistance && dist < 800f)
+                    passScore += 350f;     // Short-medium: ideal passing range
+                else if (dist >= 800f && dist < 1500f)
+                    passScore += 250f;     // Medium-long: through balls
+                else if (dist >= 1500f && dist < AIConstants.MaxPassDistance)
+                    passScore += 150f;     // Long: switching play
                 else
-                    passScore -= 200f;
+                    passScore -= 200f;     // Too close or too far
 
                 // Bonus for open/unmarked teammates
                 float nearestDefDist = float.MaxValue;
@@ -142,9 +144,22 @@ namespace NoPasaranFC.Gameplay
                     (teammate.Role == PlayerRole.AttackingMidfielder || teammate.Role == PlayerRole.LeftWinger || teammate.Role == PlayerRole.RightWinger))
                     passScore += 120f;
 
-                // Penalty if pass path is blocked (reduced from extreme -3000)
+                // Bonus for teammates making runs (moving toward opponent goal)
+                if (teammate.Velocity.LengthSquared() > 1f)
+                {
+                    Vector2 toGoal = opponentGoalCenter - teammate.FieldPosition;
+                    if (toGoal.LengthSquared() > 0)
+                    {
+                        toGoal.Normalize();
+                        float runDot = Vector2.Dot(Vector2.Normalize(teammate.Velocity), toGoal);
+                        if (runDot > 0.3f) // Moving toward goal
+                            passScore += 300f * runDot;
+                    }
+                }
+
+                // Penalty if pass path is blocked (moderate — don't prevent all contested passes)
                 if (IsPathBlocked(player.FieldPosition, teammate.FieldPosition, activeOpponents, 40f))
-                    passScore -= 1500f;
+                    passScore -= 800f;
 
                 if (passScore > bestPassScore)
                 {

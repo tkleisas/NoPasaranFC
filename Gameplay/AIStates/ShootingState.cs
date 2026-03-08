@@ -92,27 +92,27 @@ namespace NoPasaranFC.Gameplay.AIStates
                 playerToBall.Normalize();
                 float dotProduct = Vector2.Dot(playerToBall, shotDirection);
                 
-                // Execute shot when roughly aligned and close enough
-                if (dotProduct > 0.0f && distToBall < 100f)
+                // Execute shot when close enough — any approach angle works
+                // Poor alignment reduces power (simulates awkward body position)
+                if (distToBall < 100f)
                 {
+                    float alignmentFactor = MathHelper.Clamp((dotProduct + 1f) / 2f, 0.5f, 1f);
                     float basePower = MathHelper.Clamp(0.6f + (1500f - distance) / 1500f * 0.4f, 0.6f, 1f);
                     float statBonus = statRatio * 0.15f;
-                    float power = MathHelper.Clamp(basePower + statBonus, 0.6f, 1.15f);
+                    float power = MathHelper.Clamp((basePower + statBonus) * alignmentFactor, 0.5f, 1.15f);
                     OnShootBall?.Invoke(target, power);
                     _hasExecutedShot = true;
                     return AIStateType.Positioning;
                 }
                 else
                 {
-                    // Reposition behind ball with controlled speed
-                    Vector2 idealPosition = context.BallPosition - (shotDirection * 50f);
-                    Vector2 toIdealPos = idealPosition - player.FieldPosition;
-                    
-                    if (toIdealPos.LengthSquared() > 25f)
+                    // Move toward ball (not behind it — just get close)
+                    Vector2 towardBall = context.BallPosition - player.FieldPosition;
+                    if (towardBall.LengthSquared() > 0)
                     {
-                        toIdealPos.Normalize();
-                        float repositionSpeed = player.Speed * 2.0f;
-                        player.Velocity = toIdealPos * repositionSpeed;
+                        towardBall.Normalize();
+                        float repositionSpeed = player.Speed * 2.5f;
+                        player.Velocity = towardBall * repositionSpeed;
                         return AIStateType.Shooting;
                     }
                 }

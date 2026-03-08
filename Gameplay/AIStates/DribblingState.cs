@@ -78,9 +78,9 @@ namespace NoPasaranFC.Gameplay.AIStates
                 float distToBall = Vector2.Distance(player.FieldPosition, context.BallPosition);
                 Vector2 playerToBall = context.BallPosition - player.FieldPosition;
                 float dotProduct = Vector2.Dot(desiredKickDirection, playerToBall);
-                bool playerAheadOfBall = dotProduct < 0;
+                bool playerAheadOfBall = dotProduct < -0.5f; // Only orbit when severely misaligned
 
-                // Orbit logic when ahead of ball
+                // Orbit logic only when very far ahead of ball
                 AIStateType? orbitResult = HandleOrbitMovement(player, context, desiredKickDirection, playerAheadOfBall, dotProduct);
                 if (orbitResult.HasValue)
                     return orbitResult.Value;
@@ -136,9 +136,6 @@ namespace NoPasaranFC.Gameplay.AIStates
             bool teammateAheadOfMe = teammateDistToGoal < myDistToGoal - 30f;
             bool validPassRange = distToTeammate > AIConstants.MinPassDistance && distToTeammate < AIConstants.MaxPassDistance;
 
-            // Difficulty scales decision quality
-            float probMult = AIBehaviorManager.GetProbabilityMultiplier();
-
             bool underPressure = false;
             if (context.NearestOpponent != null)
             {
@@ -157,30 +154,31 @@ namespace NoPasaranFC.Gameplay.AIStates
 
             if (isDefender && validPassRange)
             {
-                if (teammateAheadOfMe && context.Random.NextDouble() < AIConstants.DefenderForwardPassChance * probMult)
+                if (teammateAheadOfMe && context.Random.NextDouble() < AIConstants.DefenderForwardPassChance)
                     return AIStateType.Passing;
-                if (context.Random.NextDouble() < AIConstants.DefenderLateralPassChance * probMult)
+                if (context.Random.NextDouble() < AIConstants.DefenderLateralPassChance)
                     return AIStateType.Passing;
             }
 
             if (isMidfielder && validPassRange)
             {
-                if (isTeammateForward && teammateAheadOfMe && distToTeammate > 400f)
+                // Always pass to forward who is ahead and open
+                if (isTeammateForward && teammateAheadOfMe)
                     return AIStateType.Passing;
-                if (teammateAheadOfMe && context.Random.NextDouble() < AIConstants.MidfielderForwardPassChance * probMult)
+                if (teammateAheadOfMe && context.Random.NextDouble() < AIConstants.MidfielderForwardPassChance)
                     return AIStateType.Passing;
-                if (context.Random.NextDouble() < AIConstants.MidfielderLateralPassChance * probMult)
+                if (context.Random.NextDouble() < AIConstants.MidfielderLateralPassChance)
                     return AIStateType.Passing;
             }
 
             if (isForward && validPassRange)
             {
-                if (distanceToGoal < 350f && context.Random.NextDouble() < 0.85 * probMult)
+                if (distanceToGoal < 350f && context.Random.NextDouble() < 0.85)
                     return AIStateType.Shooting;
                 if (teammateAheadOfMe && (myDistToGoal - teammateDistToGoal) > 150f
-                    && context.Random.NextDouble() < AIConstants.ForwardPassWhenTeammateCloserChance * probMult)
+                    && context.Random.NextDouble() < AIConstants.ForwardPassWhenTeammateCloserChance)
                     return AIStateType.Passing;
-                if (context.Random.NextDouble() < AIConstants.ForwardDefaultPassChance * probMult)
+                if (context.Random.NextDouble() < AIConstants.ForwardDefaultPassChance)
                     return AIStateType.Passing;
             }
 

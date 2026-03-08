@@ -53,14 +53,14 @@ namespace NoPasaranFC.Gameplay.AIStates
                     MatchEngine.StadiumMargin + MatchEngine.FieldWidth * 0.30f;
             }
 
-            // Reduced ball lerp — forwards should hold attacking positions
+            // Forward ball lerp — more dynamic movement with play
             float lerpFactor;
             if (teamHasBall && ballInOpponentHalf)
-                lerpFactor = 0.12f * diffMult;
+                lerpFactor = 0.22f * diffMult;
             else if (teamHasBall)
-                lerpFactor = 0.10f * diffMult;
+                lerpFactor = 0.18f * diffMult;
             else
-                lerpFactor = 0.20f * diffMult;
+                lerpFactor = 0.25f * diffMult;
 
             Vector2 attackingPosition = new Vector2(attackingX, player.HomePosition.Y);
             Vector2 target = Vector2.Lerp(attackingPosition, context.BallPosition, MathHelper.Clamp(lerpFactor, 0f, 0.35f));
