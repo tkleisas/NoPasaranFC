@@ -8,7 +8,7 @@ namespace NoPasaranFC.Database
 {
     public class DatabaseManager
     {
-        private const int CurrentSchemaVersion = 2; // Increment when adding migrations
+        private const int CurrentSchemaVersion = 3; // Increment when adding migrations
         
         private static string GetDatabasePath()
         {
@@ -90,7 +90,9 @@ namespace NoPasaranFC.Database
                 
                 CREATE TABLE IF NOT EXISTS Championship (
                     Id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    CurrentMatchweek INTEGER DEFAULT 0
+                    CurrentMatchweek INTEGER DEFAULT 0,
+                    ChampionshipId TEXT,
+                    ChampionshipName TEXT
                 );
                 
                 CREATE TABLE IF NOT EXISTS Settings (
@@ -139,9 +141,17 @@ namespace NoPasaranFC.Database
                 SetSchemaVersion(connection, 2);
                 currentVersion = 2;
             }
-            
+
+            if (currentVersion < 3)
+            {
+                // Migration 3: Add ChampionshipId/ChampionshipName columns to Championship table
+                ApplyMigration3_AddChampionshipMetadata(connection);
+                SetSchemaVersion(connection, 3);
+                currentVersion = 3;
+            }
+
             // Add future migrations here:
-            // if (currentVersion < 3) { ... }
+            // if (currentVersion < 4) { ... }
         }
         
         private int GetSchemaVersion(SqliteConnection connection)
@@ -170,6 +180,39 @@ namespace NoPasaranFC.Database
             command.ExecuteNonQuery();
         }
         
+        private void ApplyMigration3_AddChampionshipMetadata(SqliteConnection connection)
+        {
+            // Check which columns already exist on the Championship table
+            var checkCommand = connection.CreateCommand();
+            checkCommand.CommandText = "PRAGMA table_info(Championship)";
+
+            bool hasId = false;
+            bool hasName = false;
+            using (var reader = checkCommand.ExecuteReader())
+            {
+                while (reader.Read())
+                {
+                    string columnName = reader.GetString(1);
+                    if (columnName == "ChampionshipId") hasId = true;
+                    if (columnName == "ChampionshipName") hasName = true;
+                }
+            }
+
+            if (!hasId)
+            {
+                var alter = connection.CreateCommand();
+                alter.CommandText = "ALTER TABLE Championship ADD COLUMN ChampionshipId TEXT";
+                alter.ExecuteNonQuery();
+            }
+
+            if (!hasName)
+            {
+                var alter = connection.CreateCommand();
+                alter.CommandText = "ALTER TABLE Championship ADD COLUMN ChampionshipName TEXT";
+                alter.ExecuteNonQuery();
+            }
+        }
+
         private void ApplyMigration2_AddPlayerPicture(SqliteConnection connection)
         {
             // Check if column already exists
@@ -460,13 +503,17 @@ namespace NoPasaranFC.Database
             using var connection = new SqliteConnection(ConnectionString);
             connection.Open();
             
-            // Save current matchweek
+            // Save current matchweek + championship metadata
             var command = connection.CreateCommand();
             command.CommandText = @"
-                INSERT OR REPLACE INTO Championship (Id, CurrentMatchweek)
-                VALUES (1, @currentMatchweek);
+                INSERT OR REPLACE INTO Championship (Id, CurrentMatchweek, ChampionshipId, ChampionshipName)
+                VALUES (1, @currentMatchweek, @championshipId, @championshipName);
             ";
             command.Parameters.AddWithValue("@currentMatchweek", championship.CurrentMatchweek);
+            command.Parameters.AddWithValue("@championshipId",
+                string.IsNullOrEmpty(championship.Id) ? (object)DBNull.Value : championship.Id);
+            command.Parameters.AddWithValue("@championshipName",
+                string.IsNullOrEmpty(championship.Name) ? (object)DBNull.Value : championship.Name);
             command.ExecuteNonQuery();
             
             // Save all teams
@@ -493,13 +540,17 @@ namespace NoPasaranFC.Database
             using var connection = new SqliteConnection(ConnectionString);
             connection.Open();
             
-            // Load current matchweek
+            // Load current matchweek + championship metadata
             var command = connection.CreateCommand();
-            command.CommandText = "SELECT CurrentMatchweek FROM Championship WHERE Id = 1";
-            var result = command.ExecuteScalar();
-            if (result != null)
+            command.CommandText = "SELECT CurrentMatchweek, ChampionshipId, ChampionshipName FROM Championship WHERE Id = 1";
+            using (var reader = command.ExecuteReader())
             {
-                championship.CurrentMatchweek = Convert.ToInt32(result);
+                if (reader.Read())
+                {
+                    championship.CurrentMatchweek = reader.IsDBNull(0) ? 0 : reader.GetInt32(0);
+                    championship.Id = reader.IsDBNull(1) ? string.Empty : reader.GetString(1);
+                    championship.Name = reader.IsDBNull(2) ? string.Empty : reader.GetString(2);
+                }
             }
             
             // Load teams and matches

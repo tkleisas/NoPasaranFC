@@ -1,0 +1,34 @@
+{
+  "championships": [
+    {
+      "id": "football_for_all_2026",
+      "name": "FOOTBALL FOR ALL 2026",
+      "playerTeam": "NO PASARAN!",
+      "teams": [
+        { "name": "NO PASARAN!" },
+        { "name": "ΟΥΡΑΝΟΚΑΤΕΒΑΤΟΙ" },
+        { "name": "ΚΤΕΛ" },
+        { "name": "ΜΠΑΡΤΣΕΛΙΩΜΑ" },
+        { "name": "Old School" },
+        { "name": "TUBA LIBRE" },
+        { "name": "No Name" },
+        { "name": "ΣΚΛΑΒΕΝΙΤΗΣ" }
+      ]
+    },
+    {
+      "id": "antifa_league",
+      "name": "ANTIFA LEAGUE",
+      "playerTeam": "NO PASARAN!",
+      "teams": [
+        { "name": "NO PASARAN!" },
+        { "name": "ΑΣΑΛΑΓΗΤΟΣ", "kitName": "asalagitos_kit", "logo": "asalagitos_logo.png" },
+        { "name": "ΑΔΕΣΠΟΤΟΣ" },
+        { "name": "ΤΗΓΑΝΙΤΗΣ", "kitName": "tiganitis_kit", "logo": "tiganitis_logo.png" },
+        { "name": "ΑΣΤΕΡΑΣ ΕΞΑΡΧΕΙΩΝ", "kitName": "asteras_exarcheion_kit", "logo": "asteras_exarcheion_logo.png" },
+        { "name": "Κυψέλη FC" },
+        { "name": "Α.Ο. Αλληλεγγύης" },
+        { "name": "Απόλλων Αγίου Δημητρίου" }
+      ]
+    }
+  ]
+}

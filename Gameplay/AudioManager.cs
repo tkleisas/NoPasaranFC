@@ -13,10 +13,12 @@ namespace NoPasaranFC.Gameplay
 
         private ContentManager _content;
         private Dictionary<string, SoundEffect> _soundEffects;
+        private Dictionary<string, List<string>> _soundEffectGroups;
         private Dictionary<string, Song> _songs;
         private Dictionary<string, SoundEffectInstance> _activeSoundInstances;
         private Song _currentSong;
         private string _currentSongName;
+        private readonly Random _random = new Random();
         
         // Volume settings (0.0 to 1.0)
         public float MusicVolume { get; set; } = 0.7f;
@@ -27,6 +29,7 @@ namespace NoPasaranFC.Gameplay
         private AudioManager()
         {
             _soundEffects = new Dictionary<string, SoundEffect>();
+            _soundEffectGroups = new Dictionary<string, List<string>>();
             _songs = new Dictionary<string, Song>();
             _activeSoundInstances = new Dictionary<string, SoundEffectInstance>();
         }
@@ -47,7 +50,14 @@ namespace NoPasaranFC.Gameplay
             TryLoadSoundEffect("whistle_end", "Audio/SFX/whistle_end");
             TryLoadSoundEffect("kick_ball", "Audio/SFX/kick_ball");
             TryLoadSoundEffect("tackle", "Audio/SFX/tackle");
-            TryLoadSoundEffect("goal", "Audio/SFX/goal");
+
+            // Goal variants — one is picked randomly each time PlaySoundEffect("goal") is called.
+            TryLoadSoundEffect("goal01", "Audio/SFX/goal01");
+            TryLoadSoundEffect("goal02", "Audio/SFX/goal02");
+            TryLoadSoundEffect("goal03", "Audio/SFX/goal03");
+            TryLoadSoundEffect("goal04", "Audio/SFX/goal04");
+            RegisterSoundGroup("goal", "goal01", "goal02", "goal03", "goal04");
+
             TryLoadSoundEffect("crowd_cheer", "Audio/SFX/crowd_cheer");
             TryLoadSoundEffect("crowd_aww", "Audio/SFX/crowd_aww");
             
@@ -71,6 +81,25 @@ namespace NoPasaranFC.Gameplay
             }
         }
 
+        /// <summary>
+        /// Register a group of sound effect variants under a single alias. When
+        /// <see cref="PlaySoundEffect(string, float, bool)"/> is called with the group name,
+        /// one of the loaded variants is picked at random. Variants that failed to load
+        /// are silently skipped so partial asset sets still work.
+        /// </summary>
+        private void RegisterSoundGroup(string groupName, params string[] variantNames)
+        {
+            var loaded = new List<string>();
+            foreach (var variant in variantNames)
+            {
+                if (_soundEffects.ContainsKey(variant))
+                    loaded.Add(variant);
+            }
+
+            if (loaded.Count > 0)
+                _soundEffectGroups[groupName] = loaded;
+        }
+
         private void TryLoadSong(string name, string assetPath)
         {
             try
@@ -88,37 +117,50 @@ namespace NoPasaranFC.Gameplay
         public void PlaySoundEffect(string name, float volumeMultiplier = 1.0f, bool allowRetrigger = true)
         {
             if (!SfxEnabled) return;
-            
-            if (_soundEffects.TryGetValue(name, out var sfx))
+
+            // If the caller asked for a group, pick a random variant from it. The tracking key
+            // remains the group name so `allowRetrigger: false` still prevents overlapping goal
+            // sounds regardless of which variant was picked last time.
+            SoundEffect sfx = null;
+            if (_soundEffectGroups.TryGetValue(name, out var variants) && variants.Count > 0)
             {
-                // Check if this sound is already playing and shouldn't be retriggered
-                if (!allowRetrigger && _activeSoundInstances.TryGetValue(name, out var existingInstance))
+                string variantName = variants[_random.Next(variants.Count)];
+                _soundEffects.TryGetValue(variantName, out sfx);
+            }
+            else
+            {
+                _soundEffects.TryGetValue(name, out sfx);
+            }
+
+            if (sfx == null) return;
+
+            // Check if this sound is already playing and shouldn't be retriggered
+            if (!allowRetrigger && _activeSoundInstances.TryGetValue(name, out var existingInstance))
+            {
+                if (existingInstance.State == SoundState.Playing)
                 {
-                    if (existingInstance.State == SoundState.Playing)
-                    {
-                        return; // Don't retrigger while still playing
-                    }
-                    else
-                    {
-                        // Clean up stopped instance
-                        existingInstance.Dispose();
-                        _activeSoundInstances.Remove(name);
-                    }
-                }
-                
-                // For non-retriggerable sounds, create an instance we can track
-                if (!allowRetrigger)
-                {
-                    var instance = sfx.CreateInstance();
-                    instance.Volume = SfxVolume * volumeMultiplier;
-                    instance.Play();
-                    _activeSoundInstances[name] = instance;
+                    return; // Don't retrigger while still playing
                 }
                 else
                 {
-                    // For retriggerable sounds, just play normally (allows overlapping)
-                    sfx.Play(SfxVolume * volumeMultiplier, 0f, 0f);
+                    // Clean up stopped instance
+                    existingInstance.Dispose();
+                    _activeSoundInstances.Remove(name);
                 }
+            }
+
+            // For non-retriggerable sounds, create an instance we can track
+            if (!allowRetrigger)
+            {
+                var instance = sfx.CreateInstance();
+                instance.Volume = SfxVolume * volumeMultiplier;
+                instance.Play();
+                _activeSoundInstances[name] = instance;
+            }
+            else
+            {
+                // For retriggerable sounds, just play normally (allows overlapping)
+                sfx.Play(SfxVolume * volumeMultiplier, 0f, 0f);
             }
         }
 

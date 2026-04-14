@@ -5,12 +5,16 @@ namespace NoPasaranFC.Models
 {
     public class Championship
     {
+        public string Id { get; set; }
+        public string Name { get; set; }
         public List<Team> Teams { get; set; }
         public List<Match> Matches { get; set; }
         public int CurrentMatchweek { get; set; }
-        
+
         public Championship()
         {
+            Id = string.Empty;
+            Name = string.Empty;
             Teams = new List<Team>();
             Matches = new List<Match>();
             CurrentMatchweek = 0;

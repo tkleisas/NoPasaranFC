@@ -111,6 +111,21 @@ namespace NoPasaranFC.Database
             };
         }
         
+        /// <summary>
+        /// Create a new team with a procedurally-generated roster.
+        /// Used for championship teams that aren't present in teams_seed.json.
+        /// </summary>
+        public static Team CreateTeamWithDefaultRoster(string name, bool isPlayerControlled, string kitName = null, string logo = null)
+        {
+            var team = new Team(name, isPlayerControlled)
+            {
+                KitName = kitName ?? string.Empty,
+                Logo = logo ?? string.Empty
+            };
+            GenerateDefaultRoster(team);
+            return team;
+        }
+
         private static void GenerateDefaultRoster(Team team, int rosterSize = 25)
         {
             var random = new Random(team.Name.GetHashCode()); // Consistent generation per team

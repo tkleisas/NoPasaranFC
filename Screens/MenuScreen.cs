@@ -88,7 +88,17 @@ namespace NoPasaranFC.Screens
             _input.Update();
             var keyState = Keyboard.GetState(); // Still needed for some menu controls
             var touchUI = Gameplay.TouchUI.Instance;
-            
+
+            // If there is no active championship (e.g. fresh install or the database was
+            // reset), push the championship selection screen so the player can pick a mode
+            // before interacting with the menu.
+            if (_championship.Teams.Count == 0)
+            {
+                _screenManager.PushScreen(new ChampionshipSelectionScreen(
+                    _championship, _database, _screenManager, canCancel: false));
+                return;
+            }
+
             // Update grass scroll
             _grassScrollOffset += 50f * (float)gameTime.ElapsedGameTime.TotalSeconds;
             if (_grassScrollOffset >= 200f) // Texture size
@@ -312,8 +322,9 @@ namespace NoPasaranFC.Screens
                     }
                     break;
                 
-                case 2: // New Season
-                    StartNewSeason();
+                case 2: // New Season — pick a championship (can be the same or a different mode)
+                    _screenManager.PushScreen(new ChampionshipSelectionScreen(
+                        _championship, _database, _screenManager, canCancel: true));
                     break;
                     
                 case 3: // Options
@@ -325,30 +336,6 @@ namespace NoPasaranFC.Screens
                     ShouldExit = true;
                     break;
             }
-        }
-        
-        private void StartNewSeason()
-        {
-            // Reset all match results
-            foreach (var match in _championship.Matches)
-            {
-                match.IsPlayed = false;
-                match.HomeScore = 0;
-                match.AwayScore = 0;
-            }
-            
-            // Reset all team stats
-            foreach (var team in _championship.Teams)
-            {
-                team.Wins = 0;
-                team.Draws = 0;
-                team.Losses = 0;
-                team.GoalsFor = 0;
-                team.GoalsAgainst = 0;
-            }
-            
-            // Save to database
-            _database.SaveChampionship(_championship);
         }
         
         private void DrawGrassBackground(SpriteBatch spriteBatch, int screenWidth, int screenHeight)
@@ -429,6 +416,15 @@ namespace NoPasaranFC.Screens
                     Vector2 titleSize = font.MeasureString(title);
                     Vector2 titlePos = new Vector2((screenWidth - titleSize.X) / 2, screenHeight * 0.5f);
                     spriteBatch.DrawString(font, title, titlePos, Color.Yellow);
+                }
+
+                // Show the active championship name above the menu options
+                if (!string.IsNullOrEmpty(_championship.Name))
+                {
+                    Vector2 champSize = font.MeasureString(_championship.Name) * scale;
+                    Vector2 champPos = new Vector2((screenWidth - champSize.X) / 2, screenHeight * 0.55f);
+                    spriteBatch.DrawString(font, _championship.Name, champPos, Color.LightGoldenrodYellow,
+                        0f, Vector2.Zero, scale, SpriteEffects.None, 0f);
                 }
                 // Check if season is complete
                 var playerTeam = _championship.Teams.Find(t => t.IsPlayerControlled);

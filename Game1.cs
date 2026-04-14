@@ -110,14 +110,9 @@ public class Game1 : Game
         _graphics.SynchronizeWithVerticalRetrace = settings.VSync;
 #endif
         
-        // Try to load existing championship or create new one
+        // Try to load existing championship; if none exists, leave it empty so the
+        // menu can launch the championship selection flow.
         _championship = _database.LoadChampionship();
-        
-        if (_championship.Teams.Count == 0)
-        {
-            _championship = ChampionshipInitializer.CreateNewChampionship();
-            _database.SaveChampionship(_championship);
-        }
 
         base.Initialize();
     }

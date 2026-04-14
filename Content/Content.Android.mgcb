@@ -31,11 +31,29 @@
 /processorParam:Quality=Best
 /build:Audio/SFX/crowd_cheer.wav
 
-#begin Audio/SFX/goal.wav
+#begin Audio/SFX/goal01.wav
 /importer:WavImporter
 /processor:SoundEffectProcessor
 /processorParam:Quality=Best
-/build:Audio/SFX/goal.wav
+/build:Audio/SFX/goal01.wav
+
+#begin Audio/SFX/goal02.wav
+/importer:WavImporter
+/processor:SoundEffectProcessor
+/processorParam:Quality=Best
+/build:Audio/SFX/goal02.wav
+
+#begin Audio/SFX/goal03.wav
+/importer:WavImporter
+/processor:SoundEffectProcessor
+/processorParam:Quality=Best
+/build:Audio/SFX/goal03.wav
+
+#begin Audio/SFX/goal04.wav
+/importer:WavImporter
+/processor:SoundEffectProcessor
+/processorParam:Quality=Best
+/build:Audio/SFX/goal04.wav
 
 #begin Audio/SFX/kick_ball.wav
 /importer:WavImporter

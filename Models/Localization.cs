@@ -174,9 +174,16 @@ namespace NoPasaranFC.Models
                 
                 ["settings.on"] = "ON",
                 ["settings.off"] = "OFF",
+
+                // Championship selection
+                ["championship.selectTitle"] = "SELECT CHAMPIONSHIP",
+                ["championship.none"] = "No championships available",
+                ["championship.teamCount"] = "{0} teams",
+                ["championship.instructions"] = "UP/DOWN: Navigate   ENTER: Confirm",
+                ["championship.instructionsCancel"] = "UP/DOWN: Navigate   ENTER: Confirm   ESC: Back",
             };
         }
-        
+
         private Dictionary<string, string> GetGreekStrings()
         {
             return new Dictionary<string, string>
@@ -280,6 +287,13 @@ namespace NoPasaranFC.Models
                 
                 ["settings.on"] = "ΝΑΙ",
                 ["settings.off"] = "ΟΧΙ",
+
+                // Championship selection
+                ["championship.selectTitle"] = "ΕΠΙΛΟΓΗ ΠΡΩΤΑΘΛΗΜΑΤΟΣ",
+                ["championship.none"] = "Δεν υπάρχουν διαθέσιμα πρωταθλήματα",
+                ["championship.teamCount"] = "{0} ομάδες",
+                ["championship.instructions"] = "ΑΝΩ/ΚΑΤΩ: Πλοήγηση   ENTER: Επιβεβαίωση",
+                ["championship.instructionsCancel"] = "ΑΝΩ/ΚΑΤΩ: Πλοήγηση   ENTER: Επιβεβαίωση   ESC: Πίσω",
             };
         }
         

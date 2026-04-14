@@ -45,6 +45,7 @@
   <ItemGroup>
     <AndroidAsset Include="..\Content\bin\Android\Content\**\*.*" Exclude="**\*.db" Link="Assets\Content\%(RecursiveDir)%(Filename)%(Extension)" />
     <AndroidAsset Include="..\Database\teams_seed.json" Link="Assets\Database\teams_seed.json" />
+    <AndroidAsset Include="..\Database\championships_seed.json" Link="Assets\Database\championships_seed.json" />
     <!-- Explicitly exclude database files -->
     <AndroidAsset Remove="**\*.db" />
     <AndroidAsset Remove="**\nopasaran.db" />
