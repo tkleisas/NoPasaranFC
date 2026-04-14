@@ -6,6 +6,7 @@
     <PublishReadyToRun>false</PublishReadyToRun>
     <TieredCompilation>false</TieredCompilation>
     <GitCommitHash>unknown</GitCommitHash>
+    <ErrorOnDuplicatePublishOutputFiles>false</ErrorOnDuplicatePublishOutputFiles>
   </PropertyGroup>
   <PropertyGroup>
     <ApplicationManifest>app.manifest</ApplicationManifest>
@@ -20,11 +21,12 @@
     <None Remove="NoPasaranFC.Android\**" />
   </ItemGroup>
 
-  <!-- Exclude Android MGCB file so MonoGame Content Builder Task only builds desktop content -->
+  <!-- Exclude Android MGCB and content output from desktop build -->
   <ItemGroup>
     <MonoGameContentReference Remove="Content\Content.Android.mgcb" />
+    <None Remove="Content\Content.Android.mgcb" />
   </ItemGroup>
-  
+
   <ItemGroup>
     <None Remove="Icon.ico" />
     <None Remove="Icon.bmp" />
