@@ -19,6 +19,11 @@
     <EmbeddedResource Remove="NoPasaranFC.Android\**" />
     <None Remove="NoPasaranFC.Android\**" />
   </ItemGroup>
+
+  <!-- Exclude Android MGCB file so MonoGame Content Builder Task only builds desktop content -->
+  <ItemGroup>
+    <MonoGameContentReference Remove="Content\Content.Android.mgcb" />
+  </ItemGroup>
   
   <ItemGroup>
     <None Remove="Icon.ico" />

@@ -11,6 +11,7 @@ permissions:
 jobs:
   build-desktop:
     strategy:
+      fail-fast: false
       matrix:
         include:
           - os: windows-latest
@@ -81,6 +82,9 @@ jobs:
           distribution: microsoft
           java-version: 17
 
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y libfreetype6-dev libfontconfig1-dev
+
       - name: Install Android workload
         run: dotnet workload install android
 
@@ -89,7 +93,7 @@ jobs:
 
       - name: Build content for Android
         working-directory: Content
-        run: dotnet mgcb Content.Android.mgcb /platform:Android /rebuild
+        run: dotnet mgcb Content.mgcb /platform:Android /rebuild
 
       - name: Decode keystore
         if: env.ANDROID_KEYSTORE_BASE64 != ''
