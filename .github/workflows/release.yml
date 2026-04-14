@@ -93,7 +93,7 @@ jobs:
 
       - name: Build content for Android
         working-directory: Content
-        run: dotnet mgcb Content.mgcb /platform:Android /rebuild
+        run: mgcb /rebuild:true /@:Content.Android.mgcb
 
       - name: Decode keystore
         if: env.ANDROID_KEYSTORE_BASE64 != ''
