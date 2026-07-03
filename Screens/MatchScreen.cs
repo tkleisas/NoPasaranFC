@@ -192,9 +192,13 @@ namespace NoPasaranFC.Screens
             bool isPassKeyDown = _input.IsPassButtonDown() || touchUI.IsPassPressed;
 
 #if !ANDROID
-            // ===== Player 2 join/leave toggle (desktop local co-op) =====
-            // Right Shift on keyboard, or Start on gamepad 2. Same key toggles off.
-            if (_input.IsPlayer2JoinTogglePressed(out bool p2FromKeyboard))
+            // ===== Player 2 join/leave toggle (desktop local 2-player) =====
+            // Right Shift / Start on pad 2 = join the OPPOSING team (versus).
+            // Right Alt / Back on pad 2 = join P1's team (co-op).
+            // While P2 is active, any of these keys toggles them back off.
+            bool p2VersusPressed = _input.IsPlayer2JoinVersusPressed(out bool p2VersusFromKeyboard);
+            bool p2CoopPressed = _input.IsPlayer2JoinCoopPressed(out bool p2CoopFromKeyboard);
+            if (p2VersusPressed || p2CoopPressed)
             {
                 if (_matchEngine.Player2Active)
                 {
@@ -203,13 +207,13 @@ namespace NoPasaranFC.Screens
                 }
                 else
                 {
-                    // Prefer gamepad 2 if it's connected, even when RShift was used.
-                    // Only route P2 to the keyboard if no pad 2 is attached.
+                    // Versus wins if both were somehow pressed on the same frame.
+                    bool p2FromKeyboard = p2VersusPressed ? p2VersusFromKeyboard : p2CoopFromKeyboard;
+                    // Prefer gamepad 2 if it's connected, even when a keyboard key was
+                    // used. Only route P2 to the keyboard if no pad 2 is attached.
                     bool useKeyboard = p2FromKeyboard && !_input.IsGamePad2Connected();
-                    // If they pressed Start on pad 2, that's obviously gamepad.
-                    if (!p2FromKeyboard) useKeyboard = false;
 
-                    if (_matchEngine.JoinPlayer2())
+                    if (_matchEngine.JoinPlayer2(joinOpposingTeam: p2VersusPressed))
                     {
                         _input.Player2KeyboardActive = useKeyboard;
                         _player2HasEverJoined = true;
@@ -1254,8 +1258,9 @@ namespace NoPasaranFC.Screens
             }
             else if (player.IsControlled)
             {
-                // Controlled player has bright yellow tint
-                tintColor = new Color(255, 255, 150); // Light yellow tint
+                // Controlled players get a bright tint — yellow for P1, cyan for P2
+                bool isP2Tint = _matchEngine.Player2Active && player == _matchEngine.ControlledPlayer2;
+                tintColor = isP2Tint ? new Color(170, 255, 255) : new Color(255, 255, 150);
             }
             else
             {
@@ -1347,13 +1352,28 @@ namespace NoPasaranFC.Screens
             // Draw selection indicator for controlled player
             if (player.IsControlled && !player.IsKnockedDown)
             {
+                // P1 = yellow, P2 = cyan so the two humans can tell themselves apart
+                bool isPlayer2 = _matchEngine.Player2Active && player == _matchEngine.ControlledPlayer2;
+                Color indicatorColor = isPlayer2 ? Color.Cyan : Color.Yellow;
+
                 // Draw a circle around the controlled player
-                DrawCircleOutline(spriteBatch, pos, renderSize / 2 + 10, Color.Yellow, 4);
-                
-                // Draw shot power indicator if charging
-                if (_matchEngine.IsChargingShot())
+                DrawCircleOutline(spriteBatch, pos, renderSize / 2 + 10, indicatorColor, 4);
+
+                // With two humans in the match, tag each with their player number
+                if (_matchEngine.Player2Active)
                 {
-                    float power = _matchEngine.GetShotPower();
+                    string label = isPlayer2 ? "P2" : "P1";
+                    Vector2 labelSize = font.MeasureString(label);
+                    Vector2 labelPos = new Vector2(pos.X - labelSize.X / 2, pos.Y - renderSize / 2 - 52 - labelSize.Y);
+                    spriteBatch.DrawString(font, label, labelPos + new Vector2(2, 2), Color.Black);
+                    spriteBatch.DrawString(font, label, labelPos, indicatorColor);
+                }
+
+                // Draw shot power indicator if charging (each player has their own charge)
+                bool charging = isPlayer2 ? _matchEngine.IsChargingShot2() : _matchEngine.IsChargingShot();
+                if (charging)
+                {
+                    float power = isPlayer2 ? _matchEngine.GetShotPower2() : _matchEngine.GetShotPower();
                     int barWidth = 60;
                     int barHeight = 8;
                     int barX = (int)(pos.X - barWidth / 2);

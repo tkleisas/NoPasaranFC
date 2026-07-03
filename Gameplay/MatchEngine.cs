@@ -23,8 +23,15 @@ namespace NoPasaranFC.Gameplay
         private bool _p2IsShootKeyDown;
         private bool _p2IsPassKeyDown;
 
+        // The team P2 joined (their own choice of P1's team for co-op, or the
+        // opposing team for versus). Persists across post-goal position resets.
+        private Team _player2Team;
+
         /// <summary>True when a second human player has joined this match.</summary>
         public bool Player2Active { get; private set; }
+
+        /// <summary>The player currently controlled by P1.</summary>
+        public Player ControlledPlayer => _controlledPlayer;
 
         /// <summary>The player currently controlled by P2 (null if P2 isn't active).</summary>
         public Player ControlledPlayer2 => _controlledPlayer2;
@@ -250,8 +257,10 @@ namespace NoPasaranFC.Gameplay
             // controlled player for them too — InitializePositions cleared all IsControlled flags.
             if (Player2Active)
             {
-                var p2Team = _homeTeam.IsPlayerControlled ? _awayTeam : _homeTeam;
-                var p2Starters = p2Team.Players.Where(p => p.IsStarting).ToList();
+                var p2Team = _player2Team ?? (_homeTeam.IsPlayerControlled ? _awayTeam : _homeTeam);
+                var p2Starters = p2Team.Players
+                    .Where(p => p.IsStarting && p != _controlledPlayer)
+                    .ToList();
                 if (p2Starters.Any())
                 {
                     _controlledPlayer2 = p2Starters.FirstOrDefault(p => p.Position == PlayerPosition.Midfielder)
@@ -262,6 +271,7 @@ namespace NoPasaranFC.Gameplay
                 else
                 {
                     _controlledPlayer2 = null;
+                    _player2Team = null;
                     Player2Active = false;
                 }
             }
@@ -2253,17 +2263,24 @@ namespace NoPasaranFC.Gameplay
         }
         
         /// <summary>
-        /// Called by the MatchScreen when the player hits the P2 join/leave toggle.
-        /// Picks an initial opponent-team player for P2 (skipping the GK) and marks
-        /// them as controlled so the AI loop leaves them alone.
+        /// Called by the MatchScreen when the player hits a P2 join/leave toggle.
+        /// Picks an initial player for P2 on the chosen team (skipping the GK and
+        /// P1's player) and marks them as controlled so the AI loop leaves them alone.
         /// </summary>
-        public bool JoinPlayer2()
+        /// <param name="joinOpposingTeam">
+        /// True = P2 plays against P1 (versus); false = P2 joins P1's team (co-op).
+        /// </param>
+        public bool JoinPlayer2(bool joinOpposingTeam = true)
         {
             if (Player2Active) return false;
 
-            // P2 controls whichever team is NOT the primary human team.
-            var p2Team = _homeTeam.IsPlayerControlled ? _awayTeam : _homeTeam;
-            var starters = p2Team.Players.Where(p => p.IsStarting && !p.IsKnockedDown).ToList();
+            var playerTeam = _homeTeam.IsPlayerControlled ? _homeTeam : _awayTeam;
+            var p2Team = joinOpposingTeam
+                ? (playerTeam == _homeTeam ? _awayTeam : _homeTeam)
+                : playerTeam;
+            var starters = p2Team.Players
+                .Where(p => p.IsStarting && !p.IsKnockedDown && p != _controlledPlayer)
+                .ToList();
             if (starters.Count == 0) return false;
 
             // Prefer a midfielder, then any outfield player, then whatever's left.
@@ -2271,6 +2288,7 @@ namespace NoPasaranFC.Gameplay
                               ?? starters.FirstOrDefault(p => p.Position != PlayerPosition.Goalkeeper)
                               ?? starters[0];
             _controlledPlayer2.IsControlled = true;
+            _player2Team = p2Team;
             _wasShootButtonDown2 = false;
             _shootButtonHoldTime2 = 0f;
             Player2Active = true;
@@ -2290,14 +2308,16 @@ namespace NoPasaranFC.Gameplay
                 _controlledPlayer2.IsControlled = false;
             }
             _controlledPlayer2 = null;
+            _player2Team = null;
             _wasShootButtonDown2 = false;
             _shootButtonHoldTime2 = 0f;
             Player2Active = false;
         }
 
         /// <summary>
-        /// Cycle P2's selected player across visible teammates on the opposing team,
-        /// mirroring <see cref="SwitchControlledPlayer"/> for P1.
+        /// Cycle P2's selected player across visible teammates on P2's team,
+        /// mirroring <see cref="SwitchControlledPlayer"/> for P1. Never lands on
+        /// P1's player (relevant when both play on the same team in co-op).
         /// </summary>
         public void SwitchControlledPlayer2()
         {
@@ -2305,7 +2325,7 @@ namespace NoPasaranFC.Gameplay
 
             _controlledPlayer2.IsControlled = false;
 
-            var p2Team = _homeTeam.IsPlayerControlled ? _awayTeam : _homeTeam;
+            var p2Team = _player2Team ?? (_homeTeam.IsPlayerControlled ? _awayTeam : _homeTeam);
 
             // Use the same viewport window as P1's switch — the camera tracks the ball.
             float viewportWidth = 800f / Camera.Zoom;
@@ -2363,9 +2383,10 @@ namespace NoPasaranFC.Gameplay
             float minY = cameraPos.Y - viewportHeight / 2;
             float maxY = cameraPos.Y + viewportHeight / 2;
 
-            // Find visible players that are NOT knocked down
+            // Find visible players that are NOT knocked down (and never steal
+            // P2's player when both humans are on the same team in co-op)
             var visiblePlayers = controlledTeam.Players
-                .Where(p => !p.IsKnockedDown && 
+                .Where(p => !p.IsKnockedDown && p != _controlledPlayer2 &&
                            p.FieldPosition.X >= minX && p.FieldPosition.X <= maxX &&
                            p.FieldPosition.Y >= minY && p.FieldPosition.Y <= maxY)
                 .OrderBy(p => Vector2.Distance(p.FieldPosition, BallPosition))
@@ -2384,7 +2405,7 @@ namespace NoPasaranFC.Gameplay
             {
                 // Fallback to nearest non-knocked player overall if no visible players
                 var nearestPlayer = controlledTeam.Players
-                    .Where(p => !p.IsKnockedDown)
+                    .Where(p => !p.IsKnockedDown && p != _controlledPlayer2)
                     .OrderBy(p => Vector2.Distance(p.FieldPosition, BallPosition))
                     .FirstOrDefault();
 
@@ -2486,10 +2507,20 @@ namespace NoPasaranFC.Gameplay
         {
             return _wasShootButtonDown && _shootButtonHoldTime > 0f;
         }
-        
+
         public float GetShotPower()
         {
             return Math.Min(_shootButtonHoldTime / MaxShootHoldTime, 1f);
+        }
+
+        public bool IsChargingShot2()
+        {
+            return _wasShootButtonDown2 && _shootButtonHoldTime2 > 0f;
+        }
+
+        public float GetShotPower2()
+        {
+            return Math.Min(_shootButtonHoldTime2 / MaxShootHoldTime, 1f);
         }
         
         public List<Player> GetAllPlayers()

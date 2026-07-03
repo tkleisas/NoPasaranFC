@@ -485,16 +485,33 @@ namespace NoPasaranFC.Gameplay
         }
 
         /// <summary>
-        /// Edge-triggered P2 join/leave toggle. Right Shift (keyboard) or Start on
-        /// gamepad 2. Returns the source so callers can route P2 input correctly.
+        /// Edge-triggered P2 "join opposing team" (versus). Right Shift (keyboard) or
+        /// Start on gamepad 2. While P2 is active this doubles as the leave toggle.
+        /// Returns the source so callers can route P2 input correctly.
         /// </summary>
-        public bool IsPlayer2JoinTogglePressed(out bool fromKeyboard)
+        public bool IsPlayer2JoinVersusPressed(out bool fromKeyboard)
         {
             bool keyPressed = _currentKeyState.IsKeyDown(Keys.RightShift) &&
                               !_previousKeyState.IsKeyDown(Keys.RightShift);
             bool padPressed = _currentPad2State.IsConnected &&
                               _currentPad2State.Buttons.Start == ButtonState.Pressed &&
                               _previousPad2State.Buttons.Start == ButtonState.Released;
+            fromKeyboard = keyPressed && !padPressed;
+            return keyPressed || padPressed;
+        }
+
+        /// <summary>
+        /// Edge-triggered P2 "join P1's team" (co-op). Right Alt (keyboard) or Back on
+        /// gamepad 2. While P2 is active this doubles as the leave toggle.
+        /// Returns the source so callers can route P2 input correctly.
+        /// </summary>
+        public bool IsPlayer2JoinCoopPressed(out bool fromKeyboard)
+        {
+            bool keyPressed = _currentKeyState.IsKeyDown(Keys.RightAlt) &&
+                              !_previousKeyState.IsKeyDown(Keys.RightAlt);
+            bool padPressed = _currentPad2State.IsConnected &&
+                              _currentPad2State.Buttons.Back == ButtonState.Pressed &&
+                              _previousPad2State.Buttons.Back == ButtonState.Released;
             fromKeyboard = keyPressed && !padPressed;
             return keyPressed || padPressed;
         }

@@ -183,7 +183,7 @@ namespace NoPasaranFC.Models
                 ["championship.instructionsCancel"] = "UP/DOWN: Navigate   ENTER: Confirm   ESC: Back",
 
                 // Local 2-player mode (desktop only)
-                ["match.player2JoinHint"] = "Press RIGHT SHIFT (or START on Pad 2) for 2-player mode",
+                ["match.player2JoinHint"] = "Player 2: RIGHT SHIFT = opposing team, RIGHT ALT = same team (Pad 2: START/BACK)",
                 ["match.player2Joined"] = "Player 2 joined",
                 ["match.player2Left"] = "Player 2 left",
             };
@@ -301,7 +301,7 @@ namespace NoPasaranFC.Models
                 ["championship.instructionsCancel"] = "ΑΝΩ/ΚΑΤΩ: Πλοήγηση   ENTER: Επιβεβαίωση   ESC: Πίσω",
 
                 // Τοπική λειτουργία 2 παικτών (μόνο σε υπολογιστή)
-                ["match.player2JoinHint"] = "Πατήστε RIGHT SHIFT (ή START στο Χειριστήριο 2) για 2ο παίκτη",
+                ["match.player2JoinHint"] = "Παίκτης 2: RIGHT SHIFT = αντίπαλη ομάδα, RIGHT ALT = ίδια ομάδα (Χειρ. 2: START/BACK)",
                 ["match.player2Joined"] = "Ο Παίκτης 2 συμμετέχει",
                 ["match.player2Left"] = "Ο Παίκτης 2 αποχώρησε",
             };
