@@ -24,6 +24,11 @@ namespace NoPasaranFC.Gameplay.AIStates
             if (context.HasBallPossession)
                 return AIStateType.Dribbling;
 
+            // We're the carrier with the ball tapped just ahead — go collect it before
+            // any role positioning logic pulls us away from our own dribble
+            if (context.BallCarrier == player)
+                return AIStateType.ChasingBall;
+
             AIStateType? chaseResult = CheckChaseBall(player, context);
             if (chaseResult.HasValue)
                 return chaseResult.Value;
@@ -139,12 +144,14 @@ namespace NoPasaranFC.Gameplay.AIStates
             if (distance < AIConstants.DeadZone)
             {
                 player.Velocity = Vector2.Zero;
+                player.Stamina = System.Math.Min(100, player.Stamina + AIConstants.StaminaStationaryRecovery * deltaTime);
                 return AIStateType.Positioning;
             }
 
             if (distance < AIConstants.StopDistance)
             {
                 player.Velocity = Vector2.Zero;
+                player.Stamina = System.Math.Min(100, player.Stamina + AIConstants.StaminaStationaryRecovery * deltaTime);
                 return AIStateType.Idle;
             }
 

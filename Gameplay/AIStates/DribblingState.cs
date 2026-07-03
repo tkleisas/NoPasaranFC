@@ -57,13 +57,15 @@ namespace NoPasaranFC.Gameplay.AIStates
             {
                 _decisionTimer = 0f;
 
-                AIStateType? passResult = EvaluatePassOpportunity(player, context);
-                if (passResult.HasValue)
-                    return passResult.Value;
-
+                // Shooting first: in shooting range the goal is the priority, and the
+                // pressure-pass rule must not talk a striker in the box out of shooting
                 AIStateType? shootResult = EvaluateShootOpportunity(player, context);
                 if (shootResult.HasValue)
                     return shootResult.Value;
+
+                AIStateType? passResult = EvaluatePassOpportunity(player, context);
+                if (passResult.HasValue)
+                    return passResult.Value;
             }
 
             // Movement toward goal
@@ -143,9 +145,19 @@ namespace NoPasaranFC.Gameplay.AIStates
                 underPressure = distToOpponent < AIConstants.PressureDistance;
             }
 
-            // Always pass under pressure (unless in close shooting range)
-            if (underPressure && validPassRange && distanceToGoal > 300f)
+            bool goodPassAvailable = context.BestPassScore >= AIConstants.MinAcceptablePassScore;
+
+            // Under pressure: pass if there's a decent option, or if we're deep in our own
+            // third (PassingState will clear the danger when every lane is bad).
+            // Inside close shooting range the shot evaluation already had priority —
+            // don't let pressure talk the shooter out of finishing.
+            if (underPressure && validPassRange && distanceToGoal > AIConstants.ShootCloseDistance
+                && (goodPassAvailable || context.IsInOwnThird(player)))
                 return AIStateType.Passing;
+
+            // No decent pass option — keep dribbling rather than gifting possession
+            if (!goodPassAvailable)
+                return null;
 
             bool isDefender = player.Position == PlayerPosition.Defender;
             bool isMidfielder = player.Position == PlayerPosition.Midfielder;
@@ -173,8 +185,6 @@ namespace NoPasaranFC.Gameplay.AIStates
 
             if (isForward && validPassRange)
             {
-                if (distanceToGoal < 350f && context.Random.NextDouble() < 0.85)
-                    return AIStateType.Shooting;
                 if (teammateAheadOfMe && (myDistToGoal - teammateDistToGoal) > 150f
                     && context.Random.NextDouble() < AIConstants.ForwardPassWhenTeammateCloserChance)
                     return AIStateType.Passing;
@@ -188,17 +198,25 @@ namespace NoPasaranFC.Gameplay.AIStates
         private AIStateType? EvaluateShootOpportunity(Player player, AIContext context)
         {
             float distanceToGoal = Vector2.Distance(player.FieldPosition, context.OpponentGoalCenter);
-            float probMult = AIBehaviorManager.GetProbabilityMultiplier();
 
             if (distanceToGoal < AIConstants.ShootAlwaysDistance)
                 return AIStateType.Shooting;
-            if (distanceToGoal < AIConstants.ShootCloseDistance && context.Random.NextDouble() < AIConstants.ShootCloseChance * probMult)
+
+            // Willingness: forwards pull the trigger readily, defenders rarely;
+            // good shooters shoot more often than poor ones
+            float roleMult = player.Position == PlayerPosition.Forward ? AIConstants.ForwardShootWillingness
+                           : player.Position == PlayerPosition.Midfielder ? AIConstants.MidfielderShootWillingness
+                           : AIConstants.DefenderShootWillingness;
+            float statMult = 0.7f + 0.6f * (player.Shooting / AIConstants.MaxStatValue);
+            float mult = AIBehaviorManager.GetProbabilityMultiplier() * roleMult * statMult;
+
+            if (distanceToGoal < AIConstants.ShootCloseDistance && context.Random.NextDouble() < AIConstants.ShootCloseChance * mult)
                 return AIStateType.Shooting;
-            if (distanceToGoal < AIConstants.ShootMediumDistance && context.Random.NextDouble() < AIConstants.ShootMediumChance * probMult)
+            if (distanceToGoal < AIConstants.ShootMediumDistance && context.Random.NextDouble() < AIConstants.ShootMediumChance * mult)
                 return AIStateType.Shooting;
-            if (distanceToGoal < AIConstants.ShootLongDistance && context.Random.NextDouble() < AIConstants.ShootLongChance * probMult)
+            if (distanceToGoal < AIConstants.ShootLongDistance && context.Random.NextDouble() < AIConstants.ShootLongChance * mult)
                 return AIStateType.Shooting;
-            if (distanceToGoal < AIConstants.ShootVeryLongDistance && context.Random.NextDouble() < AIConstants.ShootVeryLongChance * probMult)
+            if (distanceToGoal < AIConstants.ShootVeryLongDistance && context.Random.NextDouble() < AIConstants.ShootVeryLongChance * mult)
                 return AIStateType.Shooting;
 
             return null;

@@ -18,7 +18,10 @@ namespace NoPasaranFC.Gameplay.AIStates
 
             float diffMult = AIBehaviorManager.GetPositioningMultiplier();
 
-            if (teamHasBall && ballInOpponentHalf && context.DistanceToBall < AIConstants.ForwardAggressiveChaseDistance * diffMult)
+            // Chase loose balls high up the pitch — but never swarm a teammate who has
+            // clean control; runs toward goal (CalculateTargetPosition) support him better
+            if (!context.TeammateHasBall(player)
+                && teamHasBall && ballInOpponentHalf && context.DistanceToBall < AIConstants.ForwardAggressiveChaseDistance * diffMult)
                 return AIStateType.ChasingBall;
 
             if (IsKickoffChase(context) || (context.ShouldChaseBall && context.DistanceToBall < AIConstants.ForwardCloseChaseDistance))

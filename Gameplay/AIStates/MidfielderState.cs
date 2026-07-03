@@ -21,7 +21,9 @@ namespace NoPasaranFC.Gameplay.AIStates
 
             float diffMult = AIBehaviorManager.GetPositioningMultiplier();
 
-            if (isAttackingMidfielder && teamHasBall && ballInOpponentHalf && context.DistanceToBall < 600f * diffMult)
+            // Chase loose balls in the attack — but never swarm a teammate in clean control
+            if (isAttackingMidfielder && !context.TeammateHasBall(player)
+                && teamHasBall && ballInOpponentHalf && context.DistanceToBall < 600f * diffMult)
                 return AIStateType.ChasingBall;
 
             // Pressing: defensive midfielder actively presses when opponent has ball nearby

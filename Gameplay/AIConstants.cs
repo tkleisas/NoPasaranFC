@@ -42,18 +42,23 @@ namespace NoPasaranFC.Gameplay
         public const float MaxPassDistance = 3500f;
         public const float PressureDistance = 350f;
 
-        // Shooting distance thresholds
-        public const float ShootAlwaysDistance = 200f;
-        public const float ShootCloseDistance = 400f;
-        public const float ShootMediumDistance = 600f;
-        public const float ShootLongDistance = 800f;
-        public const float ShootVeryLongDistance = 1000f;
+        // Shooting distance thresholds (field scale: 73px/m — box edge is ~1205px from goal line)
+        public const float ShootAlwaysDistance = 450f;    // ~6m: six-yard box, always shoot
+        public const float ShootCloseDistance = 850f;     // ~11m: penalty spot
+        public const float ShootMediumDistance = 1300f;   // ~18m: edge of the box
+        public const float ShootLongDistance = 1700f;     // ~23m
+        public const float ShootVeryLongDistance = 2100f; // ~29m: speculative
 
-        // Shooting probabilities (base - scaled by difficulty)
+        // Shooting probabilities (base - scaled by difficulty, role, and Shooting stat)
         public const double ShootCloseChance = 0.95;
         public const double ShootMediumChance = 0.80;
-        public const double ShootLongChance = 0.50;
-        public const double ShootVeryLongChance = 0.20;
+        public const double ShootLongChance = 0.35;
+        public const double ShootVeryLongChance = 0.10;
+
+        // Shooting willingness by role (multiplies shot probabilities)
+        public const float ForwardShootWillingness = 1.0f;
+        public const float MidfielderShootWillingness = 0.75f;
+        public const float DefenderShootWillingness = 0.35f;
 
         // Passing probabilities by role (NOT scaled by difficulty — difficulty affects accuracy, not willingness)
         public const double DefenderForwardPassChance = 0.95;
@@ -73,10 +78,12 @@ namespace NoPasaranFC.Gameplay
         public const float ForwardAggressiveChaseDistance = 800f;
         public const float ForwardCloseChaseDistance = 400f;
 
-        // Stamina drain rates
-        public const float DefenderStaminaDrain = 1.5f;
-        public const float MidfielderStaminaDrain = 2.5f;
-        public const float ForwardStaminaDrain = 3.0f;
+        // Stamina drain rates (recovery is only 2/s while standing, so drains must stay
+        // below it on average or players spend the whole half in the low-stamina crawl)
+        public const float DefenderStaminaDrain = 0.8f;
+        public const float MidfielderStaminaDrain = 1.2f;
+        public const float ForwardStaminaDrain = 1.5f;
+        public const float StaminaStationaryRecovery = 2.0f; // Per second while standing still
 
         // Orbit (DribblingState)
         public const float OrbitBaseTime = 0.2f;
@@ -148,5 +155,22 @@ namespace NoPasaranFC.Gameplay
 
         // Chasing prediction
         public const float ChasePredictionTime = 0.3f;  // Seconds ahead to predict ball position
+
+        // Chaser selection (AIBehaviorManager.ShouldPlayerChaseBall)
+        public const float ChaseSelectionLookahead = 0.35f;  // Seconds of ball travel considered when ranking chasers
+        public const float ChaseStickinessFactor = 0.8f;     // Current chaser's distance discount (hysteresis)
+        public const float SupportChaseDistance = 400f;      // 2nd-closest joins the chase within this range
+        public const float BallControlRadius = 250f;         // Last toucher within this of the ball = ball carrier (covers dribble taps)
+
+        // Pass quality gating
+        public const float MinAcceptablePassScore = 150f;    // Below this, the best pass option is considered bad
+
+        // Defensive clearances
+        public const float ClearanceDistance = 1600f;        // How far upfield clearances aim
+        public const float ClearancePower = 1.25f;
+
+        // Shot placement
+        public const float ShotPostInset = 90f;               // Aim this far inside the post, away from GK
+        public const float ShotGKCenteredTolerance = 30f;     // GK within this of center = pick a random corner
     }
 }

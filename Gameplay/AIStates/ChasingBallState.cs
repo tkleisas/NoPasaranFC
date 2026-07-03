@@ -29,8 +29,9 @@ namespace NoPasaranFC.Gameplay.AIStates
                 return AIStateType.Positioning;
             }
             
-            // If ball too far, give up
-            if (context.DistanceToBall > AIConstants.ChaseBallGiveUpDistance)
+            // If ball too far, give up — unless nobody on the pitch is closer
+            // (a loose ball must always be collected by someone)
+            if (context.DistanceToBall > AIConstants.ChaseBallGiveUpDistance && context.ClosestToBall != player)
             {
                 return AIStateType.Positioning;
             }

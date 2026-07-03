@@ -39,9 +39,18 @@ namespace NoPasaranFC.Gameplay.AIStates
             _repositionTimer += deltaTime;
 
             Player passTarget = context.BestPassTarget ?? context.NearestTeammate;
-            
-            if (passTarget == null)
-                return AIStateType.Positioning;
+
+            bool badOptions = passTarget == null || context.BestPassScore < AIConstants.MinAcceptablePassScore;
+            if (badOptions)
+            {
+                // Deep in our own third with no good pass: clear the danger upfield
+                // rather than dribbling out or forcing a pass into a blocked lane
+                if (context.IsInOwnThird(player))
+                    return ExecuteClearance(player, context);
+
+                // Otherwise keep the ball — dribbling with bad options beats losing possession
+                return passTarget == null ? AIStateType.Positioning : AIStateType.Dribbling;
+            }
 
             // Predict target's future position using stat-based pass speed estimate
             Vector2 targetCurrentPos = passTarget.FieldPosition;
@@ -118,6 +127,42 @@ namespace NoPasaranFC.Gameplay.AIStates
         public override void Exit(Player player, AIContext context)
         {
             _repositionTimer = 0f;
+        }
+
+        /// <summary>
+        /// Boots the ball upfield toward the nearer sideline to relieve defensive pressure.
+        /// Used when there is no acceptable pass target in our own third.
+        /// </summary>
+        private AIStateType ExecuteClearance(Player player, AIContext context)
+        {
+            float distToBall = Vector2.Distance(player.FieldPosition, context.BallPosition);
+            if (distToBall >= 100f)
+            {
+                // Not close enough to kick yet — approach the ball
+                Vector2 towardBall = context.BallPosition - player.FieldPosition;
+                if (towardBall.LengthSquared() > 0)
+                {
+                    towardBall.Normalize();
+                    player.Velocity = towardBall * (player.Speed * 2.0f);
+                }
+                return AIStateType.Passing;
+            }
+
+            // Aim upfield and toward the nearer sideline — away from the dangerous center
+            float attackSign = context.IsHomeTeam ? 1f : -1f;
+            float centerY = MatchEngine.StadiumMargin + MatchEngine.FieldHeight / 2f;
+            float wideSign = player.FieldPosition.Y < centerY ? -1f : 1f;
+
+            Vector2 clearDirection = new Vector2(attackSign, wideSign * 0.5f);
+            clearDirection.Normalize();
+            Vector2 clearTarget = context.BallPosition + clearDirection * AIConstants.ClearanceDistance;
+            clearTarget.Y = MathHelper.Clamp(clearTarget.Y,
+                MatchEngine.StadiumMargin + AIConstants.FieldMargin,
+                MatchEngine.StadiumMargin + MatchEngine.FieldHeight - AIConstants.FieldMargin);
+
+            OnPassBall?.Invoke(clearTarget, AIConstants.ClearancePower);
+            _hasExecutedPass = true;
+            return AIStateType.Positioning;
         }
 
         private float CalculatePassPower(float distance)

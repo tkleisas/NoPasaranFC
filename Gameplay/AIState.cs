@@ -86,6 +86,16 @@ namespace NoPasaranFC.Gameplay
         public List<Player> Teammates { get; set; }
         public List<Player> Opponents { get; set; }
         public Player BestPassTarget { get; set; }
+        public float BestPassScore { get; set; } = float.MinValue; // Score of BestPassTarget (MinValue = no option)
+        public Player BallCarrier { get; set; } // Player in clean control of the ball (null = loose ball)
+
+        // True when a teammate (not this player) has clean control of the ball
+        public bool TeammateHasBall(Player player)
+        {
+            return BallCarrier != null
+                && BallCarrier.Id != player.Id
+                && BallCarrier.TeamId == player.TeamId;
+        }
         public bool IsHomeTeam { get; set; } // True if defending left goal
         public Random PlayerRandom { get; set; } // Unique random instance per player (breaks synchronization)
         
@@ -103,6 +113,16 @@ namespace NoPasaranFC.Gameplay
             return alignment > 0.7f; // ~45 degree tolerance
         }
         
+        // True when the player stands in their own defensive third of the pitch
+        public bool IsInOwnThird(Player player)
+        {
+            float boundary = IsHomeTeam
+                ? MatchEngine.StadiumMargin + MatchEngine.FieldWidth * 0.33f
+                : MatchEngine.StadiumMargin + MatchEngine.FieldWidth * 0.67f;
+            return IsHomeTeam ? player.FieldPosition.X < boundary
+                              : player.FieldPosition.X > boundary;
+        }
+
         // Get ideal position to kick ball in desired direction
         public Vector2 GetIdealKickPosition(Vector2 desiredDirection, float distanceBehindBall = 70f)
         {

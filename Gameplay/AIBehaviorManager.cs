@@ -187,9 +187,11 @@ namespace NoPasaranFC.Gameplay
                 BallPosition = _engine.BallPosition,
                 BallVelocity = _engine.BallVelocity,
                 BallHeight = _engine.BallHeight,
+                BallCarrier = GetBallCarrier(),
                 NearestOpponent = nearestOpponent,
                 NearestTeammate = nearestTeammate,
                 BestPassTarget = bestPassTarget,
+                BestPassScore = bestPassScore,
                 DistanceToBall = distanceToBall,
                 HasBallPossession = hasControl,
                 OpponentGoalCenter = opponentGoalCenterFinal,
@@ -356,10 +358,36 @@ namespace NoPasaranFC.Gameplay
             };
         }
 
+        /// <summary>
+        /// Returns the player in clean control of the ball, or null when the ball is loose
+        /// (in flight, contested, or far from the last player who touched it).
+        /// </summary>
+        public Player GetBallCarrier()
+        {
+            var lastToucher = _engine.LastPlayerTouchedBall;
+            if (lastToucher == null || lastToucher.IsKnockedDown)
+                return null;
+
+            float dist = Vector2.Distance(lastToucher.FieldPosition, _engine.BallPosition);
+            return dist < AIConstants.BallControlRadius ? lastToucher : null;
+        }
+
         public bool ShouldPlayerChaseBall(Player player)
         {
             // GK never chases ball via this method — GoalkeeperState handles its own ball pursuit
             if (player.Position == PlayerPosition.Goalkeeper)
+                return false;
+
+            var carrier = GetBallCarrier();
+
+            // The carrier always collects his own tapped-ahead ball, regardless of
+            // role-based chase rules (e.g. a defender dribbling in the opponent half)
+            if (carrier == player)
+                return true;
+
+            // A teammate has clean control — support by positioning and making runs,
+            // not by swarming the carrier (and possibly stealing the ball from him)
+            if (carrier != null && carrier.TeamId == player.TeamId)
                 return false;
 
             var team = player.Team;
@@ -367,8 +395,22 @@ namespace NoPasaranFC.Gameplay
                 .Where(p => p.IsStarting && !p.IsKnockedDown && p.Position != PlayerPosition.Goalkeeper)
                 .ToList();
 
+            // Rank by distance to where the ball is heading, not where it is —
+            // a player positioned on the ball's path outranks one chasing from behind
+            Vector2 predictedBall = _engine.BallPosition + _engine.BallVelocity * AIConstants.ChaseSelectionLookahead;
+            predictedBall.X = MathHelper.Clamp(predictedBall.X,
+                MatchEngine.StadiumMargin, MatchEngine.StadiumMargin + MatchEngine.FieldWidth);
+            predictedBall.Y = MathHelper.Clamp(predictedBall.Y,
+                MatchEngine.StadiumMargin, MatchEngine.StadiumMargin + MatchEngine.FieldHeight);
+
             var teamDistances = activeTeammates
-                .Select(p => new { Player = p, Distance = Vector2.Distance(p.FieldPosition, _engine.BallPosition) })
+                .Select(p => new
+                {
+                    Player = p,
+                    // Current chasers get a distance discount so the role doesn't flip-flop between teammates
+                    Distance = Vector2.Distance(p.FieldPosition, predictedBall)
+                        * (!p.IsControlled && IsChasingBall(p) ? AIConstants.ChaseStickinessFactor : 1f)
+                })
                 .OrderBy(x => x.Distance)
                 .ToList();
 
@@ -379,10 +421,16 @@ namespace NoPasaranFC.Gameplay
                 return true;
 
             // Support chaser: 2nd closest chases if they're close enough to the ball
-            if (playerRank == 1 && teamDistances[1].Distance < 400f)
+            if (playerRank == 1 && teamDistances[1].Distance < AIConstants.SupportChaseDistance)
                 return true;
 
             return false;
+        }
+
+        private static bool IsChasingBall(Player player)
+        {
+            return player.AIController is AIController controller
+                && controller.GetCurrentStateName() == nameof(AIStateType.ChasingBall);
         }
 
         public Player GetPlayerClosestToBall()

@@ -19,7 +19,7 @@ namespace NoPasaranFC.Gameplay.AIStates
         {
             // Stop moving and recover stamina
             player.Velocity = Vector2.Zero;
-            player.Stamina = System.Math.Min(100, player.Stamina + 2f * deltaTime);
+            player.Stamina = System.Math.Min(100, player.Stamina + AIConstants.StaminaStationaryRecovery * deltaTime);
             
             // At kickoff (first 5 seconds after kickoff), all players rush to ball
             bool justAfterKickoff = context.TimeSinceKickoff < AIConstants.KickoffDuration;
