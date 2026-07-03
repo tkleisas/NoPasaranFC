@@ -13,6 +13,21 @@ namespace NoPasaranFC.Gameplay
         private Team _homeTeam;
         private Team _awayTeam;
         private Player _controlledPlayer;
+
+        // ========== Player 2 (optional local co-op) ==========
+        private Player _controlledPlayer2;
+        private bool _wasShootButtonDown2;
+        private float _shootButtonHoldTime2;
+        // Cached P2 input for the frame (set by Update() before UpdatePlayers runs)
+        private Vector2 _p2MoveDirection;
+        private bool _p2IsShootKeyDown;
+        private bool _p2IsPassKeyDown;
+
+        /// <summary>True when a second human player has joined this match.</summary>
+        public bool Player2Active { get; private set; }
+
+        /// <summary>The player currently controlled by P2 (null if P2 isn't active).</summary>
+        public Player ControlledPlayer2 => _controlledPlayer2;
         private Player _lastPlayerTouchedBall;
         private Random _random;
         private AIBehaviorManager _aiBehaviorManager;
@@ -219,8 +234,8 @@ namespace NoPasaranFC.Gameplay
                 player.IsControlled = false;
             
             // Find the first starting non-GK player from controlled team
-            var controlledTeamPlayers = _homeTeam.IsPlayerControlled ? 
-                _homeTeam.Players.Where(p => p.IsStarting).ToList() : 
+            var controlledTeamPlayers = _homeTeam.IsPlayerControlled ?
+                _homeTeam.Players.Where(p => p.IsStarting).ToList() :
                 _awayTeam.Players.Where(p => p.IsStarting).ToList();
             if (controlledTeamPlayers.Any())
             {
@@ -230,7 +245,27 @@ namespace NoPasaranFC.Gameplay
                     ?? controlledTeamPlayers[0];
                 _controlledPlayer.IsControlled = true;
             }
-            
+
+            // If Player 2 has already joined (e.g. resetting after a goal), re-pick a
+            // controlled player for them too — InitializePositions cleared all IsControlled flags.
+            if (Player2Active)
+            {
+                var p2Team = _homeTeam.IsPlayerControlled ? _awayTeam : _homeTeam;
+                var p2Starters = p2Team.Players.Where(p => p.IsStarting).ToList();
+                if (p2Starters.Any())
+                {
+                    _controlledPlayer2 = p2Starters.FirstOrDefault(p => p.Position == PlayerPosition.Midfielder)
+                        ?? p2Starters.FirstOrDefault(p => p.Position != PlayerPosition.Goalkeeper)
+                        ?? p2Starters[0];
+                    _controlledPlayer2.IsControlled = true;
+                }
+                else
+                {
+                    _controlledPlayer2 = null;
+                    Player2Active = false;
+                }
+            }
+
             // Initialize camera to follow ball
             Camera.Follow(BallPosition, 1f);
         }
@@ -312,6 +347,26 @@ namespace NoPasaranFC.Gameplay
         
         public void Update(GameTime gameTime, Vector2 moveDirection, bool isShootKeyDown, bool isPassKeyDown = false)
         {
+            // Legacy / single-player entry point. P2 inputs default to zero/false.
+            Update(gameTime, moveDirection, isShootKeyDown, isPassKeyDown,
+                   Vector2.Zero, false, false);
+        }
+
+        /// <summary>
+        /// Full update with optional Player 2 input. When <see cref="Player2Active"/> is
+        /// false, the P2 arguments are ignored. Caller should gate P2 input to the
+        /// moment P2 has actually joined via <see cref="JoinPlayer2"/>.
+        /// </summary>
+        public void Update(GameTime gameTime,
+                           Vector2 moveDirection, bool isShootKeyDown, bool isPassKeyDown,
+                           Vector2 moveDirection2, bool isShootKeyDown2, bool isPassKeyDown2)
+        {
+            // Stash P2 input so UpdatePlayers (called from deep within this method for
+            // countdown/celebration/etc.) can read it without extra plumbing.
+            _p2MoveDirection = moveDirection2;
+            _p2IsShootKeyDown = isShootKeyDown2;
+            _p2IsPassKeyDown = isPassKeyDown2;
+
             float deltaTime = (float)gameTime.ElapsedGameTime.TotalSeconds;
             
             // Handle camera initialization
@@ -661,10 +716,11 @@ namespace NoPasaranFC.Gameplay
             // Update all players
             UpdatePlayers(deltaTime, moveDirection, isShootKeyDown, isPassKeyDown);
             
-            // Ensure only the controlled player has IsControlled = true (safeguard)
+            // Ensure only the controlled player(s) have IsControlled = true (safeguard)
             foreach (var player in _homeTeam.Players.Concat(_awayTeam.Players))
             {
-                player.IsControlled = (player == _controlledPlayer);
+                player.IsControlled = (player == _controlledPlayer) ||
+                                     (Player2Active && player == _controlledPlayer2);
             }
             
             // Check for collisions between players
@@ -705,161 +761,193 @@ namespace NoPasaranFC.Gameplay
             // During celebration, all players use AI (including controlled player)
             bool celebrationActive = CurrentState == MatchState.GoalCelebration;
 
-            // Update controlled player
-            if (_controlledPlayer != null && !celebrationActive)
+            // Update Player 1's controlled player
+            if (!celebrationActive)
             {
-                float distToBall = Vector2.Distance(_controlledPlayer.FieldPosition, BallPosition);
-                
-                // Handle shoot button for charging shot or tackle
-                if (isShootKeyDown && distToBall < BallShootDistance && BallHeight < 100f)
+                UpdateControlledPlayerInput(
+                    _controlledPlayer, moveDirection, isShootKeyDown, isPassKeyDown,
+                    ref _wasShootButtonDown, ref _shootButtonHoldTime, deltaTime);
+
+                // Update Player 2's controlled player (if P2 has joined the match)
+                if (Player2Active && _controlledPlayer2 != null)
                 {
-                    // Near ball - charge shot (no angle check here, allow from any angle when charging)
-                    if (!_wasShootButtonDown)
-                    {
-                        // Just pressed
-                        _shootButtonHoldTime = 0f;
-                    }
-                    _shootButtonHoldTime += deltaTime;
-                    _shootButtonHoldTime = Math.Min(_shootButtonHoldTime, MaxShootHoldTime);
-                    _wasShootButtonDown = true;
+                    UpdateControlledPlayerInput(
+                        _controlledPlayer2, _p2MoveDirection, _p2IsShootKeyDown, _p2IsPassKeyDown,
+                        ref _wasShootButtonDown2, ref _shootButtonHoldTime2, deltaTime);
                 }
-                else if (_wasShootButtonDown && !isShootKeyDown)
+            }
+
+            // Update AI players (only starting players)
+            foreach (var player in _homeTeam.Players.Where(p => p.IsStarting).Concat(_awayTeam.Players.Where(p => p.IsStarting)))
+            {
+                // During celebration, update ALL players including controlled player(s)
+                if (!celebrationActive && (player == _controlledPlayer ||
+                    (Player2Active && player == _controlledPlayer2))) continue;
+
+                UpdateAIPlayer(player, deltaTime);
+            }
+        }
+
+        /// <summary>
+        /// Per-frame update for a single human-controlled player. Handles shoot charge,
+        /// pass, tackle, knockdown, corner run-up, movement and auto-kicking. Same logic
+        /// used for Player 1 and (optionally) Player 2 — per-player state is threaded
+        /// through the `ref` parameters so the two players don't stomp on each other's
+        /// shoot-charge.
+        /// </summary>
+        private void UpdateControlledPlayerInput(
+            Player player,
+            Vector2 moveDirection,
+            bool isShootKeyDown,
+            bool isPassKeyDown,
+            ref bool wasShootButtonDown,
+            ref float shootButtonHoldTime,
+            float deltaTime)
+        {
+            if (player == null) return;
+
+            float distToBall = Vector2.Distance(player.FieldPosition, BallPosition);
+
+            // Handle shoot button for charging shot or tackle
+            if (isShootKeyDown && distToBall < BallShootDistance && BallHeight < 100f)
+            {
+                // Near ball - charge shot (no angle check here, allow from any angle when charging)
+                if (!wasShootButtonDown)
                 {
-                    // Button released
-                    if (distToBall < BallShootDistance && BallHeight < 100f)
-                    {
-                        // Near ball - shoot! (no angle check for charged shots)
-                        PerformShoot(moveDirection);
-                    }
-                    else if (_shootButtonHoldTime < 0.1f && _lastPlayerTouchedBall != _controlledPlayer)
-                    {
-                        // Not near ball, quick tap, and controlled player doesn't have possession - try to tackle
-                        // Only tackle if button was pressed very briefly (not a shot attempt)
-                        // and the controlled player is NOT the one who last touched the ball
-                        Tackle();
-                    }
-                    _wasShootButtonDown = false;
-                    _shootButtonHoldTime = 0f;
+                    // Just pressed
+                    shootButtonHoldTime = 0f;
                 }
-                else if (!_wasShootButtonDown && !isShootKeyDown)
+                shootButtonHoldTime += deltaTime;
+                shootButtonHoldTime = Math.Min(shootButtonHoldTime, MaxShootHoldTime);
+                wasShootButtonDown = true;
+            }
+            else if (wasShootButtonDown && !isShootKeyDown)
+            {
+                // Button released
+                if (distToBall < BallShootDistance && BallHeight < 100f)
                 {
-                    // Reset state when not pressing
-                    _shootButtonHoldTime = 0f;
+                    // Near ball - shoot! (no angle check for charged shots)
+                    PerformShoot(player, moveDirection, shootButtonHoldTime);
                 }
-                
-                // Handle pass button (Z key / B button)
-                if (isPassKeyDown && !isShootKeyDown && !_controlledPlayer.IsKnockedDown
-                    && CurrentState == MatchState.Playing && BallHeight < 100f)
+                else if (shootButtonHoldTime < 0.1f && _lastPlayerTouchedBall != player)
                 {
-                    float passDist = Vector2.Distance(_controlledPlayer.FieldPosition, BallPosition);
-                    if (passDist < BallShootDistance)
+                    // Not near ball, quick tap, and the player doesn't have possession - try to tackle.
+                    // Only tackle if button was pressed very briefly (not a shot attempt)
+                    // and the player is NOT the one who last touched the ball
+                    Tackle(player);
+                }
+                wasShootButtonDown = false;
+                shootButtonHoldTime = 0f;
+            }
+            else if (!wasShootButtonDown && !isShootKeyDown)
+            {
+                // Reset state when not pressing
+                shootButtonHoldTime = 0f;
+            }
+
+            // Handle pass button (Z key / B button for P1, NumPad . / gamepad 2 B for P2)
+            if (isPassKeyDown && !isShootKeyDown && !player.IsKnockedDown
+                && CurrentState == MatchState.Playing && BallHeight < 100f)
+            {
+                float passDist = Vector2.Distance(player.FieldPosition, BallPosition);
+                if (passDist < BallShootDistance)
+                {
+                    float timeSinceLastKick = (float)MatchTime - player.LastKickTime;
+                    if (timeSinceLastKick >= AutoKickCooldown)
                     {
-                        float timeSinceLastKick = (float)MatchTime - _controlledPlayer.LastKickTime;
-                        if (timeSinceLastKick >= AutoKickCooldown)
-                        {
-                            PerformPass(moveDirection);
-                        }
+                        PerformPass(player, moveDirection);
                     }
                 }
-                
-                // Handle knockdown for controlled player
-                if (_controlledPlayer.IsKnockedDown)
+            }
+
+            // Handle knockdown for this player
+            if (player.IsKnockedDown)
+            {
+                player.KnockdownTimer -= deltaTime;
+                if (player.KnockdownTimer <= 0)
                 {
-                    _controlledPlayer.KnockdownTimer -= deltaTime;
-                    if (_controlledPlayer.KnockdownTimer <= 0)
+                    player.IsKnockedDown = false;
+                    player.Velocity = Vector2.Zero;
+                }
+                else
+                {
+                    // Player is knocked down, can't control but slides
+                    player.Velocity *= 0.9f; // Slide to stop
+                    player.FieldPosition += player.Velocity * deltaTime;
+                    Vector2 pos = player.FieldPosition;
+                    ClampToField(ref pos);
+                    player.FieldPosition = pos;
+                }
+            }
+            else
+            {
+                // Check if player is in corner kick run-up mode
+                bool inCornerRunUp = CurrentState == MatchState.CornerKick &&
+                                     player == RestartPlayer &&
+                                     _cornerKickRunUp;
+
+                if (inCornerRunUp)
+                {
+                    // During corner kick run-up, move automatically toward ball
+                    Vector2 toBall = BallPosition - player.FieldPosition;
+                    if (toBall.Length() > 1f)
                     {
-                        _controlledPlayer.IsKnockedDown = false;
-                        _controlledPlayer.Velocity = Vector2.Zero;
-                    }
-                    else
-                    {
-                        // Player is knocked down, can't control but slides
-                        _controlledPlayer.Velocity *= 0.9f; // Slide to stop
-                        _controlledPlayer.FieldPosition += _controlledPlayer.Velocity * deltaTime;
-                        Vector2 pos = _controlledPlayer.FieldPosition;
-                        ClampToField(ref pos);
-                        _controlledPlayer.FieldPosition = pos;
+                        toBall.Normalize();
+                        player.Velocity = toBall * player.Speed * 3.5f;
+                        player.FieldPosition += player.Velocity * deltaTime;
                     }
                 }
                 else
                 {
-                    // Check if player is in corner kick run-up mode
-                    bool inCornerRunUp = CurrentState == MatchState.CornerKick && 
-                                         _controlledPlayer == RestartPlayer && 
-                                         _cornerKickRunUp;
-                    
-                    if (inCornerRunUp)
+                    // Check if player should be frozen during set piece (not during run-up)
+                    bool frozenForSetPiece = (CurrentState == MatchState.ThrowIn ||
+                                              CurrentState == MatchState.CornerKick ||
+                                              CurrentState == MatchState.GoalKick) &&
+                                             player == RestartPlayer;
+
+                    // Normal movement (only if not knocked down and not frozen for set piece)
+                    if (moveDirection.Length() > 0 && !frozenForSetPiece)
                     {
-                        // During corner kick run-up, move automatically toward ball
-                        Vector2 toBall = BallPosition - _controlledPlayer.FieldPosition;
-                        if (toBall.Length() > 1f)
+                        // Apply stamina speed multiplier
+                        float staminaMultiplier = GetStaminaSpeedMultiplier(player);
+                        float moveSpeed = player.Speed * 3f * GameSettings.Instance.PlayerSpeedMultiplier * staminaMultiplier;
+                        var newPosition = player.FieldPosition + moveDirection * moveSpeed * deltaTime;
+                        player.Velocity = moveDirection * moveSpeed;
+                        ClampToField(ref newPosition);
+                        player.FieldPosition = newPosition;
+
+                        // Decrease stamina while running
+                        player.Stamina = Math.Max(0, player.Stamina - StaminaDecreasePerSecondRunning * deltaTime);
+
+                        // If this player is near the ball and moving, kick it (with angle check and cooldown)
+                        // Don't kick if ball is in the air (prevents headbutting glitch)
+                        // Don't kick during countdown
+                        // Don't auto-kick if player is charging a shot
+                        if (CurrentState == MatchState.Playing && moveDirection.Length() > 0.1f && BallHeight < 100f && !isShootKeyDown && CanPlayerKickBall(player, moveDirection, BallKickDistance))
                         {
-                            toBall.Normalize();
-                            _controlledPlayer.Velocity = toBall * _controlledPlayer.Speed * 3.5f;
-                            _controlledPlayer.FieldPosition += _controlledPlayer.Velocity * deltaTime;
+                            // Check cooldown to prevent continuous juggling
+                            float timeSinceLastKick = (float)MatchTime - player.LastKickTime;
+                            if (timeSinceLastKick >= AutoKickCooldown)
+                            {
+                                // Trigger shoot animation
+                                player.CurrentAnimationState = "shoot";
+
+                                // Kick ball in movement direction with stamina effect
+                                float staminaStatMultiplier = GetStaminaStatMultiplier(player);
+                                float kickPower = (player.Shooting / 8f + 6f) * staminaStatMultiplier;
+                                BallVelocity = moveDirection * kickPower * player.Speed * 1.2f;
+                                AudioManager.Instance.PlaySoundEffect("kick_ball", 0.6f, allowRetrigger: false);
+                                player.LastKickTime = (float)MatchTime;
+                            }
                         }
                     }
                     else
                     {
-                        // Check if player should be frozen during set piece (not during run-up)
-                        bool frozenForSetPiece = (CurrentState == MatchState.ThrowIn || 
-                                                  CurrentState == MatchState.CornerKick || 
-                                                  CurrentState == MatchState.GoalKick) &&
-                                                 _controlledPlayer == RestartPlayer;
-                        
-                        // Normal movement (only if not knocked down and not frozen for set piece)
-                        if (moveDirection.Length() > 0 && !frozenForSetPiece)
-                        {
-                            // Apply stamina speed multiplier
-                            float staminaMultiplier = GetStaminaSpeedMultiplier(_controlledPlayer);
-                            float moveSpeed = _controlledPlayer.Speed * 3f * GameSettings.Instance.PlayerSpeedMultiplier * staminaMultiplier;
-                            var newPosition = _controlledPlayer.FieldPosition + moveDirection * moveSpeed * deltaTime;
-                            _controlledPlayer.Velocity = moveDirection * moveSpeed;
-                            ClampToField(ref newPosition);
-                            _controlledPlayer.FieldPosition = newPosition;
-                            
-                            // Decrease stamina while running
-                            _controlledPlayer.Stamina = Math.Max(0, _controlledPlayer.Stamina - StaminaDecreasePerSecondRunning * deltaTime);
-                            
-                            // If controlled player is near ball and moving, kick it (with angle check and cooldown)
-                            // Don't kick if ball is in the air (prevents headbutting glitch)
-                            // Don't kick during countdown
-                            // Don't auto-kick if player is charging a shot
-                            if (CurrentState == MatchState.Playing && moveDirection.Length() > 0.1f && BallHeight < 100f && !isShootKeyDown && CanPlayerKickBall(_controlledPlayer, moveDirection, BallKickDistance))
-                            {
-                                // Check cooldown to prevent continuous juggling
-                                float timeSinceLastKick = (float)MatchTime - _controlledPlayer.LastKickTime;
-                                if (timeSinceLastKick >= AutoKickCooldown)
-                                {
-                                    // Trigger shoot animation
-                                    _controlledPlayer.CurrentAnimationState = "shoot";
-                                    
-                                    // Kick ball in movement direction with stamina effect
-                                    float staminaStatMultiplier = GetStaminaStatMultiplier(_controlledPlayer);
-                                    float kickPower = (_controlledPlayer.Shooting / 8f + 6f) * staminaStatMultiplier;
-                                    BallVelocity = moveDirection * kickPower * _controlledPlayer.Speed * 1.2f;
-                                    AudioManager.Instance.PlaySoundEffect("kick_ball", 0.6f, allowRetrigger: false);
-                                    _controlledPlayer.LastKickTime = (float)MatchTime;
-                                }
-                            }
-                        }
-                        else
-                        {
-                            _controlledPlayer.Velocity = Vector2.Zero;
-                            // Recover stamina when idle
-                            _controlledPlayer.Stamina = Math.Min(100, _controlledPlayer.Stamina + StaminaRecoveryPerSecond * deltaTime);
-                        }
+                        player.Velocity = Vector2.Zero;
+                        // Recover stamina when idle
+                        player.Stamina = Math.Min(100, player.Stamina + StaminaRecoveryPerSecond * deltaTime);
                     }
                 }
-            }
-            
-            // Update AI players (only starting players)
-            foreach (var player in _homeTeam.Players.Where(p => p.IsStarting).Concat(_awayTeam.Players.Where(p => p.IsStarting)))
-            {
-                // During celebration, update ALL players including controlled player
-                if (player.IsControlled && !celebrationActive) continue;
-
-                UpdateAIPlayer(player, deltaTime);
             }
         }
         
@@ -1374,13 +1462,13 @@ namespace NoPasaranFC.Gameplay
                 return !_ballInHomeHalfCache; // Away team: is ball in their (right) half?
         }
         
-        private void PerformShoot(Vector2 moveDirection)
+        private void PerformShoot(Player player, Vector2 moveDirection, float shootButtonHoldTime)
         {
             // Calculate power based on hold time (0 to 1)
-            float power = _shootButtonHoldTime / MaxShootHoldTime;
-            
+            float power = shootButtonHoldTime / MaxShootHoldTime;
+
             // Determine shoot direction
-            Vector2 shootDirection = moveDirection.Length() > 0.1f ? moveDirection : _controlledPlayer.Velocity;
+            Vector2 shootDirection = moveDirection.Length() > 0.1f ? moveDirection : player.Velocity;
             if (shootDirection.Length() < 0.1f)
             {
                 // Default to shooting toward nearest goal
@@ -1392,71 +1480,70 @@ namespace NoPasaranFC.Gameplay
             {
                 shootDirection.Normalize();
             }
-            
+
             // Trigger shoot animation
-            _controlledPlayer.CurrentAnimationState = "shoot";
-            
+            player.CurrentAnimationState = "shoot";
+
             // Calculate horizontal and vertical velocity with stamina effect
-            float staminaMultiplier = GetStaminaStatMultiplier(_controlledPlayer);
-            float basePower = (_controlledPlayer.Shooting / 10f + 5f) * staminaMultiplier;
+            float staminaMultiplier = GetStaminaStatMultiplier(player);
+            float basePower = (player.Shooting / 10f + 5f) * staminaMultiplier;
             float horizontalPower = basePower * (1f + power * 2f); // More power = faster
-            BallVelocity = shootDirection * horizontalPower * _controlledPlayer.Speed;
-            _lastPlayerTouchedBall = _controlledPlayer;
-            
+            BallVelocity = shootDirection * horizontalPower * player.Speed;
+            _lastPlayerTouchedBall = player;
+
             // Calculate vertical velocity (height)
             // More hold time = higher shot
             BallVerticalVelocity = power * 800f * staminaMultiplier; // Max height with max hold
-            
+
             // Decrease stamina for shooting
-            _controlledPlayer.Stamina = Math.Max(0, _controlledPlayer.Stamina - StaminaDecreasePerShot);
-            
+            player.Stamina = Math.Max(0, player.Stamina - StaminaDecreasePerShot);
+
             // Play kick sound (louder for shooting)
             AudioManager.Instance.PlaySoundEffect("kick_ball", 0.8f + power * 0.4f, allowRetrigger: false);
         }
         
-        private void PerformPass(Vector2 moveDirection)
+        private void PerformPass(Player player, Vector2 moveDirection)
         {
             // Find best pass target in the direction the player is facing
-            Player myTeam = _controlledPlayer.Team == _homeTeam ? null : null; // just for type
-            var teammates = (_controlledPlayer.Team == _homeTeam ? _homeTeam : _awayTeam)
-                .Players.Where(p => p.IsStarting && !p.IsKnockedDown && p != _controlledPlayer).ToList();
-            
+            var teammates = (player.Team == _homeTeam ? _homeTeam : _awayTeam)
+                .Players.Where(p => p.IsStarting && !p.IsKnockedDown && p != player).ToList();
+
             if (teammates.Count == 0) return;
 
             Vector2 passDir = moveDirection;
             if (passDir.LengthSquared() < 0.01f)
-                passDir = _controlledPlayer.Velocity;
+                passDir = player.Velocity;
             if (passDir.LengthSquared() < 0.01f)
             {
                 // Default: pass toward opponent goal
-                bool isHome = _controlledPlayer.Team == _homeTeam;
+                bool isHome = player.Team == _homeTeam;
                 passDir = isHome ? Vector2.UnitX : -Vector2.UnitX;
             }
             passDir.Normalize();
 
             // Score each teammate: prefer those in pass direction, open, and at good distance
-            var opponentPlayers = (_controlledPlayer.Team == _homeTeam ? _awayTeam : _homeTeam)
+            var opponentPlayers = (player.Team == _homeTeam ? _awayTeam : _homeTeam)
                 .Players.Where(p => p.IsStarting && !p.IsKnockedDown).ToList();
-            
+
             Player bestTarget = null;
             float bestScore = float.MinValue;
 
             foreach (var teammate in teammates)
             {
-                Vector2 toTeammate = teammate.FieldPosition - _controlledPlayer.FieldPosition;
+                Vector2 toTeammate = teammate.FieldPosition - player.FieldPosition;
                 float dist = toTeammate.Length();
                 if (dist < 50f || dist > 2500f) continue;
 
                 toTeammate.Normalize();
                 float dot = Vector2.Dot(passDir, toTeammate);
-                
+
                 // Direction alignment score (heavily weighted)
                 float score = dot * 500f;
-                
+
                 // Distance score — prefer medium distance
                 if (dist > 150f && dist < 800f) score += 200f;
                 else if (dist >= 800f && dist < 1500f) score += 100f;
-                
+
                 // Openness — check nearest opponent to teammate
                 float nearestDefDist = float.MaxValue;
                 foreach (var opp in opponentPlayers)
@@ -1478,7 +1565,7 @@ namespace NoPasaranFC.Gameplay
             if (bestTarget == null)
             {
                 // Fallback: nearest teammate
-                bestTarget = teammates.OrderBy(t => Vector2.Distance(t.FieldPosition, _controlledPlayer.FieldPosition)).First();
+                bestTarget = teammates.OrderBy(t => Vector2.Distance(t.FieldPosition, player.FieldPosition)).First();
             }
 
             // Predict target position
@@ -1492,13 +1579,13 @@ namespace NoPasaranFC.Gameplay
             if (toTarget.LengthSquared() < 0.01f) return;
             toTarget.Normalize();
 
-            float staminaMultiplier = GetStaminaStatMultiplier(_controlledPlayer);
-            float passingRatio = _controlledPlayer.Passing / 100f;
+            float staminaMultiplier = GetStaminaStatMultiplier(player);
+            float passingRatio = player.Passing / 100f;
             float basePower = (6f + passingRatio * 4f) * staminaMultiplier;
-            
+
             // Scale power with distance
             float powerScale = MathHelper.Clamp(distance / 600f, 0.5f, 1.3f);
-            float finalPower = basePower * powerScale * _controlledPlayer.Speed;
+            float finalPower = basePower * powerScale * player.Speed;
 
             // Apply slight direction error based on Passing stat (higher = more accurate)
             float errorAngle = (1f - passingRatio) * 0.15f; // Max ±8.6° error for 0 Passing
@@ -1507,13 +1594,13 @@ namespace NoPasaranFC.Gameplay
             float sin = (float)Math.Sin(randomError);
             Vector2 finalDir = new Vector2(toTarget.X * cos - toTarget.Y * sin, toTarget.X * sin + toTarget.Y * cos);
 
-            _controlledPlayer.CurrentAnimationState = "shoot";
+            player.CurrentAnimationState = "shoot";
             BallVelocity = finalDir * finalPower;
             BallVerticalVelocity = distance > 600f ? 80f : 30f; // Lofted for long passes
-            _lastPlayerTouchedBall = _controlledPlayer;
-            _controlledPlayer.LastKickTime = (float)MatchTime;
-            _controlledPlayer.Stamina = Math.Max(0, _controlledPlayer.Stamina - 2f);
-            
+            _lastPlayerTouchedBall = player;
+            player.LastKickTime = (float)MatchTime;
+            player.Stamina = Math.Max(0, player.Stamina - 2f);
+
             AudioManager.Instance.PlaySoundEffect("kick_ball", 0.5f + powerScale * 0.2f, allowRetrigger: false);
         }
         
@@ -2165,6 +2252,99 @@ namespace NoPasaranFC.Gameplay
             InitializePositions();
         }
         
+        /// <summary>
+        /// Called by the MatchScreen when the player hits the P2 join/leave toggle.
+        /// Picks an initial opponent-team player for P2 (skipping the GK) and marks
+        /// them as controlled so the AI loop leaves them alone.
+        /// </summary>
+        public bool JoinPlayer2()
+        {
+            if (Player2Active) return false;
+
+            // P2 controls whichever team is NOT the primary human team.
+            var p2Team = _homeTeam.IsPlayerControlled ? _awayTeam : _homeTeam;
+            var starters = p2Team.Players.Where(p => p.IsStarting && !p.IsKnockedDown).ToList();
+            if (starters.Count == 0) return false;
+
+            // Prefer a midfielder, then any outfield player, then whatever's left.
+            _controlledPlayer2 = starters.FirstOrDefault(p => p.Position == PlayerPosition.Midfielder)
+                              ?? starters.FirstOrDefault(p => p.Position != PlayerPosition.Goalkeeper)
+                              ?? starters[0];
+            _controlledPlayer2.IsControlled = true;
+            _wasShootButtonDown2 = false;
+            _shootButtonHoldTime2 = 0f;
+            Player2Active = true;
+            return true;
+        }
+
+        /// <summary>
+        /// Releases P2 back to AI control. Called by the toggle key, and also called
+        /// implicitly if the match ends. Safe to call when P2 isn't active.
+        /// </summary>
+        public void LeavePlayer2()
+        {
+            if (!Player2Active) return;
+
+            if (_controlledPlayer2 != null)
+            {
+                _controlledPlayer2.IsControlled = false;
+            }
+            _controlledPlayer2 = null;
+            _wasShootButtonDown2 = false;
+            _shootButtonHoldTime2 = 0f;
+            Player2Active = false;
+        }
+
+        /// <summary>
+        /// Cycle P2's selected player across visible teammates on the opposing team,
+        /// mirroring <see cref="SwitchControlledPlayer"/> for P1.
+        /// </summary>
+        public void SwitchControlledPlayer2()
+        {
+            if (!Player2Active || _controlledPlayer2 == null) return;
+
+            _controlledPlayer2.IsControlled = false;
+
+            var p2Team = _homeTeam.IsPlayerControlled ? _awayTeam : _homeTeam;
+
+            // Use the same viewport window as P1's switch — the camera tracks the ball.
+            float viewportWidth = 800f / Camera.Zoom;
+            float viewportHeight = 600f / Camera.Zoom;
+            Vector2 cameraPos = Camera.Position;
+            float minX = cameraPos.X - viewportWidth / 2;
+            float maxX = cameraPos.X + viewportWidth / 2;
+            float minY = cameraPos.Y - viewportHeight / 2;
+            float maxY = cameraPos.Y + viewportHeight / 2;
+
+            var visiblePlayers = p2Team.Players
+                .Where(p => !p.IsKnockedDown && p != _controlledPlayer &&
+                           p.FieldPosition.X >= minX && p.FieldPosition.X <= maxX &&
+                           p.FieldPosition.Y >= minY && p.FieldPosition.Y <= maxY)
+                .OrderBy(p => Vector2.Distance(p.FieldPosition, BallPosition))
+                .ToList();
+
+            if (visiblePlayers.Any())
+            {
+                int currentIndex = visiblePlayers.IndexOf(_controlledPlayer2);
+                int nextIndex = (currentIndex + 1) % visiblePlayers.Count;
+                _controlledPlayer2 = visiblePlayers[nextIndex];
+                _controlledPlayer2.IsControlled = true;
+            }
+            else
+            {
+                var nearestPlayer = p2Team.Players
+                    .Where(p => !p.IsKnockedDown && p != _controlledPlayer)
+                    .OrderBy(p => Vector2.Distance(p.FieldPosition, BallPosition))
+                    .FirstOrDefault();
+
+                if (nearestPlayer != null)
+                {
+                    _controlledPlayer2 = nearestPlayer;
+                    _controlledPlayer2.IsControlled = true;
+                }
+            }
+        }
+
         public void SwitchControlledPlayer()
         {
             if (_controlledPlayer == null) return;
@@ -2216,28 +2396,30 @@ namespace NoPasaranFC.Gameplay
             }
         }
         
-        public void Tackle()
+        public void Tackle() => Tackle(_controlledPlayer);
+
+        public void Tackle(Player player)
         {
-            if (_controlledPlayer == null) return;
-            
-            // Don't tackle if the controlled player has the ball
-            if (_lastPlayerTouchedBall == _controlledPlayer)
+            if (player == null) return;
+
+            // Don't tackle if the player has the ball
+            if (_lastPlayerTouchedBall == player)
             {
                 return;
             }
-            
+
             // Trigger tackle animation
-            _controlledPlayer.CurrentAnimationState = "tackle";
-            
+            player.CurrentAnimationState = "tackle";
+
             // Find nearest opponent with the ball
-            var opposingTeam = _controlledPlayer.Team == _homeTeam ? _awayTeam : _homeTeam;
-            
+            var opposingTeam = player.Team == _homeTeam ? _awayTeam : _homeTeam;
+
             Player nearestOpponent = null;
             float minDistance = float.MaxValue;
-            
+
             foreach (var opponent in opposingTeam.Players)
             {
-                float dist = Vector2.Distance(_controlledPlayer.FieldPosition, opponent.FieldPosition);
+                float dist = Vector2.Distance(player.FieldPosition, opponent.FieldPosition);
                 if (dist < minDistance && dist < TackleDistance)
                 {
                     // Check if opponent is near the ball (possessing it)
@@ -2248,47 +2430,47 @@ namespace NoPasaranFC.Gameplay
                     }
                 }
             }
-            
+
             if (nearestOpponent != null)
             {
                 // Calculate tackle success based on attributes with stamina effect
-                float staminaMultiplier = GetStaminaStatMultiplier(_controlledPlayer);
-                float tacklerDefending = _controlledPlayer.Defending * staminaMultiplier;
-                float tacklerAgility = _controlledPlayer.Agility * staminaMultiplier;
+                float staminaMultiplier = GetStaminaStatMultiplier(player);
+                float tacklerDefending = player.Defending * staminaMultiplier;
+                float tacklerAgility = player.Agility * staminaMultiplier;
                 float opponentTechnique = nearestOpponent.Technique;
                 float opponentAgility = nearestOpponent.Agility;
-                
+
                 // Success probability formula
-                float tackleSuccess = TackleSuccessBase + 
-                    (tacklerDefending * 0.3f) + 
-                    (tacklerAgility * 0.2f) - 
-                    (opponentTechnique * 0.2f) - 
+                float tackleSuccess = TackleSuccessBase +
+                    (tacklerDefending * 0.3f) +
+                    (tacklerAgility * 0.2f) -
+                    (opponentTechnique * 0.2f) -
                     (opponentAgility * 0.1f);
-                
+
                 // Decrease stamina for tackle attempt
-                _controlledPlayer.Stamina = Math.Max(0, _controlledPlayer.Stamina - StaminaDecreasePerShot);
-                
+                player.Stamina = Math.Max(0, player.Stamina - StaminaDecreasePerShot);
+
                 // Random element
                 float roll = (float)_random.NextDouble() * 100f;
-                
+
                 if (roll < tackleSuccess)
                 {
                     // Successful tackle - ball bounces away from opponent
-                    Vector2 tackleDirection = (nearestOpponent.FieldPosition - _controlledPlayer.FieldPosition);
+                    Vector2 tackleDirection = (nearestOpponent.FieldPosition - player.FieldPosition);
                     if (tackleDirection.Length() > 0)
                     {
                         tackleDirection.Normalize();
                         // Ball goes to the side, not straight back
-                        tackleDirection = Vector2.Transform(tackleDirection, 
+                        tackleDirection = Vector2.Transform(tackleDirection,
                             Matrix.CreateRotationZ((_random.Next(2) == 0 ? 1 : -1) * MathHelper.PiOver4));
                         BallVelocity = tackleDirection * 150f;
-                        _lastPlayerTouchedBall = _controlledPlayer;
+                        _lastPlayerTouchedBall = player;
                     }
                 }
                 else
                 {
                     // Failed tackle - opponent keeps ball and gets a boost
-                    Vector2 escapeDirection = (nearestOpponent.FieldPosition - _controlledPlayer.FieldPosition);
+                    Vector2 escapeDirection = (nearestOpponent.FieldPosition - player.FieldPosition);
                     if (escapeDirection.Length() > 0)
                     {
                         escapeDirection.Normalize();

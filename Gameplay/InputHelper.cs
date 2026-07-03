@@ -14,8 +14,16 @@ namespace NoPasaranFC.Gameplay
         private KeyboardState _previousKeyState;
         private GamePadState _currentPadState;
         private GamePadState _previousPadState;
+        private GamePadState _currentPad2State;
+        private GamePadState _previousPad2State;
         private TouchCollection _currentTouchState;
         private TouchCollection _previousTouchState;
+
+        /// <summary>
+        /// When true, Player 1 movement ignores the arrow keys because Player 2 has joined
+        /// via keyboard and claimed them. WASD still works for P1 regardless.
+        /// </summary>
+        public bool Player2KeyboardActive { get; set; } = false;
         
         private const float DeadZone = 0.2f;
         
@@ -57,6 +65,8 @@ namespace NoPasaranFC.Gameplay
             _previousKeyState = _currentKeyState;
             _currentPadState = GamePad.GetState(PlayerIndex.One);
             _previousPadState = _currentPadState;
+            _currentPad2State = GamePad.GetState(PlayerIndex.Two);
+            _previousPad2State = _currentPad2State;
             
 #if ANDROID
             TouchControlsEnabled = true;
@@ -109,12 +119,14 @@ namespace NoPasaranFC.Gameplay
         {
             _previousKeyState = _currentKeyState;
             _previousPadState = _currentPadState;
+            _previousPad2State = _currentPad2State;
             _previousTouchState = _currentTouchState;
             _previousSwitchButtonPressed = _switchButtonPressed;
             _previousBackButtonPressed = _backButtonPressed;
-            
+
             _currentKeyState = Keyboard.GetState();
             _currentPadState = GamePad.GetState(PlayerIndex.One);
+            _currentPad2State = GamePad.GetState(PlayerIndex.Two);
             
             // Touch input
             if (TouchControlsEnabled)
@@ -193,14 +205,18 @@ namespace NoPasaranFC.Gameplay
         {
             Vector2 direction = Vector2.Zero;
             
-            // Keyboard input
-            if (_currentKeyState.IsKeyDown(Keys.Up) || _currentKeyState.IsKeyDown(Keys.W))
+            // Keyboard input (WASD always, arrows only when P2 hasn't claimed them)
+            if (_currentKeyState.IsKeyDown(Keys.W) ||
+                (!Player2KeyboardActive && _currentKeyState.IsKeyDown(Keys.Up)))
                 direction.Y -= 1;
-            if (_currentKeyState.IsKeyDown(Keys.Down) || _currentKeyState.IsKeyDown(Keys.S))
+            if (_currentKeyState.IsKeyDown(Keys.S) ||
+                (!Player2KeyboardActive && _currentKeyState.IsKeyDown(Keys.Down)))
                 direction.Y += 1;
-            if (_currentKeyState.IsKeyDown(Keys.Left) || _currentKeyState.IsKeyDown(Keys.A))
+            if (_currentKeyState.IsKeyDown(Keys.A) ||
+                (!Player2KeyboardActive && _currentKeyState.IsKeyDown(Keys.Left)))
                 direction.X -= 1;
-            if (_currentKeyState.IsKeyDown(Keys.Right) || _currentKeyState.IsKeyDown(Keys.D))
+            if (_currentKeyState.IsKeyDown(Keys.D) ||
+                (!Player2KeyboardActive && _currentKeyState.IsKeyDown(Keys.Right)))
                 direction.X += 1;
             
             // GamePad input (left stick)
@@ -387,6 +403,100 @@ namespace NoPasaranFC.Gameplay
                 return rect.Contains(new Point((int)tap.Value.X, (int)tap.Value.Y));
             }
             return false;
+        }
+
+        // ================== Player 2 input (desktop local co-op) ==================
+        // P2 keyboard layout: Arrows to move, NumPad0 to shoot, Decimal (NumPad .) to
+        // pass, RightControl to switch player. P2 gamepad = PlayerIndex.Two.
+        // These methods are safe to call on Android — they just report no input.
+
+        /// <summary>True if gamepad 2 is currently connected.</summary>
+        public bool IsGamePad2Connected() => _currentPad2State.IsConnected;
+
+        /// <summary>
+        /// Movement direction for Player 2. Reads arrow keys (when P2 has claimed the
+        /// keyboard) and/or gamepad 2's left stick and D-pad.
+        /// </summary>
+        public Vector2 GetMovementDirectionPlayer2()
+        {
+            Vector2 direction = Vector2.Zero;
+
+            // Keyboard arrows — caller guarantees P2 has the keyboard when calling this.
+            if (_currentKeyState.IsKeyDown(Keys.Up)) direction.Y -= 1;
+            if (_currentKeyState.IsKeyDown(Keys.Down)) direction.Y += 1;
+            if (_currentKeyState.IsKeyDown(Keys.Left)) direction.X -= 1;
+            if (_currentKeyState.IsKeyDown(Keys.Right)) direction.X += 1;
+
+            // Gamepad 2 left stick
+            if (_currentPad2State.IsConnected)
+            {
+                Vector2 leftStick = _currentPad2State.ThumbSticks.Left;
+                leftStick.Y = -leftStick.Y; // Invert Y axis
+
+                if (leftStick.Length() > DeadZone)
+                {
+                    direction = leftStick;
+                }
+
+                // D-Pad override
+                if (_currentPad2State.DPad.Up == ButtonState.Pressed)
+                    direction.Y -= 1;
+                if (_currentPad2State.DPad.Down == ButtonState.Pressed)
+                    direction.Y += 1;
+                if (_currentPad2State.DPad.Left == ButtonState.Pressed)
+                    direction.X -= 1;
+                if (_currentPad2State.DPad.Right == ButtonState.Pressed)
+                    direction.X += 1;
+            }
+
+            if (direction != Vector2.Zero && direction.Length() > 1f)
+                direction.Normalize();
+
+            return direction;
+        }
+
+        /// <summary>Shoot/action button for P2 — NumPad 0 or gamepad 2 A.</summary>
+        public bool IsShootButtonDownPlayer2()
+        {
+            bool keyDown = _currentKeyState.IsKeyDown(Keys.NumPad0);
+            bool padDown = _currentPad2State.IsConnected &&
+                           _currentPad2State.Buttons.A == ButtonState.Pressed;
+            return keyDown || padDown;
+        }
+
+        /// <summary>Pass button for P2 — NumPad Decimal or gamepad 2 B.</summary>
+        public bool IsPassButtonDownPlayer2()
+        {
+            bool keyDown = _currentKeyState.IsKeyDown(Keys.Decimal);
+            bool padDown = _currentPad2State.IsConnected &&
+                           _currentPad2State.Buttons.B == ButtonState.Pressed;
+            return keyDown || padDown;
+        }
+
+        /// <summary>Switch-player button for P2 — Right Ctrl or gamepad 2 X, edge-triggered.</summary>
+        public bool IsSwitchPlayerPressedPlayer2()
+        {
+            bool keyPressed = _currentKeyState.IsKeyDown(Keys.RightControl) &&
+                              !_previousKeyState.IsKeyDown(Keys.RightControl);
+            bool padPressed = _currentPad2State.IsConnected &&
+                              _currentPad2State.Buttons.X == ButtonState.Pressed &&
+                              _previousPad2State.Buttons.X == ButtonState.Released;
+            return keyPressed || padPressed;
+        }
+
+        /// <summary>
+        /// Edge-triggered P2 join/leave toggle. Right Shift (keyboard) or Start on
+        /// gamepad 2. Returns the source so callers can route P2 input correctly.
+        /// </summary>
+        public bool IsPlayer2JoinTogglePressed(out bool fromKeyboard)
+        {
+            bool keyPressed = _currentKeyState.IsKeyDown(Keys.RightShift) &&
+                              !_previousKeyState.IsKeyDown(Keys.RightShift);
+            bool padPressed = _currentPad2State.IsConnected &&
+                              _currentPad2State.Buttons.Start == ButtonState.Pressed &&
+                              _previousPad2State.Buttons.Start == ButtonState.Released;
+            fromKeyboard = keyPressed && !padPressed;
+            return keyPressed || padPressed;
         }
     }
 }

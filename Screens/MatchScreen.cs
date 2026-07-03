@@ -29,6 +29,14 @@ namespace NoPasaranFC.Screens
         // Debug overlay
         private bool _debugOverlayEnabled = false;
         private KeyboardState _previousKeyboardState;
+
+#if !ANDROID
+        // Player 2 join hint (desktop only). Fades out after a few seconds at kickoff
+        // and is permanently suppressed once P2 has joined at least once in this process.
+        private const float Player2HintDuration = 6f;
+        private float _player2HintTimer = Player2HintDuration;
+        private static bool _player2HasEverJoined = false;
+#endif
         
         // Goal nets
         private GoalNet _leftGoalNet;
@@ -169,22 +177,75 @@ namespace NoPasaranFC.Screens
             
             _input.Update();
             var touchUI = Gameplay.TouchUI.Instance;
-            
+
             // Get movement direction (supports keyboard, gamepad, and touch joystick)
             Vector2 moveDirection = _input.GetMovementDirection();
             if (touchUI.Enabled && touchUI.JoystickActive)
             {
                 moveDirection = touchUI.JoystickDirection;
             }
-            
+
             // Shoot/Tackle (X key, A button, or touch A)
             bool isShootKeyDown = _input.IsShootButtonDown() || touchUI.IsActionPressed;
-            
+
             // Pass (Z key, B button, or touch Y)
             bool isPassKeyDown = _input.IsPassButtonDown() || touchUI.IsPassPressed;
-            
+
+#if !ANDROID
+            // ===== Player 2 join/leave toggle (desktop local co-op) =====
+            // Right Shift on keyboard, or Start on gamepad 2. Same key toggles off.
+            if (_input.IsPlayer2JoinTogglePressed(out bool p2FromKeyboard))
+            {
+                if (_matchEngine.Player2Active)
+                {
+                    _matchEngine.LeavePlayer2();
+                    _input.Player2KeyboardActive = false;
+                }
+                else
+                {
+                    // Prefer gamepad 2 if it's connected, even when RShift was used.
+                    // Only route P2 to the keyboard if no pad 2 is attached.
+                    bool useKeyboard = p2FromKeyboard && !_input.IsGamePad2Connected();
+                    // If they pressed Start on pad 2, that's obviously gamepad.
+                    if (!p2FromKeyboard) useKeyboard = false;
+
+                    if (_matchEngine.JoinPlayer2())
+                    {
+                        _input.Player2KeyboardActive = useKeyboard;
+                        _player2HasEverJoined = true;
+                    }
+                }
+            }
+
+            // Collect P2 input if they're in the match.
+            Vector2 moveDirection2 = Vector2.Zero;
+            bool isShootKeyDown2 = false;
+            bool isPassKeyDown2 = false;
+            if (_matchEngine.Player2Active)
+            {
+                moveDirection2 = _input.GetMovementDirectionPlayer2();
+                isShootKeyDown2 = _input.IsShootButtonDownPlayer2();
+                isPassKeyDown2 = _input.IsPassButtonDownPlayer2();
+            }
+
+            _matchEngine.Update(gameTime, moveDirection, isShootKeyDown, isPassKeyDown,
+                                moveDirection2, isShootKeyDown2, isPassKeyDown2);
+
+            // P2 switch player
+            if (_matchEngine.Player2Active && _input.IsSwitchPlayerPressedPlayer2())
+            {
+                _matchEngine.SwitchControlledPlayer2();
+            }
+
+            // Tick the join-hint timer (fades out after Player2HintDuration seconds).
+            if (_player2HintTimer > 0f)
+            {
+                _player2HintTimer -= (float)gameTime.ElapsedGameTime.TotalSeconds;
+            }
+#else
             _matchEngine.Update(gameTime, moveDirection, isShootKeyDown, isPassKeyDown);
-            
+#endif
+
             // Switch player (Space, X button, or touch X)
             if (_input.IsSwitchPlayerPressed() || touchUI.IsSwitchJustPressed)
             {
@@ -687,15 +748,51 @@ namespace NoPasaranFC.Screens
             }
             
             // Draw set piece indicators (timer and arrow) - for corners, goal kicks, and throw-ins
-            if (_matchEngine.CurrentState == MatchEngine.MatchState.CornerKick || 
+            if (_matchEngine.CurrentState == MatchEngine.MatchState.CornerKick ||
                 _matchEngine.CurrentState == MatchEngine.MatchState.GoalKick ||
                 _matchEngine.CurrentState == MatchEngine.MatchState.ThrowIn)
             {
                 DrawSetPieceIndicators(spriteBatch, font);
             }
-            
+
+#if !ANDROID
+            // Draw the Player 2 join hint at the bottom of the screen during the first
+            // few seconds of the match — but only if P2 has never joined in this session
+            // and isn't already in the match.
+            if (_player2HintTimer > 0f && !_player2HasEverJoined && !_matchEngine.Player2Active)
+            {
+                DrawPlayer2JoinHint(spriteBatch, font);
+            }
+#endif
+
             // Touch controls are now drawn globally by TouchUI in Game1.Draw
         }
+
+#if !ANDROID
+        private void DrawPlayer2JoinHint(SpriteBatch spriteBatch, SpriteFont font)
+        {
+            // Fade out in the final second of the hint's lifetime.
+            float alpha = Math.Min(1f, _player2HintTimer / 1f);
+            if (alpha <= 0f) return;
+
+            string hint = Localization.Instance.Get("match.player2JoinHint");
+            Vector2 size = font.MeasureString(hint);
+            Vector2 pos = new Vector2(
+                (Game1.ScreenWidth - size.X) / 2f,
+                Game1.ScreenHeight - size.Y - 24f);
+
+            // Semi-transparent background band
+            Rectangle bg = new Rectangle(
+                (int)(pos.X - 16), (int)(pos.Y - 6),
+                (int)(size.X + 32), (int)(size.Y + 12));
+            spriteBatch.Draw(_pixel, bg, new Color(0, 0, 0, (int)(160 * alpha)));
+
+            spriteBatch.DrawString(font, hint, pos + new Vector2(2, 2),
+                new Color(0, 0, 0, (int)(255 * alpha)));
+            spriteBatch.DrawString(font, hint, pos,
+                new Color(255, 255, 255, (int)(255 * alpha)));
+        }
+#endif
         
         private void DrawFilledCircle(SpriteBatch spriteBatch, Vector2 center, float radius, Color color)
         {
