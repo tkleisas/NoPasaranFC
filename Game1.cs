@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
@@ -6,6 +6,7 @@ using NoPasaranFC.Models;
 using NoPasaranFC.Database;
 using NoPasaranFC.Gameplay;
 using NoPasaranFC.Screens;
+using NoPasaranFC.Debugging;
 using Microsoft.Xna.Framework.Content;
 
 namespace NoPasaranFC;
@@ -19,6 +20,13 @@ public class Game1 : Game
     private ContentManager _contentManager;
     private Championship _championship;
     private DatabaseManager _database;
+
+    // Debug console (enabled via NOPASARAN_DEBUG=1)
+    private DebugServer _debugServer;
+    private ScreenCapture _screenCapture;
+    private float _fpsAccum;
+    private int _fpsFrames;
+    private float _fps;
     
     // Resolution settings
     public static int ScreenWidth { get; private set; } = 1280;
@@ -114,6 +122,18 @@ public class Game1 : Game
         // menu can launch the championship selection flow.
         _championship = _database.LoadChampionship();
 
+        // Debug TCP console: NOPASARAN_DEBUG=1 [NOPASARAN_DEBUG_PORT=7777]
+        if (Environment.GetEnvironmentVariable("NOPASARAN_DEBUG") == "1")
+        {
+            int port = 7777;
+            string portEnv = Environment.GetEnvironmentVariable("NOPASARAN_DEBUG_PORT");
+            if (!string.IsNullOrEmpty(portEnv)) int.TryParse(portEnv, out port);
+            _screenCapture = new ScreenCapture();
+            _debugServer = new DebugServer();
+            _debugServer.Start(port);
+            System.Diagnostics.Debug.WriteLine($"Debug console on 127.0.0.1:{port}");
+        }
+
         base.Initialize();
     }
 
@@ -147,6 +167,15 @@ public class Game1 : Game
 
     protected override void Update(GameTime gameTime)
     {
+        // Debug input injection frame boundary + queued console commands
+        DebugInput.BeginFrame();
+        ProcessDebugCommands();
+
+        // FPS tracking for the debug console
+        float frameDt = (float)gameTime.ElapsedGameTime.TotalSeconds;
+        _fpsAccum += frameDt; _fpsFrames++;
+        if (_fpsAccum >= 0.5f) { _fps = _fpsFrames / _fpsAccum; _fpsAccum = 0; _fpsFrames = 0; }
+
         // Update touch UI first
         Gameplay.TouchUI.Instance.Update(gameTime);
         
@@ -177,6 +206,9 @@ public class Game1 : Game
 
     protected override void Draw(GameTime gameTime)
     {
+        // When a screenshot is queued, this frame renders into a capture target.
+        var captureTarget = _screenCapture?.BeginFrame(GraphicsDevice);
+
         GraphicsDevice.Clear(new Color(34, 139, 34));
 
         _spriteBatch.Begin();
@@ -185,6 +217,9 @@ public class Game1 : Game
         // Draw touch UI overlay on top of everything
         Gameplay.TouchUI.Instance.Draw(_spriteBatch, _font);
         _spriteBatch.End();
+
+        if (captureTarget != null)
+            _screenCapture.EndFrame(GraphicsDevice);
 
         base.Draw(gameTime);
     }
@@ -199,5 +234,92 @@ public class Game1 : Game
 #else
         Exit();
 #endif
+    }
+
+    protected override void OnExiting(object sender, ExitingEventArgs args)
+    {
+        _debugServer?.Stop();
+        base.OnExiting(sender, args);
+    }
+
+    // ---- Debug console command handling (game thread) ----
+
+    private void ProcessDebugCommands()
+    {
+        if (_debugServer == null) return;
+        while (_debugServer.TryDequeue(out var cmd))
+        {
+            string response;
+            try { response = ExecuteDebugCommand(cmd); }
+            catch (Exception ex) { response = "ERR " + ex.Message; }
+            cmd.Respond(response);
+        }
+    }
+
+    private string ExecuteDebugCommand(DebugServer.DebugCommand cmd)
+    {
+        var parts = cmd.Line.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length == 0) return "ERR empty command";
+
+        switch (parts[0].ToLowerInvariant())
+        {
+            case "shot":
+            {
+                if (parts.Length < 2) return "ERR usage: shot <path> [delayFrames]";
+                int delay = parts.Length > 2 && int.TryParse(parts[2], out int d) ? d : 0;
+                if (_screenCapture.CaptureInProgress) return "ERR capture already in progress";
+                _screenCapture.Request(parts[1], delay,
+                    (ok, path) => cmd.Respond(ok ? $"OK saved {path}" : $"ERR save failed {path}"));
+                return null; // response sent when the frame is captured
+            }
+            case "key":
+            case "down":
+            case "up":
+            {
+                if (parts.Length < 2 || !Enum.TryParse<Keys>(parts[1], true, out var key))
+                    return "ERR usage: key|down|up <XNA Keys enum name>";
+                if (parts[0] == "key") DebugInput.InjectTap(key);
+                else if (parts[0] == "down") DebugInput.InjectDown(key);
+                else DebugInput.InjectUp(key);
+                return "OK";
+            }
+            case "state":
+                return "OK " + GetDebugState();
+            case "match":
+                return StartNextMatch();
+            case "quit":
+                ExitGame();
+                return "OK";
+            default:
+                return "ERR unknown command (shot|key|down|up|state|match|quit)";
+        }
+    }
+
+    private string GetDebugState()
+    {
+        string s = $"screen={_screenManager.CurrentScreen?.GetType().Name ?? "none"} fps={_fps:F0}";
+        if (_screenManager.CurrentScreen is MatchScreen ms && ms.Engine != null)
+        {
+            var e = ms.Engine;
+            s += $" match[state={e.CurrentState} time={e.MatchTime:F1} score={e.HomeScore}-{e.AwayScore} " +
+                 $"ball=({e.BallPosition.X:F0},{e.BallPosition.Y:F0},h={e.BallHeight:F0})]";
+        }
+        return s;
+    }
+
+    /// <summary>Jump straight to the next unplayed player match (same flow as the menu).</summary>
+    private string StartNextMatch()
+    {
+        if (_championship == null) return "ERR no championship loaded";
+        var playerTeam = _championship.Teams.Find(t => t.IsPlayerControlled);
+        if (playerTeam == null) return "ERR no player-controlled team";
+        var nextMatch = _championship.Matches.Find(m => !m.IsPlayed &&
+            (m.HomeTeamId == playerTeam.Id || m.AwayTeamId == playerTeam.Id));
+        if (nextMatch == null) return "ERR season complete";
+
+        var lineupScreen = new LineupScreen(playerTeam, nextMatch, _championship,
+            _database, _screenManager, _contentManager, GraphicsDevice);
+        _screenManager.PushScreen(lineupScreen);
+        return "OK lineup";
     }
 }

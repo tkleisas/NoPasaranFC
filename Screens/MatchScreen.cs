@@ -1,4 +1,5 @@
-﻿using Microsoft.Xna.Framework;
+using NoPasaranFC.Debugging;
+using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Content;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
@@ -14,6 +15,9 @@ namespace NoPasaranFC.Screens
     public class MatchScreen : Screen
     {
         private MatchEngine _matchEngine;
+        
+        /// <summary>Debug console access to live match state (read-only usage).</summary>
+        public MatchEngine Engine => _matchEngine;
         private Team _homeTeam;
         private Team _awayTeam;
         private Match _match;
@@ -52,6 +56,9 @@ namespace NoPasaranFC.Screens
         
         // New animation system
         private PlayerAnimationSystem _playerAnimSystem;
+        
+        // Optional 3D match view (null in default 2D mode)
+        private Graphics3D.MatchRenderer3D _renderer3D;
         
         // Sprite sheet configuration
         private const int SpriteFrameSize = 64; // Each frame is 64x64 in the sprite sheet
@@ -112,6 +119,12 @@ namespace NoPasaranFC.Screens
                     
                     // Initialize new animation system (load shared resources once)
                     PlayerAnimationSystem.LoadSharedResources(_content);
+                    
+                    // Optional 3D match view (additive; 2D rendering remains the default)
+                    if (GameSettings.Instance.MatchViewMode == "3D")
+                    {
+                        _renderer3D = new Graphics3D.MatchRenderer3D(graphicsDevice, _content);
+                    }
                     
                     // Initialize all players with their own animation system instance
                     foreach (var player in _homeTeam.Players.Concat(_awayTeam.Players))
@@ -263,7 +276,7 @@ namespace NoPasaranFC.Screens
             }
             
             // Toggle debug overlay (F3 key)
-            KeyboardState currentKeyboardState = Keyboard.GetState();
+            KeyboardState currentKeyboardState = DebugInput.GetState();
             if (currentKeyboardState.IsKeyDown(Keys.F3) && _previousKeyboardState.IsKeyUp(Keys.F3))
             {
                 _debugOverlayEnabled = !_debugOverlayEnabled;
@@ -301,6 +314,12 @@ namespace NoPasaranFC.Screens
             
             // Update ball animation
             UpdateBallAnimation(gameTime);
+            
+            // Update 3D renderer (camera follow, ball roll, billboard animations)
+            if (_renderer3D != null)
+            {
+                _renderer3D.Update(gameTime, _matchEngine);
+            }
             
             // Update goal nets with ball position and velocity
             if (_leftGoalNet != null && _rightGoalNet != null)
@@ -610,6 +629,18 @@ namespace NoPasaranFC.Screens
         {
             if (_pixel == null) return;
             
+            // 3D match view: draw the 3D scene (no sprite batch), then only HUD/overlay UI.
+            // The 2D world rendering (field, players, ball, nets, stadium) is skipped.
+            if (_renderer3D != null)
+            {
+                spriteBatch.End();
+                _renderer3D.Draw(_graphicsDevice, _matchEngine, _homeTeam.Id);
+                spriteBatch.Begin();
+                
+                DrawScreenUI(spriteBatch, font, true);
+                return;
+            }
+            
             var cameraMatrix = _matchEngine.Camera.GetTransformMatrix();
             
             // Begin with camera transformation for world objects
@@ -727,6 +758,16 @@ namespace NoPasaranFC.Screens
             // Begin UI drawing (no camera transform)
             spriteBatch.Begin();
             
+            DrawScreenUI(spriteBatch, font, false);
+        }
+        
+        /// <summary>
+        /// Screen-space UI drawn on top of the match (minimap, HUD, overlays).
+        /// Shared by both 2D and 3D match views; in 3D mode world-anchored
+        /// indicators (set piece arrow) are centered/simplified instead.
+        /// </summary>
+        private void DrawScreenUI(SpriteBatch spriteBatch, SpriteFont font, bool is3DMode)
+        {
             // Draw minimap
             _minimap.Draw(spriteBatch, _pixel, _matchEngine, _homeTeam, _awayTeam);
             
@@ -756,7 +797,13 @@ namespace NoPasaranFC.Screens
                 _matchEngine.CurrentState == MatchEngine.MatchState.GoalKick ||
                 _matchEngine.CurrentState == MatchEngine.MatchState.ThrowIn)
             {
-                DrawSetPieceIndicators(spriteBatch, font);
+                DrawSetPieceIndicators(spriteBatch, font, is3DMode);
+            }
+            
+            // Player indicators projected onto the 3D view (names, stamina bars, shot power)
+            if (is3DMode)
+            {
+                Draw3DPlayerIndicators(spriteBatch, font);
             }
 
 #if !ANDROID
@@ -798,6 +845,102 @@ namespace NoPasaranFC.Screens
         }
 #endif
         
+        /// <summary>
+        /// Screen-space player indicators for the 3D view: name labels and stamina
+        /// bars at the players' feet, shot power bar above the controlled player's
+        /// head. Mirrors the 2D indicators in style/colors.
+        /// </summary>
+        private void Draw3DPlayerIndicators(SpriteBatch spriteBatch, SpriteFont font)
+        {
+            foreach (var player in _matchEngine.GetAllPlayers())
+            {
+                if (player.IsKnockedDown) continue;
+                
+                // Player name above the head (if ShowPlayerNames is enabled)
+                if (GameSettings.Instance.ShowPlayerNames && !string.IsNullOrEmpty(player.Name))
+                {
+                    // ~2.2m above ground in engine px (73 px/m)
+                    var head = _renderer3D.WorldToScreen(player.FieldPosition, 160f);
+                    if (head.HasValue)
+                    {
+                        try
+                        {
+                            string displayName = player.Name;
+                            if (displayName.Length > 12)
+                                displayName = displayName.Substring(0, 12);
+                            
+                            Vector2 nameSize = font.MeasureString(displayName);
+                            Vector2 namePos = new Vector2(head.Value.X - nameSize.X / 2, head.Value.Y - 12);
+                            
+                            spriteBatch.Draw(_pixel, new Rectangle((int)(namePos.X - 4), (int)(namePos.Y - 2),
+                                (int)(nameSize.X + 8), (int)(nameSize.Y + 4)), new Color(0, 0, 0, 150));
+                            spriteBatch.DrawString(font, displayName, namePos, Color.White);
+                        }
+                        catch (Exception)
+                        {
+                            System.Diagnostics.Debug.WriteLine($"Failed to render name: {player.Name}");
+                        }
+                    }
+                }
+                
+                // Stamina bar below the player's feet (if ShowStamina is enabled)
+                if (GameSettings.Instance.ShowStamina)
+                {
+                    var feet = _renderer3D.WorldToScreen(player.FieldPosition);
+                    if (feet.HasValue)
+                    {
+                        int barWidth = 42;
+                        int barHeight = 5;
+                        int barX = (int)(feet.Value.X - barWidth / 2);
+                        int barY = (int)(feet.Value.Y + 10);
+                        
+                        float staminaPercent = player.Stamina / 100f;
+                        spriteBatch.Draw(_pixel, new Rectangle(barX, barY, barWidth, barHeight),
+                            new Color(40, 40, 40, 200));
+                        
+                        Color staminaColor;
+                        if (staminaPercent > 0.6f)
+                            staminaColor = new Color(0, 255, 0); // Green
+                        else if (staminaPercent > 0.3f)
+                            staminaColor = new Color(255, 200, 0); // Yellow/Orange
+                        else
+                            staminaColor = new Color(255, 0, 0); // Red (low stamina)
+                        
+                        int fillWidth = (int)(barWidth * staminaPercent);
+                        if (fillWidth > 0)
+                            spriteBatch.Draw(_pixel, new Rectangle(barX, barY, fillWidth, barHeight), staminaColor);
+                        
+                        DrawRectangleOutline(spriteBatch, _pixel,
+                            new Rectangle(barX, barY, barWidth, barHeight), new Color(0, 0, 0, 150), 1);
+                    }
+                }
+                
+                // Shot power bar above the controlled player's head while charging
+                if (player.IsControlled && _matchEngine.IsChargingShot())
+                {
+                    // ~2.2m above ground in engine px (73 px/m)
+                    var head = _renderer3D.WorldToScreen(player.FieldPosition, 160f);
+                    if (head.HasValue)
+                    {
+                        float power = _matchEngine.GetShotPower();
+                        int barWidth = 60;
+                        int barHeight = 8;
+                        int barX = (int)(head.Value.X - barWidth / 2);
+                        int barY = (int)(head.Value.Y - 44); // above the name label
+                        
+                        spriteBatch.Draw(_pixel, new Rectangle(barX, barY, barWidth, barHeight),
+                            new Color(0, 0, 0, 180));
+                        
+                        Color powerColor = power < 0.5f ? Color.Yellow : (power < 0.8f ? Color.Orange : Color.Red);
+                        spriteBatch.Draw(_pixel, new Rectangle(barX, barY, (int)(barWidth * power), barHeight), powerColor);
+                        
+                        DrawRectangleOutline(spriteBatch, _pixel,
+                            new Rectangle(barX, barY, barWidth, barHeight), Color.White, 2);
+                    }
+                }
+            }
+        }
+        
         private void DrawFilledCircle(SpriteBatch spriteBatch, Vector2 center, float radius, Color color)
         {
             // Draw filled circle using rectangle strips
@@ -814,7 +957,7 @@ namespace NoPasaranFC.Screens
             }
         }
         
-        private void DrawSetPieceIndicators(SpriteBatch spriteBatch, SpriteFont font)
+        private void DrawSetPieceIndicators(SpriteBatch spriteBatch, SpriteFont font, bool useScreenCenter = false)
         {
             // Draw set piece label
             string labelText = "";
@@ -835,14 +978,23 @@ namespace NoPasaranFC.Screens
             Matrix cameraMatrix = _matchEngine.Camera.GetTransformMatrix();
             
             // Position above player or center screen (in world coordinates)
-            Vector2 worldPosition;
-            if (_matchEngine.RestartPlayer != null)
-                worldPosition = _matchEngine.RestartPlayer.FieldPosition - new Vector2(0, 100);
+            Vector2 screenPosition;
+            if (useScreenCenter)
+            {
+                // 3D mode: world-to-screen via the 2D camera is meaningless, center the label instead
+                screenPosition = new Vector2(Game1.ScreenWidth / 2, Game1.ScreenHeight / 2 - 120);
+            }
             else
-                worldPosition = new Vector2(MatchEngine.StadiumMargin + MatchEngine.FieldWidth/2, MatchEngine.StadiumMargin + MatchEngine.FieldHeight/2);
-            
-            // Transform to screen coordinates
-            Vector2 screenPosition = Vector2.Transform(worldPosition, cameraMatrix);
+            {
+                Vector2 worldPosition;
+                if (_matchEngine.RestartPlayer != null)
+                    worldPosition = _matchEngine.RestartPlayer.FieldPosition - new Vector2(0, 100);
+                else
+                    worldPosition = new Vector2(MatchEngine.StadiumMargin + MatchEngine.FieldWidth/2, MatchEngine.StadiumMargin + MatchEngine.FieldHeight/2);
+                
+                // Transform to screen coordinates
+                screenPosition = Vector2.Transform(worldPosition, cameraMatrix);
+            }
             
             // Draw label above timer (centered)
             Vector2 labelPos = screenPosition - new Vector2(labelSize.X/2, 35);
@@ -855,7 +1007,8 @@ namespace NoPasaranFC.Screens
             spriteBatch.DrawString(font, timerText, timerPos, Color.Yellow);
             
             // Draw directional arrow for restart player (both human and AI)
-            if (_matchEngine.RestartPlayer != null)
+            // (skipped in 3D mode - the arrow is anchored to the 2D world projection)
+            if (!useScreenCenter && _matchEngine.RestartPlayer != null)
             {
                 Vector2 direction = _matchEngine.RestartDirection;
                 if (direction == Vector2.Zero) direction = new Vector2(1, 0); // Default right

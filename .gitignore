@@ -363,3 +363,6 @@ MigrationBackup/
 FodyWeavers.xsd
 /NoPasaranFCv1.2.0.apk
 /NoPasaranFC.apk
+
+# Runtime debug artifact
+match_debug.txt

@@ -1,3 +1,4 @@
+using NoPasaranFC.Debugging;
 using System;
 using System.Collections.Generic;
 using Microsoft.Xna.Framework;
@@ -37,6 +38,7 @@ namespace NoPasaranFC.Screens
             ShowStamina,
             CameraZoom,
             CameraSpeed,
+            MatchViewMode,
             Language,
             Back
         }
@@ -61,6 +63,7 @@ namespace NoPasaranFC.Screens
             settings.Add(SettingType.ShowStamina);
             settings.Add(SettingType.CameraZoom);
             settings.Add(SettingType.CameraSpeed);
+            settings.Add(SettingType.MatchViewMode);
             settings.Add(SettingType.Language);
             settings.Add(SettingType.Back);
 #else
@@ -80,6 +83,7 @@ namespace NoPasaranFC.Screens
             settings.Add(SettingType.ShowStamina);
             settings.Add(SettingType.CameraZoom);
             settings.Add(SettingType.CameraSpeed);
+            settings.Add(SettingType.MatchViewMode);
             settings.Add(SettingType.Language);
             settings.Add(SettingType.Back);
 #endif
@@ -110,6 +114,7 @@ namespace NoPasaranFC.Screens
                     SettingType.ShowStamina => loc.Get("settings.showStamina"),
                     SettingType.CameraZoom => loc.Get("settings.cameraZoom"),
                     SettingType.CameraSpeed => loc.Get("settings.cameraSpeed"),
+                    SettingType.MatchViewMode => loc.Get("settings.matchView"),
                     SettingType.Language => loc.Get("settings.languageSelect"),
                     SettingType.Back => loc.Get("menu.back"),
                     _ => ""
@@ -158,7 +163,7 @@ namespace NoPasaranFC.Screens
         public override void Update(GameTime gameTime)
         {
             _input.Update();
-            var keyState = Keyboard.GetState();
+            var keyState = DebugInput.GetState();
             var touchUI = Gameplay.TouchUI.Instance;
             
             // Touch/Joystick navigation with cooldown (threshold 0.3 for responsiveness)
@@ -302,6 +307,11 @@ namespace NoPasaranFC.Screens
                     _database.SaveSettings(_settings);
                     break;
                     
+                case SettingType.MatchViewMode:
+                    _settings.MatchViewMode = _settings.MatchViewMode == "3D" ? "2D" : "3D";
+                    _database.SaveSettings(_settings);
+                    break;
+                    
                 case SettingType.Language:
                     _languageIndex = (_languageIndex + direction + _languages.Length) % _languages.Length;
                     _settings.Language = _languages[_languageIndex];
@@ -348,6 +358,11 @@ namespace NoPasaranFC.Screens
                     
                 case SettingType.ShowStamina:
                     _settings.ShowStamina = !_settings.ShowStamina;
+                    _database.SaveSettings(_settings);
+                    break;
+                    
+                case SettingType.MatchViewMode:
+                    _settings.MatchViewMode = _settings.MatchViewMode == "3D" ? "2D" : "3D";
                     _database.SaveSettings(_settings);
                     break;
                     
@@ -455,6 +470,7 @@ namespace NoPasaranFC.Screens
                 SettingType.ShowStamina => _settings.ShowStamina ? on : off,
                 SettingType.CameraZoom => $"{_settings.CameraZoom:F1}x",
                 SettingType.CameraSpeed => $"{_settings.CameraSpeed:F2}",
+                SettingType.MatchViewMode => _settings.MatchViewMode,
                 SettingType.Language => _settings.Language.ToUpper(),
                 SettingType.Back => "",
                 _ => ""

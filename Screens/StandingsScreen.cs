@@ -1,3 +1,4 @@
+using NoPasaranFC.Debugging;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
@@ -21,7 +22,7 @@ namespace NoPasaranFC.Screens
         public override void Update(GameTime gameTime)
         {
             _input.Update();
-            var keyState = Keyboard.GetState();
+            var keyState = DebugInput.GetState();
             var touchUI = Gameplay.TouchUI.Instance;
             
             // Back (Escape, B button, or touch B/A)

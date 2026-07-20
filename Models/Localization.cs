@@ -166,6 +166,7 @@ namespace NoPasaranFC.Models
                 ["settings.showStamina"] = "Show Stamina",
                 ["settings.cameraZoom"] = "Camera Zoom",
                 ["settings.cameraSpeed"] = "Camera Speed",
+                ["settings.matchView"] = "Match View",
                 ["settings.languageSelect"] = "Language",
                 
                 ["settings.difficulty.easy"] = "Easy",
@@ -284,6 +285,7 @@ namespace NoPasaranFC.Models
                 ["settings.showStamina"] = "Εμφάνιση Κόπωσης",
                 ["settings.cameraZoom"] = "Ζουμ Κάμερας",
                 ["settings.cameraSpeed"] = "Ταχύτητα Κάμερας",
+                ["settings.matchView"] = "Προβολή Αγώνα",
                 ["settings.languageSelect"] = "Γλώσσα",
                 
                 ["settings.difficulty.easy"] = "Εύκολο",

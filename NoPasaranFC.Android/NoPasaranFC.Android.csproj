@@ -4,8 +4,8 @@
     <SupportedOSPlatformVersion>21</SupportedOSPlatformVersion>
     <OutputType>Exe</OutputType>
     <ApplicationId>com.nopasaranfc.game</ApplicationId>
-    <ApplicationVersion>1</ApplicationVersion>
-    <ApplicationDisplayVersion>1.0</ApplicationDisplayVersion>
+    <ApplicationVersion>2</ApplicationVersion>
+    <ApplicationDisplayVersion>2.0</ApplicationDisplayVersion>
     <ApplicationTitle>NO PASARAN FC</ApplicationTitle>
     <EnableDefaultItems>false</EnableDefaultItems>
     <DefineConstants>$(DefineConstants);ANDROID</DefineConstants>
@@ -20,6 +20,7 @@
     <!-- Use bundle version to avoid native library locking issues -->
     <PackageReference Include="Microsoft.Data.Sqlite.Core" Version="8.0.0" />
     <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" Version="2.1.10" />
+    <PackageReference Include="SharpGLTF.Toolkit" Version="1.0.6" />
   </ItemGroup>
 
   <!-- Include shared source files from main project -->
@@ -32,6 +33,9 @@
     <Compile Include="..\Gameplay\AIStates\*.cs" Link="Gameplay\AIStates\%(Filename)%(Extension)" />
     <Compile Include="..\Gameplay\Celebrations\*.cs" Link="Gameplay\Celebrations\%(Filename)%(Extension)" />
     <Compile Include="..\Screens\*.cs" Link="Screens\%(Filename)%(Extension)" />
+    <Compile Include="..\Debugging\*.cs" Link="Debugging\%(Filename)%(Extension)" />
+    <Compile Include="..\Graphics3D\*.cs" Link="Graphics3D\%(Filename)%(Extension)" />
+    <Compile Include="..\Graphics3D\Skinning\*.cs" Link="Graphics3D\Skinning\%(Filename)%(Extension)" />
     <Compile Include="Activity1.cs" />
   </ItemGroup>
 
@@ -46,6 +50,7 @@
     <AndroidAsset Include="..\Content\bin\Android\Content\**\*.*" Exclude="**\*.db" Link="Assets\Content\%(RecursiveDir)%(Filename)%(Extension)" />
     <AndroidAsset Include="..\Database\teams_seed.json" Link="Assets\Database\teams_seed.json" />
     <AndroidAsset Include="..\Database\championships_seed.json" Link="Assets\Database\championships_seed.json" />
+    <AndroidAsset Include="..\Content\Models3D\*.glb" Link="Assets\Content\Models3D\%(Filename)%(Extension)" />
     <!-- Explicitly exclude database files -->
     <AndroidAsset Remove="**\*.db" />
     <AndroidAsset Remove="**\nopasaran.db" />

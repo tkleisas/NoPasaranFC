@@ -1,3 +1,4 @@
+using NoPasaranFC.Debugging;
 using System;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Input;
@@ -61,7 +62,7 @@ namespace NoPasaranFC.Gameplay
         
         public InputHelper()
         {
-            _currentKeyState = Keyboard.GetState();
+            _currentKeyState = DebugInput.GetState();
             _previousKeyState = _currentKeyState;
             _currentPadState = GamePad.GetState(PlayerIndex.One);
             _previousPadState = _currentPadState;
@@ -123,8 +124,7 @@ namespace NoPasaranFC.Gameplay
             _previousTouchState = _currentTouchState;
             _previousSwitchButtonPressed = _switchButtonPressed;
             _previousBackButtonPressed = _backButtonPressed;
-
-            _currentKeyState = Keyboard.GetState();
+            _currentKeyState = DebugInput.GetState();
             _currentPadState = GamePad.GetState(PlayerIndex.One);
             _currentPad2State = GamePad.GetState(PlayerIndex.Two);
             

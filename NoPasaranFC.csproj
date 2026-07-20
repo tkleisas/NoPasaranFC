@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <TargetFramework>net9.0</TargetFramework>
@@ -19,6 +19,14 @@
     <Content Remove="NoPasaranFC.Android\**" />
     <EmbeddedResource Remove="NoPasaranFC.Android\**" />
     <None Remove="NoPasaranFC.Android\**" />
+  </ItemGroup>
+
+  <!-- Exclude spikes (standalone experiments with their own csproj) -->
+  <ItemGroup>
+    <Compile Remove="Spikes\**" />
+    <Content Remove="Spikes\**" />
+    <EmbeddedResource Remove="Spikes\**" />
+    <None Remove="Spikes\**" />
   </ItemGroup>
 
   <!-- Exclude Android MGCB and content output from desktop build -->
@@ -43,6 +51,7 @@
     <PackageReference Include="Microsoft.Data.Sqlite" Version="9.0.10" />
     <PackageReference Include="MonoGame.Framework.DesktopGL" Version="3.8.*" />
     <PackageReference Include="MonoGame.Content.Builder.Task" Version="3.8.*" />
+    <PackageReference Include="SharpGLTF.Toolkit" Version="1.0.6" />
   </ItemGroup>
   <ItemGroup>
     <Folder Include="Content\Audio\Music\" />
@@ -60,6 +69,10 @@
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
     </None>
     <None Update="Content\**\*.ogg">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </None>
+    <None Update="Content\Models3D\*.glb">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
     </None>

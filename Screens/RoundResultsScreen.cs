@@ -1,3 +1,4 @@
+using NoPasaranFC.Debugging;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Content;
 using Microsoft.Xna.Framework.Graphics;
@@ -50,7 +51,7 @@ namespace NoPasaranFC.Screens
                 _font = _contentManager.Load<SpriteFont>("Font");
             }
             
-            KeyboardState keyboardState = Keyboard.GetState();
+            KeyboardState keyboardState = DebugInput.GetState();
             
             // Press Enter, Space, A, or B to continue
             if ((keyboardState.IsKeyDown(Keys.Enter) && _previousKeyboardState.IsKeyUp(Keys.Enter)) ||

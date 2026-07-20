@@ -42,6 +42,9 @@ namespace NoPasaranFC.Models
         public float CameraZoom { get; set; } = 0.8f;
         public float CameraSpeed { get; set; } = 0.1f;
         
+        // Match view settings
+        public string MatchViewMode { get; set; } = "2D"; // "2D" (default) or "3D"
+        
         // Language settings
         public string Language { get; set; } = "en";
         

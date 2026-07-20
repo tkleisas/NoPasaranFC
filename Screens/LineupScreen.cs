@@ -1,3 +1,4 @@
+using NoPasaranFC.Debugging;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -117,7 +118,7 @@ namespace NoPasaranFC.Screens
             }
             
             // PageUp/PageDown still use raw keyboard (TODO: add to InputHelper)
-            var keyState = Keyboard.GetState();
+            var keyState = DebugInput.GetState();
             
             if (keyState.IsKeyDown(Keys.PageDown))
             {

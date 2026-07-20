@@ -1,4 +1,5 @@
 ﻿using System;
+using NoPasaranFC.Debugging;
 using System.Collections.Generic;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
@@ -111,7 +112,7 @@ namespace NoPasaranFC.Screens
         public override void Update(GameTime gameTime)
         {
             _input.Update();
-            var keyState = Keyboard.GetState();
+            var keyState = DebugInput.GetState();
             var touchUI = Gameplay.TouchUI.Instance;
             float deltaTime = (float)gameTime.ElapsedGameTime.TotalSeconds;
             

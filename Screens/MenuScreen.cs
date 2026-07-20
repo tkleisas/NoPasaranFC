@@ -1,4 +1,5 @@
 ﻿using System;
+using NoPasaranFC.Debugging;
 using System.Linq;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
@@ -86,7 +87,7 @@ namespace NoPasaranFC.Screens
         public override void Update(GameTime gameTime)
         {
             _input.Update();
-            var keyState = Keyboard.GetState(); // Still needed for some menu controls
+            var keyState = DebugInput.GetState(); // Still needed for some menu controls
             var touchUI = Gameplay.TouchUI.Instance;
 
             // If there is no active championship (e.g. fresh install or the database was

@@ -8,7 +8,7 @@ namespace NoPasaranFC.Database
 {
     public class DatabaseManager
     {
-        private const int CurrentSchemaVersion = 3; // Increment when adding migrations
+        private const int CurrentSchemaVersion = 4; // Increment when adding migrations
         
         private static string GetDatabasePath()
         {
@@ -113,7 +113,8 @@ namespace NoPasaranFC.Database
                     ShowStamina INTEGER DEFAULT 1,
                     CameraZoom REAL DEFAULT 0.8,
                     CameraSpeed REAL DEFAULT 0.1,
-                    Language TEXT DEFAULT 'en'
+                    Language TEXT DEFAULT 'en',
+                    MatchViewMode TEXT DEFAULT '2D'
                 );
             ";
             command.ExecuteNonQuery();
@@ -150,8 +151,16 @@ namespace NoPasaranFC.Database
                 currentVersion = 3;
             }
 
+            if (currentVersion < 4)
+            {
+                // Migration 4: Add MatchViewMode column to Settings table
+                ApplyMigration4_AddMatchViewMode(connection);
+                SetSchemaVersion(connection, 4);
+                currentVersion = 4;
+            }
+
             // Add future migrations here:
-            // if (currentVersion < 4) { ... }
+            // if (currentVersion < 5) { ... }
         }
         
         private int GetSchemaVersion(SqliteConnection connection)
@@ -180,6 +189,33 @@ namespace NoPasaranFC.Database
             command.ExecuteNonQuery();
         }
         
+        private void ApplyMigration4_AddMatchViewMode(SqliteConnection connection)
+        {
+            // Check if column already exists
+            var checkCommand = connection.CreateCommand();
+            checkCommand.CommandText = "PRAGMA table_info(Settings)";
+
+            bool columnExists = false;
+            using (var reader = checkCommand.ExecuteReader())
+            {
+                while (reader.Read())
+                {
+                    if (reader.GetString(1) == "MatchViewMode")
+                    {
+                        columnExists = true;
+                        break;
+                    }
+                }
+            }
+
+            if (!columnExists)
+            {
+                var alterCommand = connection.CreateCommand();
+                alterCommand.CommandText = "ALTER TABLE Settings ADD COLUMN MatchViewMode TEXT DEFAULT '2D'";
+                alterCommand.ExecuteNonQuery();
+            }
+        }
+
         private void ApplyMigration3_AddChampionshipMetadata(SqliteConnection connection)
         {
             // Check which columns already exist on the Championship table
@@ -587,13 +623,13 @@ namespace NoPasaranFC.Database
                     MasterVolume, MusicVolume, SfxVolume, MuteAll,
                     Difficulty, MatchDurationMinutes, PlayerSpeedMultiplier,
                     ShowMinimap, ShowPlayerNames, ShowStamina,
-                    CameraZoom, CameraSpeed, Language
+                    CameraZoom, CameraSpeed, Language, MatchViewMode
                 ) VALUES (
                     1, @resWidth, @resHeight, @fullscreen, @vsync,
                     @masterVol, @musicVol, @sfxVol, @muteAll,
                     @difficulty, @matchDuration, @speedMulti,
                     @showMap, @showNames, @showStamina,
-                    @camZoom, @camSpeed, @language
+                    @camZoom, @camSpeed, @language, @matchViewMode
                 );
             ";
             
@@ -614,6 +650,7 @@ namespace NoPasaranFC.Database
             command.Parameters.AddWithValue("@camZoom", settings.CameraZoom);
             command.Parameters.AddWithValue("@camSpeed", settings.CameraSpeed);
             command.Parameters.AddWithValue("@language", settings.Language);
+            command.Parameters.AddWithValue("@matchViewMode", settings.MatchViewMode ?? "2D");
             
             command.ExecuteNonQuery();
         }
@@ -647,7 +684,8 @@ namespace NoPasaranFC.Database
                     ShowStamina = reader.GetInt32(14) == 1,
                     CameraZoom = reader.GetFloat(15),
                     CameraSpeed = reader.GetFloat(16),
-                    Language = reader.GetString(17)
+                    Language = reader.GetString(17),
+                    MatchViewMode = reader.FieldCount > 18 && !reader.IsDBNull(18) ? reader.GetString(18) : "2D"
                 };
                 return settings;
             }
