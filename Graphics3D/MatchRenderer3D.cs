@@ -41,6 +41,9 @@ namespace NoPasaranFC.Graphics3D
         
         // Easter egg fox wandering the apron (null if Fox.glb missing)
         private FoxWalker _fox;
+        
+        // Animated supporters on the stand (null if no player model)
+        private FanSection _fans;
 
         // KayKit chibi is ~2.3 units tall; scale to ~1.7m
         private const float PlayerModelScale = 0.75f;
@@ -90,7 +93,7 @@ namespace NoPasaranFC.Graphics3D
         public MatchRenderer3D(GraphicsDevice device, ContentManager content)
         {
             _camera = new Camera3D(Game1.ScreenWidth, Game1.ScreenHeight);
-            _world = new World3D(device);
+            _world = new World3D(device, content);
             _ball = new Ball3D(device);
             
             _billboardEffect = new BasicEffect(device)
@@ -148,6 +151,10 @@ namespace NoPasaranFC.Graphics3D
                 Debug.WriteLine($"MatchRenderer3D: no fox ({ex.Message}).");
                 _fox = null;
             }
+            
+            // Supporters on the stand (reuses the player model/atlas)
+            if (_playerModel != null)
+                _fans = new FanSection(device, _playerModel, _playerModel.Parts[0].Texture);
         }
 
         /// <summary>
@@ -220,6 +227,7 @@ namespace NoPasaranFC.Graphics3D
             
             _rain?.Update(dt, _camera.Target);
             _fox?.Update(dt);
+            _fans?.Update(dt, engine);
             
             if (_playerModel != null)
                 UpdatePlayerAnimators(engine, dt);
@@ -243,6 +251,7 @@ namespace NoPasaranFC.Graphics3D
             _ball.Draw(device, _camera.View, _camera.Projection);
             DrawPlayers(device, engine, homeTeamId);
             _fox?.Draw(device, _camera.View, _camera.Projection, _environment);
+            _fans?.Draw(device, _camera.View, _camera.Projection, _environment);
             _rain?.Draw(device, _camera.View, _camera.Projection);
             
             // Restore GraphicsDevice states for SpriteBatch (HUD drawn after us)
