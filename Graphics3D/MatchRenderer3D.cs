@@ -130,27 +130,38 @@ namespace NoPasaranFC.Graphics3D
 
         /// <summary>
         /// Loads the rigged player model (raw GLB file, not the XNB pipeline).
-        /// On failure the renderer silently falls back to billboard players.
+        /// Prefers the purpose-built soccer player (Player.glb, dedicated kit
+        /// regions); falls back to the KayKit Knight, then to billboards.
         /// </summary>
         private void TryLoadSkinnedPlayerModel(GraphicsDevice device)
         {
-            try
+            foreach (string fileName in new[] { "Player.glb", "Knight.glb" })
             {
+                try
+                {
 #if ANDROID
-                var context = global::Android.App.Application.Context;
-                using (var stream = context.Assets.Open("Content/Models3D/Knight.glb"))
-                    _playerModel = SkinnedModel.Load(device, stream);
+                    var context = global::Android.App.Application.Context;
+                    using (var stream = context.Assets.Open($"Content/Models3D/{fileName}"))
+                        _playerModel = SkinnedModel.Load(device, stream);
 #else
-                string glbPath = PlatformHelper.GetAssetPath(Path.Combine("Content", "Models3D", "Knight.glb"));
-                _playerModel = SkinnedModel.Load(device, glbPath);
+                    string glbPath = PlatformHelper.GetAssetPath(Path.Combine("Content", "Models3D", fileName));
+                    if (!File.Exists(glbPath)) continue;
+                    _playerModel = SkinnedModel.Load(device, glbPath);
 #endif
+                    _playerModelKind = fileName.StartsWith("Player") ? PlayerModelKind.SoccerPlayer : PlayerModelKind.Knight;
+                    return;
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"MatchRenderer3D: failed to load {fileName} ({ex.Message}).");
+                }
             }
-            catch (Exception ex)
-            {
-                Debug.WriteLine($"MatchRenderer3D: failed to load Knight.glb ({ex.Message}) - using billboard players.");
-                _playerModel = null;
-            }
+            Debug.WriteLine("MatchRenderer3D: no player model found - using billboard players.");
+            _playerModel = null;
         }
+        
+        private enum PlayerModelKind { Knight, SoccerPlayer }
+        private PlayerModelKind _playerModelKind;
         
         private void LoadSpriteSheets(ContentManager content)
         {
@@ -302,43 +313,85 @@ namespace NoPasaranFC.Graphics3D
         }
         
         /// <summary>
-        /// Recolors the player's armor parts to the team kit: Body/Arms/Helmet get
-        /// the shirt color, Legs a darker shorts/socks shade. Skin (Head) untouched.
-        /// Kit colors mirror the 2D kit sprite sheets (falling back to home blue /
-        /// away red for teams without a named kit).
+        /// Recolors the player's clothing parts to the team kit. SoccerPlayer model:
+        /// dedicated texture regions per garment (shirt/shorts/socks). Knight model:
+        /// armor palette columns (Body/Arms/Helmet = shirt, Legs = shorts).
+        /// Skin, hair and boots are never touched. Kit colors mirror the 2D kit
+        /// sprite sheets (falling back to home blue / away red without a named kit).
         /// </summary>
         private void ApplyKit(GraphicsDevice device, Player player, int homeTeamId, PlayerAnimator animator)
         {
-            Color shirt = GetKitShirtColor(player, homeTeamId);
-            Color shorts = KitTextureFactory.Darken(shirt);
-            
+            GetKitColors(player, homeTeamId, out Color shirt, out Color shorts, out Color socks);
             Texture2D baseTexture = _playerModel.Parts[0].Texture;
-            Texture2D shirtTexture = KitTextureFactory.GetKitTexture(device, baseTexture, shirt);
-            Texture2D shortsTexture = KitTextureFactory.GetKitTexture(device, baseTexture, shorts);
             
-            foreach (var part in _playerModel.Parts)
+            if (_playerModelKind == PlayerModelKind.SoccerPlayer)
             {
-                string name = part.Name ?? "";
-                if (name.Contains("Body") || name.Contains("Arm") || name.Contains("Helmet"))
-                    animator.Instance.SetPartTexture(part.Name, shirtTexture);
-                else if (name.Contains("Leg"))
-                    animator.Instance.SetPartTexture(part.Name, shortsTexture);
+                // player_atlas.png layout (512x512): quadrants shirt / shorts / socks / skin+extras
+                Texture2D shirtTexture = KitTextureFactory.GetKitTexture(device, baseTexture, shirt,
+                    new Rectangle(0, 0, 256, 256));
+                Texture2D shortsTexture = KitTextureFactory.GetKitTexture(device, baseTexture, shorts,
+                    new Rectangle(256, 0, 256, 256));
+                Texture2D socksTexture = KitTextureFactory.GetKitTexture(device, baseTexture, socks,
+                    new Rectangle(0, 256, 256, 256));
+                
+                foreach (var part in _playerModel.Parts)
+                {
+                    string name = part.Name ?? "";
+                    if (name == "Soccer_Shirt")
+                        animator.Instance.SetPartTexture(part.Name, shirtTexture);
+                    else if (name == "Soccer_Shorts")
+                        animator.Instance.SetPartTexture(part.Name, shortsTexture);
+                    else if (name.StartsWith("Soccer_Sock"))
+                        animator.Instance.SetPartTexture(part.Name, socksTexture);
+                }
+            }
+            else
+            {
+                Texture2D shirtTexture = KitTextureFactory.GetKitTexture(device, baseTexture, shirt);
+                Texture2D shortsTexture = KitTextureFactory.GetKitTexture(device, baseTexture, shorts);
+                
+                foreach (var part in _playerModel.Parts)
+                {
+                    string name = part.Name ?? "";
+                    if (name.Contains("Body") || name.Contains("Arm") || name.Contains("Helmet"))
+                        animator.Instance.SetPartTexture(part.Name, shirtTexture);
+                    else if (name.Contains("Leg"))
+                        animator.Instance.SetPartTexture(part.Name, shortsTexture);
+                }
             }
         }
         
-        private static Color GetKitShirtColor(Player player, int homeTeamId)
+        /// <summary>Shirt/shorts/socks colors per team, sampled from the 2D kit sprite sheets.</summary>
+        private static void GetKitColors(Player player, int homeTeamId, out Color shirt, out Color shorts, out Color socks)
         {
-            // Colors sampled from the 2D kit sprite sheets
             switch (player.Team?.KitName)
             {
-                case "no_pasaran_kit": return new Color(224, 0, 0);
-                case "asalagitos_kit": return new Color(128, 96, 160);
-                case "asteras_exarcheion_kit": return new Color(35, 35, 40);
-                case "chandrinaikos_kit": return new Color(0, 64, 160);
-                case "tiganitis_kit": return new Color(224, 224, 224);
+                case "no_pasaran_kit":
+                    shirt = new Color(224, 0, 0); shorts = new Color(240, 240, 240); socks = new Color(224, 0, 0);
+                    break;
+                case "asalagitos_kit":
+                    shirt = new Color(128, 96, 160); shorts = new Color(50, 40, 70); socks = new Color(128, 96, 160);
+                    break;
+                case "asteras_exarcheion_kit":
+                    shirt = new Color(35, 35, 40); shorts = new Color(35, 35, 40); socks = new Color(35, 35, 40);
+                    break;
+                case "chandrinaikos_kit":
+                    shirt = new Color(0, 64, 160); shorts = new Color(240, 240, 240); socks = new Color(0, 64, 160);
+                    break;
+                case "tiganitis_kit":
+                    shirt = new Color(240, 240, 240); shorts = new Color(35, 35, 40); socks = new Color(224, 160, 0);
+                    break;
                 default:
                     // No named kit: home blue / away red (player_*_multi defaults)
-                    return player.TeamId == homeTeamId ? new Color(0, 64, 160) : new Color(128, 0, 0);
+                    if (player.TeamId == homeTeamId)
+                    {
+                        shirt = new Color(0, 64, 160); shorts = new Color(240, 240, 240); socks = new Color(0, 64, 160);
+                    }
+                    else
+                    {
+                        shirt = new Color(128, 0, 0); shorts = new Color(35, 35, 40); socks = new Color(128, 0, 0);
+                    }
+                    break;
             }
         }
         

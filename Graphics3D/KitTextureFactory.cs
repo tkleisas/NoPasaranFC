@@ -23,32 +23,46 @@ namespace NoPasaranFC.Graphics3D
         private const int RegionW = 128;
         private const int RegionH = 256;
 
-        // Luminance remap gain: mid-gray armor (~0.5) maps to the full kit color
-        private const float Gain = 1.7f;
 
         private static readonly Dictionary<string, Texture2D> _cache = new Dictionary<string, Texture2D>();
 
         /// <summary>
-        /// Returns a texture where the armor region is recolored to kitColor.
-        /// Cached per (source texture, color).
+        /// Returns a texture where the given region is recolored to kitColor
+        /// (luminance-preserving). Cached per (source texture, region, color).
         /// </summary>
-        public static Texture2D GetKitTexture(GraphicsDevice device, Texture2D baseTexture, Color kitColor)
+        public static Texture2D GetKitTexture(GraphicsDevice device, Texture2D baseTexture, Color kitColor,
+            Rectangle? region = null)
         {
-            string key = $"{baseTexture.GetHashCode()}:{kitColor.PackedValue:X8}";
+            Rectangle r = region ?? new Rectangle(RegionX, RegionY, RegionW, RegionH);
+            string key = $"{baseTexture.GetHashCode()}:{kitColor.PackedValue:X8}:{r.X},{r.Y},{r.Width},{r.Height}";
             if (_cache.TryGetValue(key, out var cached))
                 return cached;
 
             var pixels = new Color[baseTexture.Width * baseTexture.Height];
             baseTexture.GetData(pixels);
 
-            for (int y = RegionY; y < RegionY + RegionH; y++)
+            // Normalize by the region's max luminance so the brightest authored
+            // shade maps exactly onto the kit color (white kits stay white even
+            // in regions authored dark, and vice versa).
+            float maxLuminance = 0.01f;
+            for (int y = r.Y; y < r.Y + r.Height; y++)
             {
-                for (int x = RegionX; x < RegionX + RegionW; x++)
+                for (int x = r.X; x < r.X + r.Width; x++)
+                {
+                    Color p = pixels[y * baseTexture.Width + x];
+                    float l = (p.R * 0.299f + p.G * 0.587f + p.B * 0.114f) / 255f;
+                    if (l > maxLuminance) maxLuminance = l;
+                }
+            }
+            
+            for (int y = r.Y; y < r.Y + r.Height; y++)
+            {
+                for (int x = r.X; x < r.X + r.Width; x++)
                 {
                     int i = y * baseTexture.Width + x;
                     Color p = pixels[i];
                     float luminance = (p.R * 0.299f + p.G * 0.587f + p.B * 0.114f) / 255f;
-                    float k = Math.Min(1f, luminance * Gain);
+                    float k = Math.Min(1f, luminance / maxLuminance);
                     pixels[i] = new Color(
                         (int)(kitColor.R * k),
                         (int)(kitColor.G * k),

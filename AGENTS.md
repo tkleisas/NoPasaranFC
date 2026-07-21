@@ -514,6 +514,12 @@ Use UTF8 encoding for all text data as there is multilingual support.
    - **Debug console** (Debugging/): TCP on 127.0.0.1:7777 enabled via NOPASARAN_DEBUG=1 - screenshot capture, key injection through a DebugInput seam, state query, match jump; Scripts/dbg.py client
    - **Spikes/SkinnedSpike**: standalone skinned-animation proof-of-concept kept for reference
 
+39. ✅ **Blender-built assets and 3D kit system**:
+   - **Blender MCP pipeline**: Blender 4.2 runs with the blender-mcp addon (127.0.0.1:9876); driven via Scripts/blender_exec.py; .kimi-code/mcp.json registers the server (gitignored)
+   - **Soccer ball**: procedural pentagon-panel texture (icosahedron Voronoi geometry) built in Blender; SoccerBall.blend source; applied to the 3D ball with white fallback
+   - **Player.glb**: chibi soccer player built in Blender on the KayKit skeleton (all 76 animation clips preserved via glTF round-trip); mesh parts Soccer_Skin/Hair/Shirt/Shorts/SockLeft/SockRight/BootLeft/BootRight; 512x512 atlas with dedicated shirt/shorts/socks quadrant regions; Player.blend source
+   - **Kit system**: KitTextureFactory recolors texture regions per team with luminance normalization (region max maps to exact kit color); per-mesh-part texture overrides; shirt/shorts/socks colors per team sampled from the 2D kit sheets; renderer prefers Player.glb, falls back to Knight.glb, then billboards
+
 ## Next Steps (Future Enhancements):
 - Add alternative formations (4-3-3, 3-5-2, etc.)
 - Add more match events (fouls, corners, throw-ins, offsides)
