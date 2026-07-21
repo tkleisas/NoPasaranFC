@@ -19,19 +19,25 @@ namespace NoPasaranFC.Graphics3D
         public int ViewportWidth { get; private set; }
         public int ViewportHeight { get; private set; }
         
-        // Base broadcast rig (at CameraZoom = 0.8); scaled by zoom at runtime
-        // ~25° elevation, telephoto FOV for a TV-broadcast feel
-        // "High" mode is a higher tactical view, further away with a wider FOV
-        private const float BroadcastHeight = 11f;
-        private const float BroadcastDistance = 24f;
+        // Camera rigs (at CameraZoom = 0.8); scaled by zoom at runtime.
+        // Broadcast: low TV-style side view, close to the players.
+        // High: higher tactical view, further away with a wider FOV.
+        // TopDown: near-vertical view like the classic 2D mode.
+        private const float BroadcastHeight = 8f;
+        private const float BroadcastDistance = 17f;
         private const float HighHeight = 22f;
         private const float HighDistance = 36f;
+        private const float TopDownHeight = 55f;
+        private const float TopDownDistance = 6f;
         private const float BaseZoom = 0.8f;
         private static readonly float BroadcastFov = MathHelper.ToRadians(30f);
         private static readonly float HighFov = MathHelper.ToRadians(32f);
+        private static readonly float TopDownFov = MathHelper.ToRadians(40f);
         
-        private static bool HighMode => GameSettings.Instance.CameraMode == "High";
-        private static float CurrentFov => HighMode ? HighFov : BroadcastFov;
+        private static string Mode => GameSettings.Instance.CameraMode ?? "Broadcast";
+        private static bool HighMode => Mode == "High";
+        private static bool TopDownMode => Mode == "TopDown";
+        private static float CurrentFov => TopDownMode ? TopDownFov : (HighMode ? HighFov : BroadcastFov);
         
         public Camera3D(int viewportWidth, int viewportHeight)
         {
@@ -96,8 +102,8 @@ namespace NoPasaranFC.Graphics3D
         {
             // Zoom > base => closer/lower; zoom < base => further/higher
             float zoomScale = BaseZoom / Math.Clamp(GameSettings.Instance.CameraZoom, 0.1f, 2f);
-            float height = (HighMode ? HighHeight : BroadcastHeight) * zoomScale;
-            float distance = (HighMode ? HighDistance : BroadcastDistance) * zoomScale;
+            float height = (TopDownMode ? TopDownHeight : HighMode ? HighHeight : BroadcastHeight) * zoomScale;
+            float distance = (TopDownMode ? TopDownDistance : HighMode ? HighDistance : BroadcastDistance) * zoomScale;
             
             // Camera sits on the POSITIVE Z side, looking toward -Z. This matches
             // the 2D top-down view (and minimap) orientation: engine +X is screen
@@ -105,11 +111,21 @@ namespace NoPasaranFC.Graphics3D
             // would mirror both axes and reverse the controls.
             Position = Target + new Vector3(0f, height, distance);
             
-            // Look slightly above and ahead of the ball: lifts the horizon into
-            // frame so the stands, crowd, floodlights and sky are visible at the
-            // top (classic broadcast framing). Otherwise the top ray stays below
-            // the horizon and everything above ~1m at the far side is cut off.
-            Vector3 lookAt = Target + new Vector3(0f, 3.5f, -7f);
+            Vector3 lookAt;
+            if (TopDownMode)
+            {
+                // Near-vertical: look straight down with a slight forward tilt so
+                // goal depth and player shapes still read (like the 2D view).
+                lookAt = Target + new Vector3(0f, 0f, -2f);
+            }
+            else
+            {
+                // Look slightly above and ahead of the ball: lifts the horizon into
+                // frame so the stands, crowd, floodlights and sky are visible at the
+                // top (classic broadcast framing). Otherwise the top ray stays below
+                // the horizon and everything above ~1m at the far side is cut off.
+                lookAt = Target + new Vector3(0f, 2.5f, -5f);
+            }
             View = Matrix.CreateLookAt(Position, lookAt, Vector3.Up);
         }
     }

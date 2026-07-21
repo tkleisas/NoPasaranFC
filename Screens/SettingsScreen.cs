@@ -142,7 +142,7 @@ namespace NoPasaranFC.Screens
         private readonly string[] _languages = new[] { "en", "el" };
         private int _languageIndex;
         
-        private static readonly string[] _cameraModes = new[] { "Broadcast", "High" };
+        private static readonly string[] _cameraModes = new[] { "Broadcast", "High", "TopDown" };
         private static readonly string[] _timeOfDayOptions = new[] { "Day", "Sunset", "Night", "Random" };
         private static readonly string[] _weatherOptions = new[] { "Clear", "Rain", "Random" };
         

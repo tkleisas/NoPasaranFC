@@ -178,6 +178,7 @@ namespace NoPasaranFC.Models
                 
                 ["settings.cameraMode.broadcast"] = "Broadcast",
                 ["settings.cameraMode.high"] = "High",
+                ["settings.cameraMode.topdown"] = "Top-Down",
                 ["settings.timeOfDay.day"] = "Day",
                 ["settings.timeOfDay.sunset"] = "Sunset",
                 ["settings.timeOfDay.night"] = "Night",
@@ -310,6 +311,7 @@ namespace NoPasaranFC.Models
                 
                 ["settings.cameraMode.broadcast"] = "Τηλεοπτική",
                 ["settings.cameraMode.high"] = "Ψηλή",
+                ["settings.cameraMode.topdown"] = "Κάτωθεν",
                 ["settings.timeOfDay.day"] = "Μέρα",
                 ["settings.timeOfDay.sunset"] = "Δύση",
                 ["settings.timeOfDay.night"] = "Νύχτα",

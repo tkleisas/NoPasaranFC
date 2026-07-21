@@ -12,9 +12,10 @@ namespace NoPasaranFC.Graphics3D
     /// </summary>
     public class Ball3D
     {
-        // Real football radius (~22cm diameter). The 2D sprite scale (32px vs
-        // 128px players) is stylized and far too big against 1.8m players.
-        public static readonly float RadiusMeters = 0.11f;
+        // Stylized ball size: roughly the chibi player head diameter (~0.4m),
+        // matching the game's chibi proportions (a realistic 22cm ball reads
+        // tiny next to the oversized heads). Real football would be 0.11f.
+        public static readonly float RadiusMeters = 0.19f;
         
         private readonly BasicEffect _sphereEffect;
         private readonly BasicEffect _shadowEffect;
