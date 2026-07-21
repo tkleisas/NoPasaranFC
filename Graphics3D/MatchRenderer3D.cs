@@ -37,6 +37,7 @@ namespace NoPasaranFC.Graphics3D
         // Skinned 3D players (null => billboard fallback)
         private SkinnedModel _playerModel;
         private readonly Dictionary<Player, PlayerAnimator> _playerAnimators = new Dictionary<Player, PlayerAnimator>();
+        private readonly HashSet<Player> _kitsApplied = new HashSet<Player>();
 
         // KayKit chibi is ~2.3 units tall; scale to ~1.7m
         private const float PlayerModelScale = 0.75f;
@@ -284,10 +285,12 @@ namespace NoPasaranFC.Graphics3D
                 if (!_playerAnimators.TryGetValue(player, out var animator))
                     continue;
                 
+                // Per-team kit textures (shirt/shorts/socks recolor), applied once per player
+                if (_kitsApplied.Add(player))
+                    ApplyKit(device, player, homeTeamId, animator);
+                
                 Vector3 pos = WorldUnits.ToWorld(player.FieldPosition);
                 
-                // Home team untinted, away team tinted red-ish (matches billboard team colors)
-                animator.Instance.SetTint(player.TeamId == homeTeamId ? (Color?)null : AwayTeamTint);
                 animator.Instance.Environment = _environment;
                 
                 Matrix world = Matrix.CreateScale(PlayerModelScale)
@@ -295,6 +298,47 @@ namespace NoPasaranFC.Graphics3D
                     * Matrix.CreateTranslation(pos);
                 
                 animator.Instance.Draw(device, world, _camera.View, _camera.Projection);
+            }
+        }
+        
+        /// <summary>
+        /// Recolors the player's armor parts to the team kit: Body/Arms/Helmet get
+        /// the shirt color, Legs a darker shorts/socks shade. Skin (Head) untouched.
+        /// Kit colors mirror the 2D kit sprite sheets (falling back to home blue /
+        /// away red for teams without a named kit).
+        /// </summary>
+        private void ApplyKit(GraphicsDevice device, Player player, int homeTeamId, PlayerAnimator animator)
+        {
+            Color shirt = GetKitShirtColor(player, homeTeamId);
+            Color shorts = KitTextureFactory.Darken(shirt);
+            
+            Texture2D baseTexture = _playerModel.Parts[0].Texture;
+            Texture2D shirtTexture = KitTextureFactory.GetKitTexture(device, baseTexture, shirt);
+            Texture2D shortsTexture = KitTextureFactory.GetKitTexture(device, baseTexture, shorts);
+            
+            foreach (var part in _playerModel.Parts)
+            {
+                string name = part.Name ?? "";
+                if (name.Contains("Body") || name.Contains("Arm") || name.Contains("Helmet"))
+                    animator.Instance.SetPartTexture(part.Name, shirtTexture);
+                else if (name.Contains("Leg"))
+                    animator.Instance.SetPartTexture(part.Name, shortsTexture);
+            }
+        }
+        
+        private static Color GetKitShirtColor(Player player, int homeTeamId)
+        {
+            // Colors sampled from the 2D kit sprite sheets
+            switch (player.Team?.KitName)
+            {
+                case "no_pasaran_kit": return new Color(224, 0, 0);
+                case "asalagitos_kit": return new Color(128, 96, 160);
+                case "asteras_exarcheion_kit": return new Color(35, 35, 40);
+                case "chandrinaikos_kit": return new Color(0, 64, 160);
+                case "tiganitis_kit": return new Color(224, 224, 224);
+                default:
+                    // No named kit: home blue / away red (player_*_multi defaults)
+                    return player.TeamId == homeTeamId ? new Color(0, 64, 160) : new Color(128, 0, 0);
             }
         }
         

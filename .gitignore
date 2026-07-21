@@ -366,3 +366,9 @@ FodyWeavers.xsd
 
 # Runtime debug artifact
 match_debug.txt
+
+# Local MCP server config (machine-specific paths)
+.kimi-code/
+
+# Blender backup files
+*.blend1

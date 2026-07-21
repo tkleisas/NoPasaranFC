@@ -36,6 +36,15 @@ namespace NoPasaranFC.Graphics3D
             _sphereEffect.DiffuseColor = Color.White.ToVector3();
             _sphereEffect.SpecularColor = new Vector3(0.2f);
             
+            // Real soccer-ball panels (generated in Blender, Content/Models3D).
+            // Optional: if the file is missing the ball stays plain white.
+            var panelTexture = TryLoadPanelTexture(device);
+            if (panelTexture != null)
+            {
+                _sphereEffect.Texture = panelTexture;
+                _sphereEffect.TextureEnabled = true;
+            }
+            
             _shadowEffect = new BasicEffect(device)
             {
                 VertexColorEnabled = false,
@@ -47,6 +56,27 @@ namespace NoPasaranFC.Graphics3D
             
             BuildSphere(12, 12);
             BuildShadow();
+        }
+        
+        private static Texture2D TryLoadPanelTexture(GraphicsDevice device)
+        {
+            try
+            {
+#if ANDROID
+                var context = global::Android.App.Application.Context;
+                using (var stream = context.Assets.Open("Content/Models3D/ball_texture.png"))
+                    return Texture2D.FromStream(device, stream);
+#else
+                string path = PlatformHelper.GetAssetPath(System.IO.Path.Combine("Content", "Models3D", "ball_texture.png"));
+                using (var stream = System.IO.File.OpenRead(path))
+                    return Texture2D.FromStream(device, stream);
+#endif
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Ball3D: no panel texture ({ex.Message}) - plain white ball.");
+                return null;
+            }
         }
         
         /// <summary>Applies the match environment lighting to the ball sphere.</summary>

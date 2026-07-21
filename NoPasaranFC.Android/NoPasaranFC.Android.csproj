@@ -51,6 +51,7 @@
     <AndroidAsset Include="..\Database\teams_seed.json" Link="Assets\Database\teams_seed.json" />
     <AndroidAsset Include="..\Database\championships_seed.json" Link="Assets\Database\championships_seed.json" />
     <AndroidAsset Include="..\Content\Models3D\*.glb" Link="Assets\Content\Models3D\%(Filename)%(Extension)" />
+    <AndroidAsset Include="..\Content\Models3D\*.png" Link="Assets\Content\Models3D\%(Filename)%(Extension)" />
     <!-- Explicitly exclude database files -->
     <AndroidAsset Remove="**\*.db" />
     <AndroidAsset Remove="**\nopasaran.db" />

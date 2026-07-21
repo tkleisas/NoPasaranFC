@@ -34,6 +34,7 @@ namespace NoPasaranFC.Graphics3D.Skinning
     /// <summary>One renderable mesh part sharing the model's skeleton.</summary>
     public class SkinnedMeshPart
     {
+        public string Name;
         public VertexBuffer Vertices;
         public IndexBuffer Indices;
         public Texture2D Texture;
@@ -175,6 +176,7 @@ namespace NoPasaranFC.Graphics3D.Skinning
                     }
 
                     var part = new SkinnedMeshPart();
+                    part.Name = node.Name ?? node.Mesh.Name; // node names are semantic (Knight_Body etc.)
                     part.Vertices = new VertexBuffer(device, SkinnedVertex.Declaration, verts.Length, BufferUsage.WriteOnly);
                     part.Vertices.SetData(verts);
 

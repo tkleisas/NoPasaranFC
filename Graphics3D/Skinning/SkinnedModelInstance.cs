@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
@@ -22,6 +23,7 @@ namespace NoPasaranFC.Graphics3D.Skinning
         private readonly SkinnedModel.NodePose[] _poseOut;
         private SkinnedEffect _effect;
         private Vector3 _tint = Vector3.One;
+        private readonly Dictionary<string, Texture2D> _partTextureOverrides = new Dictionary<string, Texture2D>();
 
         public AnimationClip CurrentClip { get; private set; }
         public float CurrentTime { get; private set; }
@@ -81,6 +83,18 @@ namespace NoPasaranFC.Graphics3D.Skinning
         public void SetTint(Color? tint)
         {
             _tint = tint?.ToVector3() ?? Vector3.One;
+        }
+        
+        /// <summary>
+        /// Overrides the texture of one mesh part for this instance only
+        /// (kit recoloring). Null removes the override.
+        /// </summary>
+        public void SetPartTexture(string partName, Texture2D texture)
+        {
+            if (texture == null)
+                _partTextureOverrides.Remove(partName);
+            else
+                _partTextureOverrides[partName] = texture;
         }
         
         /// <summary>Optional match environment; when set its lighting replaces the default rig.</summary>
@@ -143,7 +157,9 @@ namespace NoPasaranFC.Graphics3D.Skinning
 
             foreach (var part in _model.Parts)
             {
-                _effect.Texture = part.Texture; // always non-null (magenta fallback)
+                _effect.Texture = _partTextureOverrides.TryGetValue(part.Name, out var overrideTexture)
+                    ? overrideTexture
+                    : part.Texture; // always non-null (magenta fallback)
 
                 device.SetVertexBuffer(part.Vertices);
                 device.Indices = part.Indices;
