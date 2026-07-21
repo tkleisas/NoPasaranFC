@@ -334,11 +334,15 @@ namespace NoPasaranFC.Graphics3D
                 Texture2D socksTexture = KitTextureFactory.GetKitTexture(device, baseTexture, socks,
                     new Rectangle(0, 256, 256, 256));
                 
+                // Per-player: shirt number stamped on the back
+                Texture2D numberedShirt = KitTextureFactory.GetNumberedShirtTexture(device, shirtTexture,
+                    player.ShirtNumber, KitTextureFactory.ContrastFor(shirt));
+                
                 foreach (var part in _playerModel.Parts)
                 {
                     string name = part.Name ?? "";
                     if (name == "Soccer_Shirt")
-                        animator.Instance.SetPartTexture(part.Name, shirtTexture);
+                        animator.Instance.SetPartTexture(part.Name, numberedShirt);
                     else if (name == "Soccer_Shorts")
                         animator.Instance.SetPartTexture(part.Name, shortsTexture);
                     else if (name.StartsWith("Soccer_Sock"))

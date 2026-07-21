@@ -85,5 +85,89 @@ namespace NoPasaranFC.Graphics3D
                 (int)(color.G * factor),
                 (int)(color.B * factor));
         }
+        
+        #region Shirt numbers
+        
+        // Number stamp zone on the Player.glb shirt back (image px in the 512x512
+        // atlas, measured from the mesh UVs): mid-torso back, reads correctly
+        // (not mirrored) when viewed from behind.
+        private static readonly Point ShirtBackCenter = new Point(184, 128);
+        private const int DigitBlock = 7;   // px per font block
+        private const int DigitGap = 6;     // px between digits
+        
+        // 3x5 block font
+        private static readonly string[] DigitGlyphs =
+        {
+            "111101101101111", // 0
+            "010110010010111", // 1
+            "111001111100111", // 2
+            "111001111001111", // 3
+            "101101111001001", // 4
+            "111100111001111", // 5
+            "111100111101111", // 6
+            "111001001010010", // 7
+            "111101111101111", // 8
+            "111101111001111", // 9
+        };
+        
+        /// <summary>
+        /// Returns a copy of the (already team-colored) shirt texture with the
+        /// player's shirt number stamped on the back. Cached per texture/number/color.
+        /// Only meaningful for the SoccerPlayer atlas layout.
+        /// </summary>
+        public static Texture2D GetNumberedShirtTexture(GraphicsDevice device, Texture2D shirtTexture,
+            int shirtNumber, Color digitColor)
+        {
+            string key = $"num:{shirtTexture.GetHashCode()}:{shirtNumber}:{digitColor.PackedValue:X8}";
+            if (_cache.TryGetValue(key, out var cached))
+                return cached;
+            
+            var pixels = new Color[shirtTexture.Width * shirtTexture.Height];
+            shirtTexture.GetData(pixels);
+            
+            string digits = Math.Clamp(shirtNumber, 1, 99).ToString();
+            int digitWidth = 3 * DigitBlock;
+            int digitHeight = 5 * DigitBlock;
+            int totalWidth = digits.Length * digitWidth + (digits.Length - 1) * DigitGap;
+            int startX = ShirtBackCenter.X - totalWidth / 2;
+            int startY = ShirtBackCenter.Y - digitHeight / 2;
+            
+            for (int d = 0; d < digits.Length; d++)
+            {
+                string glyph = DigitGlyphs[digits[d] - '0'];
+                int baseX = startX + d * (digitWidth + DigitGap);
+                for (int row = 0; row < 5; row++)
+                {
+                    for (int col = 0; col < 3; col++)
+                    {
+                        if (glyph[row * 3 + col] != '1') continue;
+                        for (int by = 0; by < DigitBlock; by++)
+                        {
+                            for (int bx = 0; bx < DigitBlock; bx++)
+                            {
+                                int x = baseX + col * DigitBlock + bx;
+                                int y = startY + row * DigitBlock + by;
+                                if (x >= 0 && x < shirtTexture.Width && y >= 0 && y < shirtTexture.Height)
+                                    pixels[y * shirtTexture.Width + x] = digitColor;
+                            }
+                        }
+                    }
+                }
+            }
+            
+            var texture = new Texture2D(device, shirtTexture.Width, shirtTexture.Height);
+            texture.SetData(pixels);
+            _cache[key] = texture;
+            return texture;
+        }
+        
+        /// <summary>Readable digit color for a kit: black on light shirts, white on dark.</summary>
+        public static Color ContrastFor(Color kitColor)
+        {
+            float luminance = (kitColor.R * 0.299f + kitColor.G * 0.587f + kitColor.B * 0.114f) / 255f;
+            return luminance > 0.55f ? new Color(20, 20, 20) : new Color(245, 245, 245);
+        }
+        
+        #endregion
     }
 }
