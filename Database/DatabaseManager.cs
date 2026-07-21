@@ -114,7 +114,10 @@ namespace NoPasaranFC.Database
                     CameraZoom REAL DEFAULT 0.8,
                     CameraSpeed REAL DEFAULT 0.1,
                     Language TEXT DEFAULT 'en',
-                    MatchViewMode TEXT DEFAULT '2D'
+                    MatchViewMode TEXT DEFAULT '2D',
+                    CameraMode TEXT DEFAULT 'Broadcast',
+                    TimeOfDay TEXT DEFAULT 'Day',
+                    Weather TEXT DEFAULT 'Clear'
                 );
             ";
             command.ExecuteNonQuery();
@@ -159,8 +162,16 @@ namespace NoPasaranFC.Database
                 currentVersion = 4;
             }
 
+            if (currentVersion < 5)
+            {
+                // Migration 5: Add CameraMode/TimeOfDay/Weather columns to Settings table
+                ApplyMigration5_Add3DViewSettings(connection);
+                SetSchemaVersion(connection, 5);
+                currentVersion = 5;
+            }
+
             // Add future migrations here:
-            // if (currentVersion < 5) { ... }
+            // if (currentVersion < 6) { ... }
         }
         
         private int GetSchemaVersion(SqliteConnection connection)
@@ -212,6 +223,48 @@ namespace NoPasaranFC.Database
             {
                 var alterCommand = connection.CreateCommand();
                 alterCommand.CommandText = "ALTER TABLE Settings ADD COLUMN MatchViewMode TEXT DEFAULT '2D'";
+                alterCommand.ExecuteNonQuery();
+            }
+        }
+
+        private void ApplyMigration5_Add3DViewSettings(SqliteConnection connection)
+        {
+            // Check which columns already exist
+            var checkCommand = connection.CreateCommand();
+            checkCommand.CommandText = "PRAGMA table_info(Settings)";
+
+            bool hasCameraMode = false;
+            bool hasTimeOfDay = false;
+            bool hasWeather = false;
+            using (var reader = checkCommand.ExecuteReader())
+            {
+                while (reader.Read())
+                {
+                    string columnName = reader.GetString(1);
+                    if (columnName == "CameraMode") hasCameraMode = true;
+                    if (columnName == "TimeOfDay") hasTimeOfDay = true;
+                    if (columnName == "Weather") hasWeather = true;
+                }
+            }
+
+            if (!hasCameraMode)
+            {
+                var alterCommand = connection.CreateCommand();
+                alterCommand.CommandText = "ALTER TABLE Settings ADD COLUMN CameraMode TEXT DEFAULT 'Broadcast'";
+                alterCommand.ExecuteNonQuery();
+            }
+
+            if (!hasTimeOfDay)
+            {
+                var alterCommand = connection.CreateCommand();
+                alterCommand.CommandText = "ALTER TABLE Settings ADD COLUMN TimeOfDay TEXT DEFAULT 'Day'";
+                alterCommand.ExecuteNonQuery();
+            }
+
+            if (!hasWeather)
+            {
+                var alterCommand = connection.CreateCommand();
+                alterCommand.CommandText = "ALTER TABLE Settings ADD COLUMN Weather TEXT DEFAULT 'Clear'";
                 alterCommand.ExecuteNonQuery();
             }
         }
@@ -623,13 +676,15 @@ namespace NoPasaranFC.Database
                     MasterVolume, MusicVolume, SfxVolume, MuteAll,
                     Difficulty, MatchDurationMinutes, PlayerSpeedMultiplier,
                     ShowMinimap, ShowPlayerNames, ShowStamina,
-                    CameraZoom, CameraSpeed, Language, MatchViewMode
+                    CameraZoom, CameraSpeed, Language, MatchViewMode,
+                    CameraMode, TimeOfDay, Weather
                 ) VALUES (
                     1, @resWidth, @resHeight, @fullscreen, @vsync,
                     @masterVol, @musicVol, @sfxVol, @muteAll,
                     @difficulty, @matchDuration, @speedMulti,
                     @showMap, @showNames, @showStamina,
-                    @camZoom, @camSpeed, @language, @matchViewMode
+                    @camZoom, @camSpeed, @language, @matchViewMode,
+                    @cameraMode, @timeOfDay, @weather
                 );
             ";
             
@@ -651,6 +706,9 @@ namespace NoPasaranFC.Database
             command.Parameters.AddWithValue("@camSpeed", settings.CameraSpeed);
             command.Parameters.AddWithValue("@language", settings.Language);
             command.Parameters.AddWithValue("@matchViewMode", settings.MatchViewMode ?? "2D");
+            command.Parameters.AddWithValue("@cameraMode", settings.CameraMode ?? "Broadcast");
+            command.Parameters.AddWithValue("@timeOfDay", settings.TimeOfDay ?? "Day");
+            command.Parameters.AddWithValue("@weather", settings.Weather ?? "Clear");
             
             command.ExecuteNonQuery();
         }
@@ -685,7 +743,10 @@ namespace NoPasaranFC.Database
                     CameraZoom = reader.GetFloat(15),
                     CameraSpeed = reader.GetFloat(16),
                     Language = reader.GetString(17),
-                    MatchViewMode = reader.FieldCount > 18 && !reader.IsDBNull(18) ? reader.GetString(18) : "2D"
+                    MatchViewMode = reader.FieldCount > 18 && !reader.IsDBNull(18) ? reader.GetString(18) : "2D",
+                    CameraMode = reader.FieldCount > 19 && !reader.IsDBNull(19) ? reader.GetString(19) : "Broadcast",
+                    TimeOfDay = reader.FieldCount > 20 && !reader.IsDBNull(20) ? reader.GetString(20) : "Day",
+                    Weather = reader.FieldCount > 21 && !reader.IsDBNull(21) ? reader.GetString(21) : "Clear"
                 };
                 return settings;
             }

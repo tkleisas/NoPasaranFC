@@ -503,6 +503,17 @@ Use UTF8 encoding for all text data as there is multilingual support.
    - **Sound feedback**: Kick sound volume scales with power (0.4-0.7)
    - **Created THROW_IN_SYSTEM.md**: Complete technical documentation
 
+38. ✅ **Optional 3D Match View (v2.0.0)**:
+   - **Additive "Match View" setting** (2D/3D, persisted, default 2D) - the classic 2D rendering is fully preserved
+   - **Graphics3D renderer** (metric world, 73px = 1m, Y-up): striped pitch with FIFA markings, 3D goals, stadium, rolling ball with soft blob shadow
+   - **Broadcast camera** matching 2D/minimap orientation (controls feel identical), plus "High" tactical camera (Camera setting)
+   - **Rigged GPU-skinned players**: runtime GLB loading (SharpGLTF) + MonoGame SkinnedEffect; KayKit characters (CC0) with state-driven clips (idle/walk/run/kick/tackle/knockdown/celebrate/throw-in), 0.3s cross-fades, one-shots with auto-return to locomotion, away-team tint, billboard fallback
+   - **Screen-space indicators in 3D**: pulsing control ring, name labels, stamina bars, shot power bar (projected world→screen)
+   - **Match ambience**: Day/Sunset/Night lighting presets (+ Random), floodlight pylons at night, Rain weather system (streak particles), 3-tier stadium bowl with animated blocky crowd and ad boards
+   - **3D cloth goal nets**: spring-mass panels (back/top/sides) with wind sway and ball-impact deformation (visual only; engine net physics unchanged)
+   - **Debug console** (Debugging/): TCP on 127.0.0.1:7777 enabled via NOPASARAN_DEBUG=1 - screenshot capture, key injection through a DebugInput seam, state query, match jump; Scripts/dbg.py client
+   - **Spikes/SkinnedSpike**: standalone skinned-animation proof-of-concept kept for reference
+
 ## Next Steps (Future Enhancements):
 - Add alternative formations (4-3-3, 3-5-2, etc.)
 - Add more match events (fouls, corners, throw-ins, offsides)

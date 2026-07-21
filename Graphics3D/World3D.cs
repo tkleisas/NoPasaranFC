@@ -17,17 +17,24 @@ namespace NoPasaranFC.Graphics3D
         private readonly BasicEffect _pitchEffect;
         private readonly Texture2D _grassTexture;
         
-        // Opaque geometry (apron, ground, markings, posts, stands)
+        // Opaque geometry (apron, ground, markings, posts, stands, ad boards)
         private VertexPositionColor[] _opaqueVertices;
         private int[] _opaqueIndices;
-        
-        // Semi-transparent geometry (goal nets)
-        private VertexPositionColor[] _netVertices;
-        private int[] _netIndices;
         
         // Textured pitch plane
         private VertexPositionTexture[] _pitchVertices;
         private int[] _pitchIndices;
+        
+        // Crowd (animated stand fronts, tiled texture)
+        private BasicEffect _crowdEffect;
+        private Texture2D[] _crowdTextures;
+        private readonly List<VertexPositionTexture> _crowdVertList = new List<VertexPositionTexture>();
+        private readonly List<int> _crowdIndexList = new List<int>();
+        private VertexPositionTexture[] _crowdVertices;
+        private int[] _crowdIndices;
+        private float _crowdTimer;
+        private int _crowdTextureIndex;
+        private const float CrowdFrameDuration = 0.4f;
         
         // Field dimensions in meters (same constants as MatchScreen.DrawFieldMarkings)
         private readonly float _halfLength = WorldUnits.PitchLengthMeters / 2f;   // 52.5
@@ -53,9 +60,39 @@ namespace NoPasaranFC.Graphics3D
                 LightingEnabled = false
             };
             
+            _crowdTextures = CreateCrowdTextures(device);
+            _crowdEffect = new BasicEffect(device)
+            {
+                VertexColorEnabled = false,
+                TextureEnabled = true,
+                Texture = _crowdTextures[0],
+                LightingEnabled = false
+            };
+            
             BuildPitch();
             BuildOpaqueGeometry();
-            BuildNetGeometry();
+            
+            _crowdVertices = _crowdVertList.ToArray();
+            _crowdIndices = _crowdIndexList.ToArray();
+        }
+        
+        /// <summary>Applies the environment tint to all world effects.</summary>
+        public void ApplyEnvironment(MatchEnvironment environment)
+        {
+            environment.ApplyTo(_colorEffect, false);
+            environment.ApplyTo(_pitchEffect, false);
+            environment.ApplyTo(_crowdEffect, false);
+        }
+        
+        /// <summary>Cycles the crowd textures for a shimmering crowd effect.</summary>
+        public void Update(float dt)
+        {
+            _crowdTimer += dt;
+            if (_crowdTimer >= CrowdFrameDuration)
+            {
+                _crowdTimer = 0f;
+                _crowdTextureIndex = (_crowdTextureIndex + 1) % _crowdTextures.Length;
+            }
         }
         
         public void Draw(GraphicsDevice device, Matrix view, Matrix projection)
@@ -66,6 +103,9 @@ namespace NoPasaranFC.Graphics3D
             _pitchEffect.View = view;
             _pitchEffect.Projection = projection;
             _pitchEffect.World = Matrix.Identity;
+            _crowdEffect.View = view;
+            _crowdEffect.Projection = projection;
+            _crowdEffect.World = Matrix.Identity;
             
             device.BlendState = BlendState.Opaque;
             device.DepthStencilState = DepthStencilState.Default;
@@ -89,16 +129,16 @@ namespace NoPasaranFC.Graphics3D
                     _opaqueIndices, 0, _opaqueIndices.Length / 3);
             }
             
-            // Semi-transparent nets on top
-            device.BlendState = BlendState.AlphaBlend;
-            foreach (var pass in _colorEffect.CurrentTechnique.Passes)
+            // Animated crowd on the stand fronts (tiled horizontally)
+            _crowdEffect.Texture = _crowdTextures[_crowdTextureIndex];
+            device.SamplerStates[0] = SamplerState.LinearWrap;
+            foreach (var pass in _crowdEffect.CurrentTechnique.Passes)
             {
                 pass.Apply();
                 device.DrawUserIndexedPrimitives(PrimitiveType.TriangleList,
-                    _netVertices, 0, _netVertices.Length,
-                    _netIndices, 0, _netIndices.Length / 3);
+                    _crowdVertices, 0, _crowdVertices.Length,
+                    _crowdIndices, 0, _crowdIndices.Length / 3);
             }
-            device.BlendState = BlendState.Opaque;
         }
         
         #region Pitch + grass texture
@@ -161,6 +201,7 @@ namespace NoPasaranFC.Graphics3D
             BuildFieldMarkings(verts, indices);
             BuildGoals(verts, indices);
             BuildStands(verts, indices);
+            BuildAdBoards(verts, indices);
             
             _opaqueVertices = verts.ToArray();
             _opaqueIndices = indices.ToArray();
@@ -237,88 +278,242 @@ namespace NoPasaranFC.Graphics3D
         
         private void BuildStands(List<VertexPositionColor> verts, List<int> indices)
         {
-            // 4 large dark boxes as stands, starting just past the stadium margin
-            Color standColor = new Color(80, 60, 60);
-            float gap = WorldUnits.StadiumMarginMeters; // stands begin at the margin distance
-            float standDepth = 13f;
-            float standHeight = 12f;
-            float spanX = _halfLength + gap + standDepth;
-            float spanZ = _halfWidth + gap + standDepth;
+            // Bowl stadium: 3 stepped tiers per side, starting just past the
+            // stadium margin. Tier fronts get the animated crowd texture
+            // (built into the crowd lists), everything else is plain concrete.
+            Color concrete = new Color(80, 60, 60);
+            float gap = WorldUnits.StadiumMarginMeters;
+            const int tierCount = 3;
+            const float tierDepth = 7f;
+            float totalDepth = tierCount * tierDepth;
+            // Tier heights (base, top) per tier
+            float[] tierBase = { 0f, 4.5f, 9.5f };
+            float[] tierTop = { 4.5f, 9.5f, 15f };
             
-            // North stand (camera side, negative Z)
-            AddBox(verts, indices,
-                new Vector3(-spanX, 0f, -_halfWidth - gap - standDepth),
-                new Vector3(spanX, standHeight, -_halfWidth - gap), standColor);
-            // South stand
-            AddBox(verts, indices,
-                new Vector3(-spanX, 0f, _halfWidth + gap),
-                new Vector3(spanX, standHeight, _halfWidth + gap + standDepth), standColor);
-            // West stand
-            AddBox(verts, indices,
-                new Vector3(-_halfLength - gap - standDepth, 0f, -spanZ),
-                new Vector3(-_halfLength - gap, standHeight, spanZ), standColor);
-            // East stand
-            AddBox(verts, indices,
-                new Vector3(_halfLength + gap, 0f, -spanZ),
-                new Vector3(_halfLength + gap + standDepth, standHeight, spanZ), standColor);
+            // 4 sides: local coords (lateral l, height y, outward o) -> world
+            BuildStandSide(verts, indices, tierCount, tierDepth, tierBase, tierTop, concrete,
+                _halfLength + gap + totalDepth,
+                (l, y, o) => new Vector3(l, y, -_halfWidth - gap - o)); // North (camera side)
+            BuildStandSide(verts, indices, tierCount, tierDepth, tierBase, tierTop, concrete,
+                _halfLength + gap + totalDepth,
+                (l, y, o) => new Vector3(l, y, _halfWidth + gap + o));  // South
+            BuildStandSide(verts, indices, tierCount, tierDepth, tierBase, tierTop, concrete,
+                _halfWidth + gap + totalDepth,
+                (l, y, o) => new Vector3(-_halfLength - gap - o, y, l)); // West
+            BuildStandSide(verts, indices, tierCount, tierDepth, tierBase, tierTop, concrete,
+                _halfWidth + gap + totalDepth,
+                (l, y, o) => new Vector3(_halfLength + gap + o, y, l));  // East
+        }
+        
+        /// <summary>
+        /// Builds one side of the bowl as stepped tiers. The N/S sides span the
+        /// full X width (including corners) like the old flat stands did.
+        /// </summary>
+        private void BuildStandSide(List<VertexPositionColor> verts, List<int> indices,
+            int tierCount, float tierDepth,
+            float[] tierBase, float[] tierTop, Color concrete,
+            float lateralHalfSpan,
+            Func<float, float, float, Vector3> toWorld)
+        {
+            const float crowdTileMeters = 3f; // One crowd texture tile per 3m
+            
+            for (int tier = 0; tier < tierCount; tier++)
+            {
+                float frontO = tier * tierDepth;
+                float backO = frontO + tierDepth;
+                float y0 = tierBase[tier];
+                float y1 = tierTop[tier];
+                
+                // Concrete tier block (toWorld can flip an axis per side, so
+                // compute the true component-wise min/max for AddBox)
+                Vector3 corner0 = toWorld(-lateralHalfSpan, y0, frontO);
+                Vector3 corner1 = toWorld(lateralHalfSpan, y1, backO);
+                AddBox(verts, indices,
+                    Vector3.Min(corner0, corner1),
+                    Vector3.Max(corner0, corner1), concrete);
+                
+                // Crowd-textured front face, floating 2cm in front of the block
+                float uMax = lateralHalfSpan * 2f / crowdTileMeters;
+                AddTexturedQuad(_crowdVertList, _crowdIndexList,
+                    toWorld(-lateralHalfSpan, y0, frontO - 0.02f), new Vector2(0f, 1f),
+                    toWorld(lateralHalfSpan, y0, frontO - 0.02f), new Vector2(uMax, 1f),
+                    toWorld(lateralHalfSpan, y1, frontO - 0.02f), new Vector2(uMax, 0f),
+                    toWorld(-lateralHalfSpan, y1, frontO - 0.02f), new Vector2(0f, 0f));
+            }
+        }
+        
+        /// <summary>
+        /// Ring of thin ad boards around the pitch apron (~0.9m tall), alternating
+        /// bright colors with a contrasting stripe band (fake branding, no text).
+        /// </summary>
+        private void BuildAdBoards(List<VertexPositionColor> verts, List<int> indices)
+        {
+            Color[] palette =
+            {
+                new Color(240, 240, 240),
+                new Color(0, 180, 220),
+                new Color(250, 210, 40),
+                new Color(230, 40, 140),
+                new Color(250, 130, 30),
+                new Color(60, 200, 80),
+            };
+            const float boardHeight = 0.9f;
+            const float stripeTop = 0.62f; // Main color below, stripe above
+            const float boardWidth = 4f;
+            const float boardGap = 0.15f;
+            float sideOffset = _halfWidth + 2.0f;  // Touchline boards
+            float endOffset = _halfLength + 2.6f;  // Behind the goal nets (2m deep)
+            
+            int colorIndex = 0;
+            
+            // Touchline boards (run along X at both Z sides)
+            for (float x = -_halfLength; x < _halfLength - 0.01f; x += boardWidth + boardGap)
+            {
+                float x1 = Math.Min(x + boardWidth, _halfLength);
+                AddAdBoard(verts, indices,
+                    new Vector3(x, 0f, -sideOffset), new Vector3(x1, 0f, -sideOffset),
+                    stripeTop, boardHeight, palette, ref colorIndex);
+                AddAdBoard(verts, indices,
+                    new Vector3(x, 0f, sideOffset), new Vector3(x1, 0f, sideOffset),
+                    stripeTop, boardHeight, palette, ref colorIndex);
+            }
+            
+            // Goal-end boards (run along Z at both X ends)
+            for (float z = -_halfWidth; z < _halfWidth - 0.01f; z += boardWidth + boardGap)
+            {
+                float z1 = Math.Min(z + boardWidth, _halfWidth);
+                AddAdBoard(verts, indices,
+                    new Vector3(-endOffset, 0f, z), new Vector3(-endOffset, 0f, z1),
+                    stripeTop, boardHeight, palette, ref colorIndex);
+                AddAdBoard(verts, indices,
+                    new Vector3(endOffset, 0f, z), new Vector3(endOffset, 0f, z1),
+                    stripeTop, boardHeight, palette, ref colorIndex);
+            }
+        }
+        
+        private static void AddAdBoard(List<VertexPositionColor> verts, List<int> indices,
+            Vector3 from, Vector3 to, float stripeTop, float boardHeight,
+            Color[] palette, ref int colorIndex)
+        {
+            Color main = palette[colorIndex % palette.Length];
+            colorIndex++;
+            // Contrasting stripe: white on colored boards, cyan on the white board
+            Color stripe = main == palette[0] ? palette[1] : palette[0];
+            
+            Vector3 fromStripe = from + new Vector3(0f, stripeTop, 0f);
+            Vector3 toStripe = to + new Vector3(0f, stripeTop, 0f);
+            Vector3 fromTop = from + new Vector3(0f, boardHeight, 0f);
+            Vector3 toTop = to + new Vector3(0f, boardHeight, 0f);
+            
+            AddQuad(verts, indices, from, to, toStripe, fromStripe, main);
+            AddQuad(verts, indices, fromStripe, toStripe, toTop, fromTop, stripe);
         }
         
         #endregion
         
-        #region Net geometry (semi-transparent)
+        #region Crowd textures
         
-        private void BuildNetGeometry()
+        /// <summary>
+        /// Generates 3 crowd texture variants (256x64) for the shimmering crowd
+        /// animation. Dense random pixels: mostly bright shirt colors with some
+        /// skin tones over dark seats. The home kit color isn't available here,
+        /// so the left half of the texture is biased toward red/yellow and the
+        /// right half toward blue/white.
+        /// </summary>
+        private static Texture2D[] CreateCrowdTextures(GraphicsDevice device)
         {
-            var verts = new List<VertexPositionColor>();
-            var indices = new List<int>();
+            const int width = 256;
+            const int height = 64;
+            var random = new Random();
+            var textures = new Texture2D[3];
             
-            float goalHalfWidth = WorldUnits.PxToM(MatchEngine.GoalWidth) / 2f;
-            float goalHeight = WorldUnits.PxToM(MatchEngine.GoalPostHeight);
-            float goalDepth = WorldUnits.PxToM(MatchEngine.GoalDepth); // 2m
-            Color netColor = new Color(255, 255, 255, 80); // Semi-transparent white
+            Color[] homeShirts =
+            {
+                new Color(200, 30, 30), new Color(230, 60, 40),
+                new Color(240, 200, 30), new Color(210, 170, 20),
+            };
+            Color[] awayShirts =
+            {
+                new Color(30, 60, 200), new Color(60, 120, 230),
+                new Color(230, 230, 230), new Color(160, 160, 170),
+            };
+            Color[] skinTones =
+            {
+                new Color(224, 184, 144), new Color(196, 154, 116), new Color(160, 120, 88),
+            };
+            Color emptySeat = new Color(45, 45, 55);
+            Color gapColor = new Color(35, 35, 42);
             
-            BuildNet(verts, indices, -_halfLength, -1f, goalHalfWidth, goalHeight, goalDepth, netColor);
-            BuildNet(verts, indices, _halfLength, 1f, goalHalfWidth, goalHeight, goalDepth, netColor);
+            // Fans are blocks of texels (one block = one seated fan) so the crowd
+            // reads as people from broadcast distance instead of per-pixel noise.
+            const int fanW = 5;
+            const int fanH = 6;
             
-            _netVertices = verts.ToArray();
-            _netIndices = indices.ToArray();
-        }
-        
-        private void BuildNet(List<VertexPositionColor> verts, List<int> indices,
-            float goalLineX, float direction, float halfWidth, float height, float depth, Color color)
-        {
-            float backX = goalLineX + direction * depth;
+            for (int t = 0; t < textures.Length; t++)
+            {
+                var data = new Color[width * height];
+                for (int i = 0; i < data.Length; i++) data[i] = gapColor;
+                
+                for (int fy = 0; fy + fanH <= height; fy += fanH)
+                {
+                    for (int fx = 0; fx + fanW <= width; fx += fanW)
+                    {
+                        int roll = random.Next(100);
+                        Color fanColor;
+                        if (roll < 10)
+                        {
+                            fanColor = emptySeat;
+                        }
+                        else
+                        {
+                            if (roll < 22)
+                                fanColor = skinTones[random.Next(skinTones.Length)];
+                            else
+                            {
+                                var palette = fx < width / 2 ? homeShirts : awayShirts;
+                                fanColor = palette[random.Next(palette.Length)];
+                            }
+                            
+                            int jitter = random.Next(-15, 16);
+                            fanColor = new Color(
+                                Math.Clamp(fanColor.R + jitter, 0, 255),
+                                Math.Clamp(fanColor.G + jitter, 0, 255),
+                                Math.Clamp(fanColor.B + jitter, 0, 255));
+                        }
+                        
+                        // Fill the fan block with a 1px gap on the right and bottom
+                        for (int y = fy; y < fy + fanH - 1; y++)
+                            for (int x = fx; x < fx + fanW - 1; x++)
+                                data[y * width + x] = fanColor;
+                    }
+                }
+                
+                textures[t] = new Texture2D(device, width, height);
+                textures[t].SetData(data);
+            }
             
-            // Back quad
-            AddQuad(verts, indices,
-                new Vector3(backX, 0f, -halfWidth),
-                new Vector3(backX, 0f, halfWidth),
-                new Vector3(backX, height, halfWidth),
-                new Vector3(backX, height, -halfWidth), color);
-            
-            // Top quad
-            AddQuad(verts, indices,
-                new Vector3(goalLineX, height, -halfWidth),
-                new Vector3(goalLineX, height, halfWidth),
-                new Vector3(backX, height, halfWidth),
-                new Vector3(backX, height, -halfWidth), color);
-            
-            // Side quads
-            AddQuad(verts, indices,
-                new Vector3(goalLineX, 0f, -halfWidth),
-                new Vector3(backX, 0f, -halfWidth),
-                new Vector3(backX, height, -halfWidth),
-                new Vector3(goalLineX, height, -halfWidth), color);
-            AddQuad(verts, indices,
-                new Vector3(backX, 0f, halfWidth),
-                new Vector3(goalLineX, 0f, halfWidth),
-                new Vector3(goalLineX, height, halfWidth),
-                new Vector3(backX, height, halfWidth), color);
+            return textures;
         }
         
         #endregion
         
         #region Geometry helpers
+        
+        private static void AddTexturedQuad(List<VertexPositionTexture> verts, List<int> indices,
+            Vector3 a, Vector2 uvA, Vector3 b, Vector2 uvB, Vector3 c, Vector2 uvC, Vector3 d, Vector2 uvD)
+        {
+            int baseIndex = verts.Count;
+            verts.Add(new VertexPositionTexture(a, uvA));
+            verts.Add(new VertexPositionTexture(b, uvB));
+            verts.Add(new VertexPositionTexture(c, uvC));
+            verts.Add(new VertexPositionTexture(d, uvD));
+            indices.Add(baseIndex + 0);
+            indices.Add(baseIndex + 1);
+            indices.Add(baseIndex + 2);
+            indices.Add(baseIndex + 0);
+            indices.Add(baseIndex + 2);
+            indices.Add(baseIndex + 3);
+        }
         
         private static void AddQuad(List<VertexPositionColor> verts, List<int> indices,
             Vector3 a, Vector3 b, Vector3 c, Vector3 d, Color color)

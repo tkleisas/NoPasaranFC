@@ -49,6 +49,12 @@ namespace NoPasaranFC.Graphics3D
             BuildShadow();
         }
         
+        /// <summary>Applies the match environment lighting to the ball sphere.</summary>
+        public void ApplyEnvironment(MatchEnvironment environment)
+        {
+            environment.ApplyTo(_sphereEffect, true);
+        }
+        
         /// <summary>Soft black circle with smooth alpha falloff from center to edge.</summary>
         private static Texture2D CreateRadialShadowTexture(GraphicsDevice device, int size)
         {

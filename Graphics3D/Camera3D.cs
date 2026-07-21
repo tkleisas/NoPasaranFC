@@ -21,15 +21,22 @@ namespace NoPasaranFC.Graphics3D
         
         // Base broadcast rig (at CameraZoom = 0.8); scaled by zoom at runtime
         // ~25° elevation, telephoto FOV for a TV-broadcast feel
-        private const float BaseHeight = 11f;
-        private const float BaseDistance = 24f;
+        // "High" mode is a higher tactical view, further away with a wider FOV
+        private const float BroadcastHeight = 11f;
+        private const float BroadcastDistance = 24f;
+        private const float HighHeight = 22f;
+        private const float HighDistance = 36f;
         private const float BaseZoom = 0.8f;
-        private static readonly float FieldOfView = MathHelper.ToRadians(30f);
+        private static readonly float BroadcastFov = MathHelper.ToRadians(30f);
+        private static readonly float HighFov = MathHelper.ToRadians(32f);
+        
+        private static bool HighMode => GameSettings.Instance.CameraMode == "High";
+        private static float CurrentFov => HighMode ? HighFov : BroadcastFov;
         
         public Camera3D(int viewportWidth, int viewportHeight)
         {
             Target = Vector3.Zero;
-            Position = new Vector3(0f, BaseHeight, BaseDistance);
+            Position = new Vector3(0f, BroadcastHeight, BroadcastDistance);
             UpdateViewport(viewportWidth, viewportHeight);
             UpdateView();
         }
@@ -39,7 +46,7 @@ namespace NoPasaranFC.Graphics3D
             ViewportWidth = width;
             ViewportHeight = height;
             Projection = Matrix.CreatePerspectiveFieldOfView(
-                FieldOfView,
+                CurrentFov,
                 width / (float)Math.Max(1, height),
                 0.1f,
                 600f);
@@ -89,15 +96,21 @@ namespace NoPasaranFC.Graphics3D
         {
             // Zoom > base => closer/lower; zoom < base => further/higher
             float zoomScale = BaseZoom / Math.Clamp(GameSettings.Instance.CameraZoom, 0.1f, 2f);
-            float height = BaseHeight * zoomScale;
-            float distance = BaseDistance * zoomScale;
+            float height = (HighMode ? HighHeight : BroadcastHeight) * zoomScale;
+            float distance = (HighMode ? HighDistance : BroadcastDistance) * zoomScale;
             
             // Camera sits on the POSITIVE Z side, looking toward -Z. This matches
             // the 2D top-down view (and minimap) orientation: engine +X is screen
             // right, engine -Y (up arrow) is into the screen. Watching from -Z
             // would mirror both axes and reverse the controls.
             Position = Target + new Vector3(0f, height, distance);
-            View = Matrix.CreateLookAt(Position, Target, Vector3.Up);
+            
+            // Look slightly above and ahead of the ball: lifts the horizon into
+            // frame so the stands, crowd, floodlights and sky are visible at the
+            // top (classic broadcast framing). Otherwise the top ray stays below
+            // the horizon and everything above ~1m at the far side is cut off.
+            Vector3 lookAt = Target + new Vector3(0f, 3.5f, -7f);
+            View = Matrix.CreateLookAt(Position, lookAt, Vector3.Up);
         }
     }
 }

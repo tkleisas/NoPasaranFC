@@ -39,6 +39,9 @@ namespace NoPasaranFC.Screens
             CameraZoom,
             CameraSpeed,
             MatchViewMode,
+            CameraMode,
+            TimeOfDay,
+            Weather,
             Language,
             Back
         }
@@ -64,6 +67,9 @@ namespace NoPasaranFC.Screens
             settings.Add(SettingType.CameraZoom);
             settings.Add(SettingType.CameraSpeed);
             settings.Add(SettingType.MatchViewMode);
+            settings.Add(SettingType.CameraMode);
+            settings.Add(SettingType.TimeOfDay);
+            settings.Add(SettingType.Weather);
             settings.Add(SettingType.Language);
             settings.Add(SettingType.Back);
 #else
@@ -84,6 +90,9 @@ namespace NoPasaranFC.Screens
             settings.Add(SettingType.CameraZoom);
             settings.Add(SettingType.CameraSpeed);
             settings.Add(SettingType.MatchViewMode);
+            settings.Add(SettingType.CameraMode);
+            settings.Add(SettingType.TimeOfDay);
+            settings.Add(SettingType.Weather);
             settings.Add(SettingType.Language);
             settings.Add(SettingType.Back);
 #endif
@@ -115,6 +124,9 @@ namespace NoPasaranFC.Screens
                     SettingType.CameraZoom => loc.Get("settings.cameraZoom"),
                     SettingType.CameraSpeed => loc.Get("settings.cameraSpeed"),
                     SettingType.MatchViewMode => loc.Get("settings.matchView"),
+                    SettingType.CameraMode => loc.Get("settings.cameraMode"),
+                    SettingType.TimeOfDay => loc.Get("settings.timeOfDay"),
+                    SettingType.Weather => loc.Get("settings.weather"),
                     SettingType.Language => loc.Get("settings.languageSelect"),
                     SettingType.Back => loc.Get("menu.back"),
                     _ => ""
@@ -129,6 +141,17 @@ namespace NoPasaranFC.Screens
         private readonly Point[] _resolutions;
         private readonly string[] _languages = new[] { "en", "el" };
         private int _languageIndex;
+        
+        private static readonly string[] _cameraModes = new[] { "Broadcast", "High" };
+        private static readonly string[] _timeOfDayOptions = new[] { "Day", "Sunset", "Night", "Random" };
+        private static readonly string[] _weatherOptions = new[] { "Clear", "Rain", "Random" };
+        
+        private static string CycleOption(string current, string[] options, int direction)
+        {
+            int index = Array.IndexOf(options, current);
+            if (index < 0) index = 0;
+            return options[(index + direction + options.Length) % options.Length];
+        }
 
         public SettingsScreen(DatabaseManager database, Game1 game, ContentManager content, GraphicsDevice graphicsDevice)
             : base(content, graphicsDevice)
@@ -312,6 +335,21 @@ namespace NoPasaranFC.Screens
                     _database.SaveSettings(_settings);
                     break;
                     
+                case SettingType.CameraMode:
+                    _settings.CameraMode = CycleOption(_settings.CameraMode, _cameraModes, direction);
+                    _database.SaveSettings(_settings);
+                    break;
+                    
+                case SettingType.TimeOfDay:
+                    _settings.TimeOfDay = CycleOption(_settings.TimeOfDay, _timeOfDayOptions, direction);
+                    _database.SaveSettings(_settings);
+                    break;
+                    
+                case SettingType.Weather:
+                    _settings.Weather = CycleOption(_settings.Weather, _weatherOptions, direction);
+                    _database.SaveSettings(_settings);
+                    break;
+                    
                 case SettingType.Language:
                     _languageIndex = (_languageIndex + direction + _languages.Length) % _languages.Length;
                     _settings.Language = _languages[_languageIndex];
@@ -363,6 +401,21 @@ namespace NoPasaranFC.Screens
                     
                 case SettingType.MatchViewMode:
                     _settings.MatchViewMode = _settings.MatchViewMode == "3D" ? "2D" : "3D";
+                    _database.SaveSettings(_settings);
+                    break;
+                    
+                case SettingType.CameraMode:
+                    _settings.CameraMode = CycleOption(_settings.CameraMode, _cameraModes, 1);
+                    _database.SaveSettings(_settings);
+                    break;
+                    
+                case SettingType.TimeOfDay:
+                    _settings.TimeOfDay = CycleOption(_settings.TimeOfDay, _timeOfDayOptions, 1);
+                    _database.SaveSettings(_settings);
+                    break;
+                    
+                case SettingType.Weather:
+                    _settings.Weather = CycleOption(_settings.Weather, _weatherOptions, 1);
                     _database.SaveSettings(_settings);
                     break;
                     
@@ -471,6 +524,9 @@ namespace NoPasaranFC.Screens
                 SettingType.CameraZoom => $"{_settings.CameraZoom:F1}x",
                 SettingType.CameraSpeed => $"{_settings.CameraSpeed:F2}",
                 SettingType.MatchViewMode => _settings.MatchViewMode,
+                SettingType.CameraMode => loc.Get("settings.cameraMode." + (_settings.CameraMode ?? "Broadcast").ToLowerInvariant()),
+                SettingType.TimeOfDay => loc.Get("settings.timeOfDay." + (_settings.TimeOfDay ?? "Day").ToLowerInvariant()),
+                SettingType.Weather => loc.Get("settings.weather." + (_settings.Weather ?? "Clear").ToLowerInvariant()),
                 SettingType.Language => _settings.Language.ToUpper(),
                 SettingType.Back => "",
                 _ => ""

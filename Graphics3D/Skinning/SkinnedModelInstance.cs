@@ -82,6 +82,9 @@ namespace NoPasaranFC.Graphics3D.Skinning
         {
             _tint = tint?.ToVector3() ?? Vector3.One;
         }
+        
+        /// <summary>Optional match environment; when set its lighting replaces the default rig.</summary>
+        public MatchEnvironment Environment { get; set; }
 
         public void Update(float deltaTime)
         {
@@ -132,7 +135,10 @@ namespace NoPasaranFC.Graphics3D.Skinning
             _effect.View = view;
             _effect.Projection = projection;
             _effect.DiffuseColor = _tint;
-            _effect.EnableDefaultLighting();
+            if (Environment != null)
+                Environment.ApplyTo(_effect);
+            else
+                _effect.EnableDefaultLighting();
             _effect.SetBoneTransforms(_boneMatrices);
 
             foreach (var part in _model.Parts)

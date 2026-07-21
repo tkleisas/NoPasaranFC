@@ -28,6 +28,11 @@ namespace NoPasaranFC.Graphics3D
         private readonly BasicEffect _ringEffect;
         private Dictionary<string, Texture2D> _spriteSheets;
         private readonly Dictionary<Player, BillboardAnimState> _animStates = new Dictionary<Player, BillboardAnimState>();
+        
+        // Match environment (day/night lighting + weather), cloth nets, rain
+        private readonly MatchEnvironment _environment;
+        private readonly GoalNet3D[] _nets;
+        private readonly RainSystem _rain;
 
         // Skinned 3D players (null => billboard fallback)
         private SkinnedModel _playerModel;
@@ -101,6 +106,25 @@ namespace NoPasaranFC.Graphics3D
             LoadSpriteSheets(content);
             BuildRing();
             TryLoadSkinnedPlayerModel(device);
+            
+            // Resolve TimeOfDay/Weather (Random resolved once per match) and
+            // apply the lighting preset to all static world effects
+            _environment = new MatchEnvironment(device,
+                GameSettings.Instance.TimeOfDay, GameSettings.Instance.Weather);
+            _world.ApplyEnvironment(_environment);
+            _ball.ApplyEnvironment(_environment);
+            
+            // Dynamic cloth nets replace the old static net quads
+            float halfLength = WorldUnits.PitchLengthMeters / 2f;
+            _nets = new[]
+            {
+                new GoalNet3D(device, -halfLength, -1f),
+                new GoalNet3D(device, halfLength, 1f),
+            };
+            foreach (var net in _nets)
+                net.ApplyEnvironment(_environment);
+            
+            _rain = _environment.IsRaining ? new RainSystem(device) : null;
         }
 
         /// <summary>
@@ -150,6 +174,18 @@ namespace NoPasaranFC.Graphics3D
             _camera.Follow(engine.BallPosition, dt);
             _ball.Update(engine.BallPosition, engine.BallVelocity, engine.BallHeight, dt);
             
+            _world.Update(dt);
+            
+            // Cloth nets react to the ball when it's inside the goal volume
+            Vector3 ballWorld = WorldUnits.ToWorld(engine.BallPosition, engine.BallHeight)
+                + new Vector3(0f, Ball3D.RadiusMeters, 0f);
+            Vector3 ballVelWorld = new Vector3(engine.BallVelocity.X, 0f, engine.BallVelocity.Y)
+                / WorldUnits.PixelsPerMeter;
+            foreach (var net in _nets)
+                net.Update(dt, ballWorld, ballVelWorld);
+            
+            _rain?.Update(dt, _camera.Target);
+            
             if (_playerModel != null)
                 UpdatePlayerAnimators(engine, dt);
             else
@@ -160,14 +196,18 @@ namespace NoPasaranFC.Graphics3D
         {
             // Full clear (color + depth) - 3D scene replaces the 2D world entirely
             device.Clear(ClearOptions.Target | ClearOptions.DepthBuffer,
-                new Color(100, 149, 237), 1f, 0); // Cornflower blue sky
+                _environment.SkyColor, 1f, 0);
             
             device.DepthStencilState = DepthStencilState.Default;
             device.RasterizerState = RasterizerState.CullNone;
             
             _world.Draw(device, _camera.View, _camera.Projection);
+            _environment.Draw(device, _camera.View, _camera.Projection); // Floodlights (night only)
+            foreach (var net in _nets)
+                net.Draw(device, _camera.View, _camera.Projection);
             _ball.Draw(device, _camera.View, _camera.Projection);
             DrawPlayers(device, engine, homeTeamId);
+            _rain?.Draw(device, _camera.View, _camera.Projection);
             
             // Restore GraphicsDevice states for SpriteBatch (HUD drawn after us)
             device.DepthStencilState = DepthStencilState.None;
@@ -248,6 +288,7 @@ namespace NoPasaranFC.Graphics3D
                 
                 // Home team untinted, away team tinted red-ish (matches billboard team colors)
                 animator.Instance.SetTint(player.TeamId == homeTeamId ? (Color?)null : AwayTeamTint);
+                animator.Instance.Environment = _environment;
                 
                 Matrix world = Matrix.CreateScale(PlayerModelScale)
                     * Matrix.CreateRotationY(animator.Yaw)
@@ -373,20 +414,21 @@ namespace NoPasaranFC.Graphics3D
                     new VertexPositionTexture(topLeft, new Vector2(u0, v0)),
                 };
                 
-                // Tints match the 2D view: gray for knocked down, light yellow for controlled
+                // Tints match the 2D view: gray for knocked down, light yellow for
+                // controlled; all multiplied by the environment (day/night) tint
                 if (player.IsKnockedDown)
                 {
-                    _billboardEffect.DiffuseColor = new Color(180, 180, 180).ToVector3();
+                    _billboardEffect.DiffuseColor = _environment.ApplyTint(new Color(180, 180, 180).ToVector3());
                     _billboardEffect.Alpha = 0.7f;
                 }
                 else if (player.IsControlled)
                 {
-                    _billboardEffect.DiffuseColor = new Color(255, 255, 150).ToVector3();
+                    _billboardEffect.DiffuseColor = _environment.ApplyTint(new Color(255, 255, 150).ToVector3());
                     _billboardEffect.Alpha = 1f;
                 }
                 else
                 {
-                    _billboardEffect.DiffuseColor = Color.White.ToVector3();
+                    _billboardEffect.DiffuseColor = _environment.ApplyTint(Color.White.ToVector3());
                     _billboardEffect.Alpha = 1f;
                 }
                 
