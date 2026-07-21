@@ -38,6 +38,9 @@ namespace NoPasaranFC.Graphics3D
         private SkinnedModel _playerModel;
         private readonly Dictionary<Player, PlayerAnimator> _playerAnimators = new Dictionary<Player, PlayerAnimator>();
         private readonly HashSet<Player> _kitsApplied = new HashSet<Player>();
+        
+        // Easter egg fox wandering the apron (null if Fox.glb missing)
+        private FoxWalker _fox;
 
         // KayKit chibi is ~2.3 units tall; scale to ~1.7m
         private const float PlayerModelScale = 0.75f;
@@ -126,6 +129,25 @@ namespace NoPasaranFC.Graphics3D
                 net.ApplyEnvironment(_environment);
             
             _rain = _environment.IsRaining ? new RainSystem(device) : null;
+            
+            // Easter egg: the stadium fox (tolerant of a missing file)
+            try
+            {
+#if ANDROID
+                var context = global::Android.App.Application.Context;
+                using (var stream = context.Assets.Open("Content/Models3D/Fox.glb"))
+                    _fox = new FoxWalker(SkinnedModel.Load(device, stream));
+#else
+                string foxPath = PlatformHelper.GetAssetPath(Path.Combine("Content", "Models3D", "Fox.glb"));
+                if (File.Exists(foxPath))
+                    _fox = new FoxWalker(SkinnedModel.Load(device, foxPath));
+#endif
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"MatchRenderer3D: no fox ({ex.Message}).");
+                _fox = null;
+            }
         }
 
         /// <summary>
@@ -197,6 +219,7 @@ namespace NoPasaranFC.Graphics3D
                 net.Update(dt, ballWorld, ballVelWorld);
             
             _rain?.Update(dt, _camera.Target);
+            _fox?.Update(dt);
             
             if (_playerModel != null)
                 UpdatePlayerAnimators(engine, dt);
@@ -219,6 +242,7 @@ namespace NoPasaranFC.Graphics3D
                 net.Draw(device, _camera.View, _camera.Projection);
             _ball.Draw(device, _camera.View, _camera.Projection);
             DrawPlayers(device, engine, homeTeamId);
+            _fox?.Draw(device, _camera.View, _camera.Projection, _environment);
             _rain?.Draw(device, _camera.View, _camera.Projection);
             
             // Restore GraphicsDevice states for SpriteBatch (HUD drawn after us)
@@ -368,6 +392,20 @@ namespace NoPasaranFC.Graphics3D
         /// <summary>Shirt/shorts/socks colors per team, sampled from the 2D kit sprite sheets.</summary>
         private static void GetKitColors(Player player, int homeTeamId, out Color shirt, out Color shorts, out Color socks)
         {
+            // Goalkeepers wear a distinct kit (yellow home / lime green away)
+            if (player.Position == PlayerPosition.Goalkeeper)
+            {
+                if (player.TeamId == homeTeamId)
+                {
+                    shirt = new Color(240, 200, 30); shorts = new Color(35, 35, 40); socks = new Color(240, 200, 30);
+                }
+                else
+                {
+                    shirt = new Color(80, 200, 80); shorts = new Color(35, 35, 40); socks = new Color(80, 200, 80);
+                }
+                return;
+            }
+            
             switch (player.Team?.KitName)
             {
                 case "no_pasaran_kit":
