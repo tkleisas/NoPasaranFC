@@ -20,11 +20,12 @@ namespace NoPasaranFC.Graphics3D
         public int ViewportHeight { get; private set; }
         
         // Camera rigs (at CameraZoom = 0.8); scaled by zoom at runtime.
-        // Broadcast: low TV-style side view, close to the players.
+        // Broadcast: low TV-style side view, close but wide enough to see the
+        // players around the ball.
         // High: higher tactical view, further away with a wider FOV.
         // TopDown: near-vertical view like the classic 2D mode.
-        private const float BroadcastHeight = 8f;
-        private const float BroadcastDistance = 17f;
+        private const float BroadcastHeight = 10f;
+        private const float BroadcastDistance = 22f;
         private const float HighHeight = 22f;
         private const float HighDistance = 36f;
         private const float TopDownHeight = 55f;

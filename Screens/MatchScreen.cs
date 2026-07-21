@@ -852,6 +852,10 @@ namespace NoPasaranFC.Screens
         /// </summary>
         private void Draw3DPlayerIndicators(SpriteBatch spriteBatch, SpriteFont font)
         {
+            // In TopDown the camera looks straight down, so a world-space height
+            // projection lands on the player itself — use fixed screen offsets there.
+            bool topDown = GameSettings.Instance.CameraMode == "TopDown";
+            
             foreach (var player in _matchEngine.GetAllPlayers())
             {
                 if (player.IsKnockedDown) continue;
@@ -859,8 +863,8 @@ namespace NoPasaranFC.Screens
                 // Player name above the head (if ShowPlayerNames is enabled)
                 if (GameSettings.Instance.ShowPlayerNames && !string.IsNullOrEmpty(player.Name))
                 {
-                    // ~2.2m above ground in engine px (73 px/m)
-                    var head = _renderer3D.WorldToScreen(player.FieldPosition, 160f);
+                    // ~2.2m above ground in engine px (73 px/m); ground-level in TopDown
+                    var head = _renderer3D.WorldToScreen(player.FieldPosition, topDown ? 0f : 160f);
                     if (head.HasValue)
                     {
                         try
@@ -870,7 +874,8 @@ namespace NoPasaranFC.Screens
                                 displayName = displayName.Substring(0, 12);
                             
                             Vector2 nameSize = font.MeasureString(displayName);
-                            Vector2 namePos = new Vector2(head.Value.X - nameSize.X / 2, head.Value.Y - 12);
+                            float nameY = head.Value.Y + (topDown ? -46f : -12f);
+                            Vector2 namePos = new Vector2(head.Value.X - nameSize.X / 2, nameY);
                             
                             spriteBatch.Draw(_pixel, new Rectangle((int)(namePos.X - 4), (int)(namePos.Y - 2),
                                 (int)(nameSize.X + 8), (int)(nameSize.Y + 4)), new Color(0, 0, 0, 150));
@@ -892,7 +897,7 @@ namespace NoPasaranFC.Screens
                         int barWidth = 42;
                         int barHeight = 5;
                         int barX = (int)(feet.Value.X - barWidth / 2);
-                        int barY = (int)(feet.Value.Y + 10);
+                        int barY = (int)(feet.Value.Y + (topDown ? 24 : 10));
                         
                         float staminaPercent = player.Stamina / 100f;
                         spriteBatch.Draw(_pixel, new Rectangle(barX, barY, barWidth, barHeight),
@@ -918,15 +923,15 @@ namespace NoPasaranFC.Screens
                 // Shot power bar above the controlled player's head while charging
                 if (player.IsControlled && _matchEngine.IsChargingShot())
                 {
-                    // ~2.2m above ground in engine px (73 px/m)
-                    var head = _renderer3D.WorldToScreen(player.FieldPosition, 160f);
+                    // ~2.2m above ground in engine px (73 px/m); ground-level in TopDown
+                    var head = _renderer3D.WorldToScreen(player.FieldPosition, topDown ? 0f : 160f);
                     if (head.HasValue)
                     {
                         float power = _matchEngine.GetShotPower();
                         int barWidth = 60;
                         int barHeight = 8;
                         int barX = (int)(head.Value.X - barWidth / 2);
-                        int barY = (int)(head.Value.Y - 44); // above the name label
+                        int barY = (int)(head.Value.Y + (topDown ? -78 : -44)); // above the name label
                         
                         spriteBatch.Draw(_pixel, new Rectangle(barX, barY, barWidth, barHeight),
                             new Color(0, 0, 0, 180));
