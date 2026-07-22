@@ -398,6 +398,18 @@ Potential improvements for future versions:
 
 See **AGENTS.md** for complete development roadmap.
 
+## 👥 Credits
+
+**Engineering**
+- [tkleisas](https://github.com/tkleisas) — project creator & lead developer
+- Stathis — goal celebration system
+- [Kimi](https://www.kimi.com/code) (AI coding agent) — 3D match view, skinned animation system, Blender asset pipeline, debug tooling
+
+**Assets**
+- [KayKit](https://kaylousberg.com) (CC0) — character skeleton & animation library
+- [Khronos glTF Sample Models](https://github.com/KhronosGroup/glTF-Sample-Models) — the stadium fox
+- Players, ball, and venue assets generated with [Blender](https://www.blender.org) via the blender-mcp pipeline
+
 ## License
 
 This game is provided under an MIT License. The license text can be found in LICENSE.txt

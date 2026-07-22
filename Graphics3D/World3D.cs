@@ -765,8 +765,10 @@ namespace NoPasaranFC.Graphics3D
             for (int i = 0; i < segTop.Length; i++)
             {
                 float z0 = segZ[i], z1 = segZ[i + 1];
-                float u0 = (z0 + panelHalfWidth) / (panelHalfWidth * 2f);
-                float u1 = (z1 + panelHalfWidth) / (panelHalfWidth * 2f);
+                // U mirrored: the panel faces the pitch (+X), so plain mapping
+                // would show the text reversed
+                float u0 = 1f - (z0 + panelHalfWidth) / (panelHalfWidth * 2f);
+                float u1 = 1f - (z1 + panelHalfWidth) / (panelHalfWidth * 2f);
                 AddTexturedQuad(vertList, indexList,
                     new Vector3(panelX, panelBase, z0), new Vector2(u0, 1f),
                     new Vector3(panelX, panelBase, z1), new Vector2(u1, 1f),
