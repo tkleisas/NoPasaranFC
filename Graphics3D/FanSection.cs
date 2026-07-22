@@ -34,7 +34,7 @@ namespace NoPasaranFC.Graphics3D
         private const float StandStepHeight = 0.4f;
         private const int Rows = 3;
         
-        public FanSection(GraphicsDevice device, SkinnedModel playerModel, Texture2D baseAtlas)
+        public FanSection(GraphicsDevice device, SkinnedModel playerModel, SkinnedModel femaleModel = null)
         {
             var rng = new Random(4242);
             
@@ -60,10 +60,13 @@ namespace NoPasaranFC.Graphics3D
                     
                     bool isChild = rng.NextDouble() < 0.25;
                     bool seated = row > 0; // front row stands, upper rows sit
+                    // ~40% female fans when the female model is available
+                    var fanModel = femaleModel != null && rng.NextDouble() < 0.4 ? femaleModel : playerModel;
+                    var atlas = fanModel.Parts[0].Texture;
                     
                     var fan = new Fan
                     {
-                        Instance = new SkinnedModelInstance(playerModel),
+                        Instance = new SkinnedModelInstance(fanModel),
                         // Seated fans sit on the 0.45m seat boxes; standing ones on the step
                         Position = new Vector3(x, stepTopY + (seated ? 0.45f : 0f), rowZ),
                         Yaw = 0f, // face +Z (the pitch)
@@ -75,9 +78,9 @@ namespace NoPasaranFC.Graphics3D
                     // Team-colored casual clothes
                     Color shirt = shirtColors[rng.Next(shirtColors.Length)];
                     fan.Instance.SetPartTexture("Soccer_Shirt",
-                        KitTextureFactory.GetKitTexture(device, baseAtlas, shirt, new Rectangle(0, 0, 256, 256)));
+                        KitTextureFactory.GetKitTexture(device, atlas, shirt, new Rectangle(0, 0, 256, 256)));
                     fan.Instance.SetPartTexture("Soccer_Shorts",
-                        KitTextureFactory.GetKitTexture(device, baseAtlas,
+                        KitTextureFactory.GetKitTexture(device, atlas,
                             KitTextureFactory.Darken(shirt, 0.4f), new Rectangle(256, 0, 256, 256)));
                     
                     // Randomize clip phase so they don't move in sync

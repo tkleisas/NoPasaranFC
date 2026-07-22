@@ -36,7 +36,9 @@ namespace NoPasaranFC.Graphics3D
 
         // Skinned 3D players (null => billboard fallback)
         private SkinnedModel _playerModel;
+        private SkinnedModel _playerModelF; // female variant (optional, same skeleton/atlas)
         private readonly Dictionary<Player, PlayerAnimator> _playerAnimators = new Dictionary<Player, PlayerAnimator>();
+        private readonly Dictionary<Player, SkinnedModel> _playerModelChoice = new Dictionary<Player, SkinnedModel>();
         private readonly HashSet<Player> _kitsApplied = new HashSet<Player>();
         
         // Easter egg fox wandering the apron (null if Fox.glb missing)
@@ -113,6 +115,7 @@ namespace NoPasaranFC.Graphics3D
             LoadSpriteSheets(content);
             BuildRing();
             TryLoadSkinnedPlayerModel(device);
+            TryLoadFemalePlayerModel(device);
             
             // Resolve TimeOfDay/Weather (Random resolved once per match) and
             // apply the lighting preset to all static world effects
@@ -152,9 +155,9 @@ namespace NoPasaranFC.Graphics3D
                 _fox = null;
             }
             
-            // Supporters on the stand (reuses the player model/atlas)
+            // Supporters on the stand (reuses the player models/atlases)
             if (_playerModel != null)
-                _fans = new FanSection(device, _playerModel, _playerModel.Parts[0].Texture);
+                _fans = new FanSection(device, _playerModel, _playerModelF);
         }
 
         /// <summary>
@@ -187,6 +190,36 @@ namespace NoPasaranFC.Graphics3D
             }
             Debug.WriteLine("MatchRenderer3D: no player model found - using billboard players.");
             _playerModel = null;
+        }
+        
+        /// <summary>Loads the optional female player variant (PlayerF.glb).</summary>
+        private void TryLoadFemalePlayerModel(GraphicsDevice device)
+        {
+            try
+            {
+#if ANDROID
+                var context = global::Android.App.Application.Context;
+                using (var stream = context.Assets.Open("Content/Models3D/PlayerF.glb"))
+                    _playerModelF = SkinnedModel.Load(device, stream);
+#else
+                string glbPath = PlatformHelper.GetAssetPath(Path.Combine("Content", "Models3D", "PlayerF.glb"));
+                if (File.Exists(glbPath))
+                    _playerModelF = SkinnedModel.Load(device, glbPath);
+#endif
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"MatchRenderer3D: failed to load PlayerF.glb ({ex.Message}).");
+                _playerModelF = null;
+            }
+        }
+        
+        /// <summary>Deterministic per-player model choice (~1 in 4 female when available).</summary>
+        private SkinnedModel GetModelForPlayer(Player player)
+        {
+            if (_playerModelF != null && player.Name != null && (player.Name.GetHashCode() & 3) == 0)
+                return _playerModelF;
+            return _playerModel;
         }
         
         private enum PlayerModelKind { Knight, SoccerPlayer }
@@ -269,8 +302,10 @@ namespace NoPasaranFC.Graphics3D
             {
                 if (!_playerAnimators.TryGetValue(player, out var animator))
                 {
-                    animator = new PlayerAnimator(_playerModel);
+                    var model = GetModelForPlayer(player);
+                    animator = new PlayerAnimator(model);
                     _playerAnimators[player] = animator;
+                    _playerModelChoice[player] = model;
                 }
                 animator.Update(player, dt);
             }
@@ -355,9 +390,13 @@ namespace NoPasaranFC.Graphics3D
         private void ApplyKit(GraphicsDevice device, Player player, int homeTeamId, PlayerAnimator animator)
         {
             GetKitColors(player, homeTeamId, out Color shirt, out Color shorts, out Color socks);
-            Texture2D baseTexture = _playerModel.Parts[0].Texture;
             
-            if (_playerModelKind == PlayerModelKind.SoccerPlayer)
+            var model = _playerModelChoice.TryGetValue(player, out var m) ? m : _playerModel;
+            Texture2D baseTexture = model.Parts[0].Texture;
+            bool soccerStyle = model == _playerModelF ||
+                (model == _playerModel && _playerModelKind == PlayerModelKind.SoccerPlayer);
+            
+            if (soccerStyle)
             {
                 // player_atlas.png layout (512x512): quadrants shirt / shorts / socks / skin+extras
                 Texture2D shirtTexture = KitTextureFactory.GetKitTexture(device, baseTexture, shirt,
@@ -371,7 +410,7 @@ namespace NoPasaranFC.Graphics3D
                 Texture2D numberedShirt = KitTextureFactory.GetNumberedShirtTexture(device, shirtTexture,
                     player.ShirtNumber, KitTextureFactory.ContrastFor(shirt));
                 
-                foreach (var part in _playerModel.Parts)
+                foreach (var part in model.Parts)
                 {
                     string name = part.Name ?? "";
                     if (name == "Soccer_Shirt")
@@ -387,7 +426,7 @@ namespace NoPasaranFC.Graphics3D
                 Texture2D shirtTexture = KitTextureFactory.GetKitTexture(device, baseTexture, shirt);
                 Texture2D shortsTexture = KitTextureFactory.GetKitTexture(device, baseTexture, shorts);
                 
-                foreach (var part in _playerModel.Parts)
+                foreach (var part in model.Parts)
                 {
                     string name = part.Name ?? "";
                     if (name.Contains("Body") || name.Contains("Arm") || name.Contains("Helmet"))
