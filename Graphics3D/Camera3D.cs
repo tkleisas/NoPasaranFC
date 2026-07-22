@@ -40,6 +40,11 @@ namespace NoPasaranFC.Graphics3D
         private static bool TopDownMode => Mode == "TopDown";
         private static float CurrentFov => TopDownMode ? TopDownFov : (HighMode ? HighFov : BroadcastFov);
         
+        // Celebration framing: pulled back/raised and tilted toward the stand so
+        // goal celebrations show both the cheering players and the fans
+        private bool _celebrating;
+        public void SetCelebrating(bool celebrating) => _celebrating = celebrating;
+        
         public Camera3D(int viewportWidth, int viewportHeight)
         {
             Target = Vector3.Zero;
@@ -102,9 +107,17 @@ namespace NoPasaranFC.Graphics3D
         private void UpdateView()
         {
             // Zoom > base => closer/lower; zoom < base => further/higher
-            float zoomScale = BaseZoom / Math.Clamp(GameSettings.Instance.CameraZoom, 0.1f, 2f);
+            float zoomScale = BaseZoom / Math.Clamp(GameSettings.Instance.CameraZoom, 0.3f, 3f);
             float height = (TopDownMode ? TopDownHeight : HighMode ? HighHeight : BroadcastHeight) * zoomScale;
             float distance = (TopDownMode ? TopDownDistance : HighMode ? HighDistance : BroadcastDistance) * zoomScale;
+            
+            // Celebration framing: pull back and raise to show the celebrating
+            // players near the goal with the cheering stand behind them
+            if (_celebrating)
+            {
+                height *= TopDownMode ? 1.25f : 1.7f;
+                distance *= TopDownMode ? 1.1f : 1.45f;
+            }
             
             // Camera sits on the POSITIVE Z side, looking toward -Z. This matches
             // the 2D top-down view (and minimap) orientation: engine +X is screen
@@ -118,6 +131,12 @@ namespace NoPasaranFC.Graphics3D
                 // Near-vertical: look straight down with a slight forward tilt so
                 // goal depth and player shapes still read (like the 2D view).
                 lookAt = Target + new Vector3(0f, 0f, -2f);
+            }
+            else if (_celebrating)
+            {
+                // Tilt deeper toward the stand (-Z): celebrating players in the
+                // foreground, cheering fans visible behind them
+                lookAt = Target + new Vector3(0f, 2.5f, -12f);
             }
             else
             {

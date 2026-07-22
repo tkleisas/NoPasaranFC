@@ -21,6 +21,13 @@ namespace NoPasaranFC.Gameplay
 
         // Target update (anti-oscillation)
         public const float TargetUpdateThreshold = 30f;
+        // Target inertia: low-pass filter time constant for AI target positions.
+        // The chased point glides toward new targets instead of jumping,
+        // which kills rapid left-right oscillation near the ball/center line.
+        public const float TargetInertiaTime = 0.25f;
+        // Start/stop hysteresis: a stationary player only starts moving when the
+        // target is this many times StopDistance away (prevents stop-start stutter)
+        public const float StationaryStartMultiplier = 2.5f;
 
         // Field boundary margins
         public const float FieldMargin = 150f;

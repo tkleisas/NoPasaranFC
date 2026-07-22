@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -70,6 +70,7 @@ namespace NoPasaranFC.Gameplay
         public Vector2 RestartDirection { get; private set; } = Vector2.Zero;
         public float ThrowInPowerCharge { get; private set; } = 0f; // 0.0 to 1.0
         private bool _throwInAnimationStarted = false; // Track if throw animation is playing
+        private float _throwInAnimTimer = 0f; // Engine-side release timing (mode-independent)
         private float _timeSinceSetPiece = 0f; // Tracks time since set piece was executed
         private bool _cornerKickRunUp = false; // Track if player is running up to kick corner
         public bool IsCornerKickRunUp => _cornerKickRunUp; // Public accessor for UI
@@ -524,6 +525,18 @@ namespace NoPasaranFC.Gameplay
             {
                 RestartTimer -= deltaTime;
                 
+                // Engine-timed throw release: the ball leaves the hands ~0.65s
+                // after the throw animation starts, regardless of render mode
+                // (the 2D sprite completion call remains as a fallback no-op)
+                if (_throwInAnimationStarted)
+                {
+                    _throwInAnimTimer -= deltaTime;
+                    if (_throwInAnimTimer <= 0f)
+                    {
+                        ExecuteThrowIn();
+                    }
+                }
+                
                 // Keep camera on restart player
                 if (RestartPlayer != null)
                 {
@@ -577,6 +590,7 @@ namespace NoPasaranFC.Gameplay
                                 // Released - start throw animation (ball will be released when animation finishes)
                                 RestartPlayer.CurrentAnimationState = "throw_in_throw";
                                 _throwInAnimationStarted = true;
+                                _throwInAnimTimer = 0.65f; // Engine-side release timing
                                 _wasShootButtonDown = false;
                             }
                             
@@ -637,21 +651,26 @@ namespace NoPasaranFC.Gameplay
                         }
                         else
                         {
-                            // For goal kicks, use arrow keys for direction and execute on press
+                            // Goal kicks: arrow keys aim directly, hold X to charge, release to kick
                             if (moveDirection.Length() > 0.1f)
                             {
                                 RestartDirection = Vector2.Normalize(moveDirection);
                             }
                             
-                            // Execute immediately on press
-                            if (isShootKeyDown && !_wasShootButtonDown)
+                            // Handle power charging (same feel as corners/throw-ins)
+                            if (isShootKeyDown)
+                            {
+                                ThrowInPowerCharge = Math.Min(1.0f, ThrowInPowerCharge + deltaTime);
+                            }
+                            else if (_wasShootButtonDown)
                             {
                                 ExecuteSetPieceAction();
-                                _wasShootButtonDown = true;
-                            }
-                            else if (!isShootKeyDown)
-                            {
                                 _wasShootButtonDown = false;
+                            }
+                            
+                            if (isShootKeyDown && !_wasShootButtonDown)
+                            {
+                                _wasShootButtonDown = true;
                             }
                         }
                     }
@@ -666,9 +685,13 @@ namespace NoPasaranFC.Gameplay
                             Vector2 target = Vector2.Zero;
                             if (CurrentState == MatchState.GoalKick)
                             {
-                                // Aim far forward
-                                float forwardX = RestartPlayer.Team == _homeTeam ? RestartPlayer.FieldPosition.X + 500 : RestartPlayer.FieldPosition.X - 500;
-                                target = new Vector2(forwardX, RestartPlayer.FieldPosition.Y);
+                                // Aim deep into the opponent half (30-40m upfield, varied lane)
+                                float forwardX = RestartPlayer.Team == _homeTeam
+                                    ? RestartPlayer.FieldPosition.X + 2200f + (float)_random.NextDouble() * 800f
+                                    : RestartPlayer.FieldPosition.X - 2200f - (float)_random.NextDouble() * 800f;
+                                float targetY = StadiumMargin + (float)(_random.NextDouble() * FieldHeight);
+                                target = new Vector2(forwardX, targetY);
+                                ThrowInPowerCharge = 0.55f + (float)_random.NextDouble() * 0.35f;
                             }
                             else if (CurrentState == MatchState.CornerKick)
                             {
@@ -692,6 +715,7 @@ namespace NoPasaranFC.Gameplay
                             {
                                 RestartPlayer.CurrentAnimationState = "throw_in_throw";
                                 _throwInAnimationStarted = true;
+                                _throwInAnimTimer = 0.65f; // Engine-side release timing
                             }
                             else if (CurrentState == MatchState.CornerKick)
                             {
@@ -2025,20 +2049,30 @@ namespace NoPasaranFC.Gameplay
             }
             else if (CurrentState == MatchState.GoalKick)
             {
-                power = 25f; // Goal kick power
-                height = 200f; // Very high arc
-                AudioManager.Instance.PlaySoundEffect("kick_ball", 1.0f);
+                // Real goal kick power: 600-2000 px/s scaled by charge
+                // (the old 25f * stat formula produced ~70 px/s - the ball
+                //  barely rolled out of the box)
+                float minPower = 600f;
+                float maxPower = 2000f;
+                float chargeAmount = Math.Max(0.3f, ThrowInPowerCharge); // Minimum 30% charge
+                power = minPower + (maxPower - minPower) * chargeAmount;
+                
+                height = 250f + 350f * chargeAmount;
+                
+                float volume = 0.6f + 0.4f * chargeAmount;
+                AudioManager.Instance.PlaySoundEffect("kick_ball", volume);
             }
             
             // Apply velocity based on set piece type
-            if (CurrentState == MatchState.ThrowIn || CurrentState == MatchState.CornerKick)
+            if (CurrentState == MatchState.ThrowIn || CurrentState == MatchState.CornerKick ||
+                CurrentState == MatchState.GoalKick)
             {
-                // Throw-in and Corner: direct power application
+                // Direct power application
                 BallVelocity = RestartDirection * power;
             }
             else
             {
-                // Goal kicks: scale by player speed
+                // Legacy fallback (unused)
                 BallVelocity = RestartDirection * power * RestartPlayer.Speed * 0.05f;
             }
             BallVerticalVelocity = height;

@@ -31,11 +31,24 @@ namespace NoPasaranFC.Graphics3D
         private bool _wasKnockedDown;
         private bool _isLyingDown;
         private float _yaw;
+        // Latch for one-shot clips: the engine can hold a state (e.g. "shoot")
+        // longer than the clip, and without this the one-shot would retrigger
+        private string _lastOneShotState;
 
         // Locomotion thresholds in engine pixels/second (73 px = 1 m).
         // Mirrors MatchScreen.UpdatePlayerAnimations: LengthSquared > 0.1 means "moving".
         private const float IdleThresholdSquared = 0.1f;
         private const float RunThresholdPx = 120f; // ~1.6 m/s; above this use Running_A
+        // Hysteresis margins: entering a state needs a clearly higher speed than
+        // exiting it, so velocity noise can't flap idle/walk/run every frame
+        private const float WalkEnterSpeedSquared = 25f;   // idle -> walk above 5 px/s
+        private const float WalkExitSpeedSquared = 1f;     // walk -> idle below 1 px/s
+        private const float RunEnterSpeedPx = 150f;        // walk -> run
+        private const float RunExitSpeedPx = 85f;          // run -> walk
+        private const float LocomotionMinHold = 0.18f;     // seconds between switches
+        
+        private string _locomotion = "Idle";
+        private float _locomotionHold;
         // KayKit clips are authored slower than the game's movement cadence
         private const float AnimationSpeed = 1.4f;
 
@@ -86,28 +99,25 @@ namespace NoPasaranFC.Graphics3D
                 switch (state)
                 {
                     case "shoot":
-                        PlayClip("Unarmed_Melee_Attack_Kick", loop: false);
+                        PlayOneShot("shoot", "Unarmed_Melee_Attack_Kick");
                         break;
                     case "tackle":
-                        PlayClip("Dodge_Forward", loop: false);
+                        PlayOneShot("tackle", "Dodge_Forward");
                         break;
                     case "celebrate":
+                        _lastOneShotState = null;
                         PlayClip("Cheer", loop: true);
                         break;
                     case "throw_in_static":
+                        _lastOneShotState = null;
                         PlayClip("Idle", loop: true);
                         break;
                     case "throw_in_throw":
-                        PlayClip("Throw", loop: false);
+                        PlayOneShot("throw_in_throw", "Throw");
                         break;
                     default: // "idle", "walk", anything unknown -> locomotion by speed
-                        float speedSquared = velocity.LengthSquared();
-                        if (speedSquared <= IdleThresholdSquared)
-                            PlayClip("Idle", loop: true);
-                        else if (speedSquared < RunThresholdPx * RunThresholdPx)
-                            PlayClip("Walking_A", loop: true);
-                        else
-                            PlayClip("Running_A", loop: true);
+                        _lastOneShotState = null;
+                        UpdateLocomotion(velocity.Length(), deltaTime);
                         break;
                 }
             }
@@ -121,6 +131,52 @@ namespace NoPasaranFC.Graphics3D
             {
                 _instance.Play("Idle", loop: true); // graceful fallback for missing clips
             }
+        }
+        
+        /// <summary>Plays a one-shot only when the state is new (latch against retriggering).</summary>
+        private void PlayOneShot(string state, string clipName)
+        {
+            if (_lastOneShotState == state) return;
+            _lastOneShotState = state;
+            PlayClip(clipName, loop: false);
+        }
+        
+        /// <summary>
+        /// Locomotion clip selection with hysteresis: entering idle/walk/run needs
+        /// a clearly different speed than exiting it, plus a minimum hold time,
+        /// so per-frame velocity noise can't flap the animation.
+        /// </summary>
+        private void UpdateLocomotion(float speed, float deltaTime)
+        {
+            _locomotionHold -= deltaTime;
+            float speedSquared = speed * speed;
+            
+            string desired = _locomotion;
+            switch (_locomotion)
+            {
+                case "Idle":
+                    if (speedSquared > WalkEnterSpeedSquared)
+                        desired = speed > RunEnterSpeedPx ? "Running_A" : "Walking_A";
+                    break;
+                case "Walking_A":
+                    if (speedSquared <= WalkExitSpeedSquared)
+                        desired = "Idle";
+                    else if (speed > RunEnterSpeedPx)
+                        desired = "Running_A";
+                    break;
+                default: // Running_A
+                    if (speed < RunExitSpeedPx)
+                        desired = speedSquared <= WalkExitSpeedSquared ? "Idle" : "Walking_A";
+                    break;
+            }
+            
+            if (desired != _locomotion && _locomotionHold <= 0f)
+            {
+                _locomotion = desired;
+                _locomotionHold = LocomotionMinHold;
+            }
+            
+            PlayClip(_locomotion, loop: true);
         }
     }
 }

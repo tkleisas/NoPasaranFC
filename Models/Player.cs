@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using Microsoft.Xna.Framework;
 
 namespace NoPasaranFC.Models
@@ -109,6 +109,18 @@ namespace NoPasaranFC.Models
         // AI target position set flag
         [System.Text.Json.Serialization.JsonIgnore]
         public bool AITargetPositionSet { get; set; }
+        
+        // AI smoothed target (low-pass filtered AITargetPosition - movement inertia)
+        [System.Text.Json.Serialization.JsonIgnore]
+        public Vector2 AISmoothedTarget { get; set; }
+        
+        // AI smoothed target set flag
+        [System.Text.Json.Serialization.JsonIgnore]
+        public bool AISmoothedTargetSet { get; set; }
+        
+        // AI stationary flag (start/stop hysteresis)
+        [System.Text.Json.Serialization.JsonIgnore]
+        public bool AIIsStationary { get; set; }
         
         // AI cached ball half state (prevents oscillation from centerline crossing)
         [System.Text.Json.Serialization.JsonIgnore]

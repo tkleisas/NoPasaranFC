@@ -35,12 +35,31 @@ namespace NoPasaranFC.Gameplay.AIStates
 
             Vector2 newTarget = CalculateTargetPosition(player, context);
             newTarget = ApplyAntiOscillation(player, newTarget);
+            newTarget = ApplyTargetInertia(player, newTarget, deltaTime);
             // No hard clamp — boundary repulsion in MoveTowardTarget handles edge avoidance softly
 
             player.AITargetPosition = newTarget;
             player.AITargetPositionSet = true;
 
             return MoveTowardTarget(player, newTarget, deltaTime);
+        }
+        
+        /// <summary>
+        /// Low-pass filter on the AI target: the chased point glides toward new
+        /// targets instead of jumping every frame. Kills rapid left-right
+        /// oscillation when the raw target flips (e.g. near the center line).
+        /// </summary>
+        protected Vector2 ApplyTargetInertia(Player player, Vector2 newTarget, float deltaTime)
+        {
+            if (!player.AISmoothedTargetSet)
+            {
+                player.AISmoothedTargetSet = true;
+                player.AISmoothedTarget = newTarget;
+                return newTarget;
+            }
+            float t = 1f - (float)System.Math.Exp(-deltaTime / AIConstants.TargetInertiaTime);
+            player.AISmoothedTarget = Vector2.Lerp(player.AISmoothedTarget, newTarget, t);
+            return player.AISmoothedTarget;
         }
 
         /// <summary>
@@ -143,13 +162,26 @@ namespace NoPasaranFC.Gameplay.AIStates
 
             if (distance < AIConstants.DeadZone)
             {
+                player.AIIsStationary = true;
                 player.Velocity = Vector2.Zero;
                 player.Stamina = System.Math.Min(100, player.Stamina + AIConstants.StaminaStationaryRecovery * deltaTime);
                 return AIStateType.Positioning;
             }
 
+            // Start/stop hysteresis: a stationary player only starts moving again
+            // when the target is clearly far (kills stop-start stutter when the
+            // target jitters a few pixels per frame)
+            if (player.AIIsStationary && distance < AIConstants.StopDistance * AIConstants.StationaryStartMultiplier)
+            {
+                player.Velocity = Vector2.Zero;
+                player.Stamina = System.Math.Min(100, player.Stamina + AIConstants.StaminaStationaryRecovery * deltaTime);
+                return AIStateType.Positioning;
+            }
+            player.AIIsStationary = false;
+
             if (distance < AIConstants.StopDistance)
             {
+                player.AIIsStationary = true;
                 player.Velocity = Vector2.Zero;
                 player.Stamina = System.Math.Min(100, player.Stamina + AIConstants.StaminaStationaryRecovery * deltaTime);
                 return AIStateType.Idle;

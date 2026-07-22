@@ -7,6 +7,7 @@ using NoPasaranFC.Database;
 using NoPasaranFC.Gameplay;
 using NoPasaranFC.Models;
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Reflection.Metadata;
 
@@ -856,6 +857,9 @@ namespace NoPasaranFC.Screens
             // projection lands on the player itself — use fixed screen offsets there.
             bool topDown = GameSettings.Instance.CameraMode == "TopDown";
             
+            // Track drawn label rects so clustered players don't stack unreadable labels
+            var drawnLabels = new List<Rectangle>();
+            
             foreach (var player in _matchEngine.GetAllPlayers())
             {
                 if (player.IsKnockedDown) continue;
@@ -876,10 +880,22 @@ namespace NoPasaranFC.Screens
                             Vector2 nameSize = font.MeasureString(displayName);
                             float nameY = head.Value.Y + (topDown ? -46f : -12f);
                             Vector2 namePos = new Vector2(head.Value.X - nameSize.X / 2, nameY);
+                            var labelRect = new Rectangle((int)(namePos.X - 4), (int)(namePos.Y - 2),
+                                (int)(nameSize.X + 8), (int)(nameSize.Y + 4));
                             
-                            spriteBatch.Draw(_pixel, new Rectangle((int)(namePos.X - 4), (int)(namePos.Y - 2),
-                                (int)(nameSize.X + 8), (int)(nameSize.Y + 4)), new Color(0, 0, 0, 150));
-                            spriteBatch.DrawString(font, displayName, namePos, Color.White);
+                            // Skip labels that collide with an already drawn one
+                            bool overlaps = false;
+                            foreach (var r in drawnLabels)
+                            {
+                                if (r.Intersects(labelRect)) { overlaps = true; break; }
+                            }
+                            
+                            if (!overlaps)
+                            {
+                                drawnLabels.Add(labelRect);
+                                spriteBatch.Draw(_pixel, labelRect, new Color(0, 0, 0, 150));
+                                spriteBatch.DrawString(font, displayName, namePos, Color.White);
+                            }
                         }
                         catch (Exception)
                         {

@@ -1,6 +1,7 @@
 using System;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
+using NoPasaranFC.Gameplay;
 using NoPasaranFC.Graphics3D.Skinning;
 
 namespace NoPasaranFC.Graphics3D
@@ -67,13 +68,32 @@ namespace NoPasaranFC.Graphics3D
             return new Vector3(x, 0f, z);
         }
         
-        public void Update(float dt)
+        public void Update(float dt, MatchEngine engine)
         {
             Vector3 toTarget = _target - _position;
             toTarget.Y = 0f;
             float distance = toTarget.Length();
             
-            if (distance > 0.3f)
+            // Don't stroll through players: pause while one is close
+            bool playerNearby = false;
+            if (engine != null)
+            {
+                foreach (var player in engine.GetAllPlayers())
+                {
+                    Vector3 playerWorld = WorldUnits.ToWorld(player.FieldPosition);
+                    if (Vector3.DistanceSquared(playerWorld, _position) < 1.8f * 1.8f)
+                    {
+                        playerNearby = true;
+                        break;
+                    }
+                }
+            }
+            
+            if (playerNearby)
+            {
+                _instance.Play("Survey");
+            }
+            else if (distance > 0.3f)
             {
                 // Walking toward the waypoint
                 Vector3 direction = toTarget / distance;

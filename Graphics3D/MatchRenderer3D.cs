@@ -245,7 +245,29 @@ namespace NoPasaranFC.Graphics3D
             float dt = (float)gameTime.ElapsedGameTime.TotalSeconds;
             
             _camera.UpdateViewport(Game1.ScreenWidth, Game1.ScreenHeight);
-            _camera.Follow(engine.BallPosition, dt);
+            _camera.SetCelebrating(engine.CurrentState == MatchEngine.MatchState.GoalCelebration);
+            
+            // During goal celebrations the camera follows the celebrating players
+            // (centroid of the scoring team), not the ball lying in the net
+            Vector2 cameraFocus = engine.BallPosition;
+            if (engine.CurrentState == MatchEngine.MatchState.GoalCelebration &&
+                engine.LastPlayerTouchedBall != null)
+            {
+                int scorerTeamId = engine.LastPlayerTouchedBall.TeamId;
+                Vector2 sum = Vector2.Zero;
+                int count = 0;
+                foreach (var p in engine.GetAllPlayers())
+                {
+                    if (p.TeamId == scorerTeamId)
+                    {
+                        sum += p.FieldPosition;
+                        count++;
+                    }
+                }
+                if (count > 0)
+                    cameraFocus = sum / count;
+            }
+            _camera.Follow(cameraFocus, dt);
             _ball.Update(engine.BallPosition, engine.BallVelocity, engine.BallHeight, dt);
             
             _world.Update(dt);
@@ -259,7 +281,7 @@ namespace NoPasaranFC.Graphics3D
                 net.Update(dt, ballWorld, ballVelWorld);
             
             _rain?.Update(dt, _camera.Target);
-            _fox?.Update(dt);
+            _fox?.Update(dt, engine);
             _fans?.Update(dt, engine);
             
             if (_playerModel != null)
@@ -283,6 +305,7 @@ namespace NoPasaranFC.Graphics3D
                 net.Draw(device, _camera.View, _camera.Projection);
             _ball.Draw(device, _camera.View, _camera.Projection);
             DrawPlayers(device, engine, homeTeamId);
+            DrawSetPieceArrow(device, engine);
             _fox?.Draw(device, _camera.View, _camera.Projection, _environment);
             _fans?.Draw(device, _camera.View, _camera.Projection, _environment);
             _rain?.Draw(device, _camera.View, _camera.Projection);
@@ -342,6 +365,63 @@ namespace NoPasaranFC.Graphics3D
                             _ringIndices, 0, _ringIndices.Length / 3);
                     }
                 }
+            }
+        }
+        
+        /// <summary>
+        /// 3D aiming arrow for set pieces (throw-in, corner, goal kick): a flat
+        /// ground arrow at the restart position, length and color driven by the
+        /// power charge. The 2D arrow is skipped in 3D mode, so without this the
+        /// player aims blind.
+        /// </summary>
+        private void DrawSetPieceArrow(GraphicsDevice device, MatchEngine engine)
+        {
+            bool isSetPiece = engine.CurrentState == MatchEngine.MatchState.ThrowIn ||
+                              engine.CurrentState == MatchEngine.MatchState.CornerKick ||
+                              engine.CurrentState == MatchEngine.MatchState.GoalKick;
+            if (!isSetPiece || engine.RestartPlayer == null || engine.RestartDirection == Vector2.Zero)
+                return;
+            
+            float power = engine.ThrowInPowerCharge;
+            float length = 4f + 10f * power;      // meters
+            float shaftWidth = 0.35f;
+            float headLength = 1.2f;
+            float headWidth = 1.0f;
+            Color color = Color.Lerp(Color.White * 0.7f, Color.Orange, power);
+            
+            Vector3 start = WorldUnits.ToWorld(engine.RestartPlayer.FieldPosition) + new Vector3(0f, 0.06f, 0f);
+            Vector3 dir = new Vector3(engine.RestartDirection.X, 0f, engine.RestartDirection.Y);
+            dir.Normalize();
+            Vector3 side = Vector3.Normalize(Vector3.Cross(Vector3.Up, dir));
+            
+            Vector3 shaftEnd = start + dir * (length - headLength);
+            Vector3 tip = start + dir * length;
+            
+            var verts = new List<VertexPositionColor>
+            {
+                // Shaft quad
+                new VertexPositionColor(start - side * shaftWidth / 2f, color),
+                new VertexPositionColor(start + side * shaftWidth / 2f, color),
+                new VertexPositionColor(shaftEnd + side * shaftWidth / 2f, color),
+                new VertexPositionColor(shaftEnd - side * shaftWidth / 2f, color),
+                // Head triangle
+                new VertexPositionColor(shaftEnd - side * headWidth / 2f, color),
+                new VertexPositionColor(shaftEnd + side * headWidth / 2f, color),
+                new VertexPositionColor(tip, color),
+            };
+            int[] indices = { 0, 1, 2, 0, 2, 3, 4, 5, 6 };
+            
+            _ringEffect.View = _camera.View;
+            _ringEffect.Projection = _camera.Projection;
+            _ringEffect.World = Matrix.Identity;
+            
+            device.RasterizerState = RasterizerState.CullNone;
+            device.DepthStencilState = DepthStencilState.Default;
+            foreach (var pass in _ringEffect.CurrentTechnique.Passes)
+            {
+                pass.Apply();
+                device.DrawUserIndexedPrimitives(PrimitiveType.TriangleList,
+                    verts.ToArray(), 0, verts.Count, indices, 0, 3);
             }
         }
         

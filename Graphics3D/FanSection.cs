@@ -28,6 +28,19 @@ namespace NoPasaranFC.Graphics3D
         private readonly List<Fan> _fans = new List<Fan>();
         private bool _wasCelebrating;
         
+        // Waving flags held by some standing fans
+        private class WavingFlag
+        {
+            public Vector3 Base;   // pole base (at the fan's side)
+            public float Phase;    // wave phase offset
+            public float Height;   // pole height (children get shorter poles)
+        }
+        private readonly List<WavingFlag> _flags = new List<WavingFlag>();
+        private BasicEffect _flagEffect;
+        private Texture2D _flagTexture;
+        private float _waveTime;
+        private bool _celebrating;
+        
         // Stand layout (must match World3D.BuildMainStand)
         private const float StandFrontZ = -40.0f;
         private const float StandStepDepth = 0.85f;
@@ -87,15 +100,70 @@ namespace NoPasaranFC.Graphics3D
                     fan.Instance.Play(fan.IdleClip);
                     fan.Instance.Update((float)rng.NextDouble() * 3f);
                     
+                    // Some standing fans wave Palestinian flags
+                    if (!seated && _fans.Count % 3 == 0 && _flags.Count < 6)
+                    {
+                        _flags.Add(new WavingFlag
+                        {
+                            Base = fan.Position + new Vector3(0.25f, 0f, 0.1f),
+                            Phase = (float)rng.NextDouble() * MathHelper.TwoPi,
+                            Height = isChild ? 1.7f : 2.2f,
+                        });
+                    }
+                    
                     _fans.Add(fan);
                     fanCount++;
                 }
             }
+            
+            // Flag rendering resources
+            _flagTexture = CreatePalestinianFlagTexture(device);
+            _flagEffect = new BasicEffect(device)
+            {
+                TextureEnabled = true,
+                Texture = _flagTexture,
+                LightingEnabled = false,
+            };
+        }
+        
+        /// <summary>Small generated Palestinian flag: black/white/green stripes, red chevron.</summary>
+        private static Texture2D CreatePalestinianFlagTexture(GraphicsDevice device)
+        {
+            const int w = 64, h = 40;
+            var texture = new Texture2D(device, w, h);
+            var pixels = new Color[w * h];
+            Color black = new Color(20, 20, 20);
+            Color white = new Color(245, 245, 245);
+            Color green = new Color(0, 122, 61);
+            Color red = new Color(206, 17, 38);
+            
+            for (int y = 0; y < h; y++)
+            {
+                for (int x = 0; x < w; x++)
+                {
+                    Color c;
+                    // Red chevron from the left edge, apex at 1/3 width
+                    float rel = x / (w / 3f) + Math.Abs(y - h / 2f) / (h / 2f);
+                    if (rel <= 1f)
+                        c = red;
+                    else if (y < h / 3)
+                        c = black;
+                    else if (y < 2 * h / 3)
+                        c = white;
+                    else
+                        c = green;
+                    pixels[y * w + x] = c;
+                }
+            }
+            texture.SetData(pixels);
+            return texture;
         }
         
         public void Update(float dt, MatchEngine engine)
         {
             bool celebrating = engine.CurrentState == MatchEngine.MatchState.GoalCelebration;
+            _celebrating = celebrating;
+            _waveTime += dt * (celebrating ? 2.2f : 1f); // flags wave harder during celebrations
             
             foreach (var fan in _fans)
             {
@@ -123,6 +191,95 @@ namespace NoPasaranFC.Graphics3D
                     * Matrix.CreateTranslation(fan.Position);
                 fan.Instance.Draw(device, world, view, projection);
             }
+            
+            DrawFlags(device, view, projection, environment);
+        }
+        
+        /// <summary>
+        /// Draws the waving flags: a pole plus a cloth made of segments displaced
+        /// by a sine wave (amplitude grows toward the free edge).
+        /// </summary>
+        private void DrawFlags(GraphicsDevice device, Matrix view, Matrix projection, MatchEnvironment environment)
+        {
+            if (_flags.Count == 0) return;
+            
+            environment.ApplyTo(_flagEffect, false);
+            _flagEffect.View = view;
+            _flagEffect.Projection = projection;
+            _flagEffect.World = Matrix.Identity;
+            
+            device.RasterizerState = RasterizerState.CullNone;
+            device.DepthStencilState = DepthStencilState.Default;
+            device.BlendState = BlendState.Opaque;
+            
+            const int segX = 6, segY = 3;
+            const float clothW = 2.2f, clothH = 1.4f;
+            
+            foreach (var flag in _flags)
+            {
+                var verts = new List<VertexPositionTexture>();
+                var indices = new List<int>();
+                
+                // Pole (thin vertical quad, textured from the dark top stripe)
+                Vector3 poleBottom = flag.Base;
+                Vector3 poleTop = flag.Base + new Vector3(0f, flag.Height, 0f);
+                AddTexturedQuad(verts, indices,
+                    poleBottom + new Vector3(-0.012f, 0f, 0f), new Vector2(0.99f, 0.02f),
+                    poleBottom + new Vector3(0.012f, 0f, 0f), new Vector2(0.99f, 0.02f),
+                    poleTop + new Vector3(0.012f, 0f, 0f), new Vector2(0.99f, 0f),
+                    poleTop + new Vector3(-0.012f, 0f, 0f), new Vector2(0.99f, 0f));
+                
+                // Cloth: hangs from the pole top, extends in +X, waves with sine
+                Vector3 clothTopLeft = poleTop + new Vector3(0f, -0.02f, 0f);
+                for (int y = 0; y <= segY; y++)
+                {
+                    for (int x = 0; x <= segX; x++)
+                    {
+                        float u = x / (float)segX;
+                        float v = y / (float)segY;
+                        float wave = (float)Math.Sin(_waveTime * 4f + flag.Phase + u * 5f) * 0.25f * u;
+                        var pos = clothTopLeft + new Vector3(u * clothW, -v * clothH, wave);
+                        verts.Add(new VertexPositionTexture(pos, new Vector2(u, v)));
+                    }
+                }
+                for (int y = 0; y < segY; y++)
+                {
+                    for (int x = 0; x < segX; x++)
+                    {
+                        int a = y * (segX + 1) + x + 4; // +4 pole verts
+                        int b = a + segX + 1;
+                        indices.Add(a);
+                        indices.Add(b);
+                        indices.Add(a + 1);
+                        indices.Add(a + 1);
+                        indices.Add(b);
+                        indices.Add(b + 1);
+                    }
+                }
+                
+                foreach (var pass in _flagEffect.CurrentTechnique.Passes)
+                {
+                    pass.Apply();
+                    device.DrawUserIndexedPrimitives(PrimitiveType.TriangleList,
+                        verts.ToArray(), 0, verts.Count, indices.ToArray(), 0, indices.Count / 3);
+                }
+            }
+        }
+        
+        private static void AddTexturedQuad(List<VertexPositionTexture> verts, List<int> indices,
+            Vector3 a, Vector2 uvA, Vector3 b, Vector2 uvB, Vector3 c, Vector2 uvC, Vector3 d, Vector2 uvD)
+        {
+            int baseIndex = verts.Count;
+            verts.Add(new VertexPositionTexture(a, uvA));
+            verts.Add(new VertexPositionTexture(b, uvB));
+            verts.Add(new VertexPositionTexture(c, uvC));
+            verts.Add(new VertexPositionTexture(d, uvD));
+            indices.Add(baseIndex + 0);
+            indices.Add(baseIndex + 1);
+            indices.Add(baseIndex + 2);
+            indices.Add(baseIndex + 0);
+            indices.Add(baseIndex + 2);
+            indices.Add(baseIndex + 3);
         }
     }
 }

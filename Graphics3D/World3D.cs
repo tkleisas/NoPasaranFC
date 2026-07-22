@@ -303,6 +303,7 @@ namespace NoPasaranFC.Graphics3D
             
             BuildFieldMarkings(verts, indices);
             BuildGoals(verts, indices);
+            BuildCornerFlags(verts, indices);
             
             if (_venue == Venue.Bowl)
             {
@@ -316,6 +317,48 @@ namespace NoPasaranFC.Graphics3D
             
             _opaqueVertices = verts.ToArray();
             _opaqueIndices = indices.ToArray();
+        }
+        
+        /// <summary>
+        /// Corner flags at the four pitch corners: thin yellow poles with a
+        /// small red pennant pointing diagonally away from the pitch.
+        /// </summary>
+        private void BuildCornerFlags(List<VertexPositionColor> verts, List<int> indices)
+        {
+            Color poleColor = new Color(240, 200, 40);
+            Color flagColor = new Color(200, 30, 30);
+            const float poleHeight = 1.5f;
+            const float poleHalf = 0.025f;
+            const float flagLen = 0.4f;
+            const float flagHeight = 0.3f;
+            
+            foreach (float sx in new[] { -1f, 1f })
+            {
+                foreach (float sz in new[] { -1f, 1f })
+                {
+                    float cx = sx * _halfLength;
+                    float cz = sz * _halfWidth;
+                    
+                    // Pole
+                    AddBox(verts, indices,
+                        new Vector3(cx - poleHalf, 0f, cz - poleHalf),
+                        new Vector3(cx + poleHalf, poleHeight, cz + poleHalf), poleColor);
+                    
+                    // Pennant: triangle from the pole top, pointing away from center
+                    Vector3 poleTop = new Vector3(cx, poleHeight, cz);
+                    Vector3 flagDir = Vector3.Normalize(new Vector3(sx, 0f, sz));
+                    Vector3 tip = poleTop + flagDir * flagLen + new Vector3(0f, -flagHeight, 0f);
+                    Vector3 bottom = poleTop + new Vector3(0f, -flagHeight, 0f);
+                    
+                    int baseIndex = verts.Count;
+                    verts.Add(new VertexPositionColor(poleTop, flagColor));
+                    verts.Add(new VertexPositionColor(bottom, flagColor));
+                    verts.Add(new VertexPositionColor(tip, flagColor));
+                    indices.Add(baseIndex + 0);
+                    indices.Add(baseIndex + 1);
+                    indices.Add(baseIndex + 2);
+                }
+            }
         }
         
         private void BuildFieldMarkings(List<VertexPositionColor> verts, List<int> indices)

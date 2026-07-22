@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
@@ -303,6 +305,19 @@ public class Game1 : Game
             var e = ms.Engine;
             s += $" match[state={e.CurrentState} time={e.MatchTime:F1} score={e.HomeScore}-{e.AwayScore} " +
                  $"ball=({e.BallPosition.X:F0},{e.BallPosition.Y:F0},h={e.BallHeight:F0})]";
+            
+            // Animation state census (helps diagnose stuck/oscillating animations)
+            var counts = new Dictionary<string, int>();
+            string controlled = null;
+            foreach (var p in e.GetAllPlayers())
+            {
+                string a = p.CurrentAnimationState ?? "null";
+                counts[a] = counts.TryGetValue(a, out int c) ? c + 1 : 1;
+                if (p.IsControlled)
+                    controlled = $"{p.Name}:{a}{(p.IsKnockedDown ? "(down)" : "")}";
+            }
+            s += " anims[" + string.Join(",", counts.Select(kv => $"{kv.Key}:{kv.Value}")) + "]";
+            if (controlled != null) s += $" controlled={controlled}";
         }
         return s;
     }

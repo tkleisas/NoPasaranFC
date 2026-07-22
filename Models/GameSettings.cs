@@ -39,17 +39,17 @@ namespace NoPasaranFC.Models
         public bool ShowStamina { get; set; } = true;
         
         // Camera settings
-        public float CameraZoom { get; set; } = 0.8f;
+        public float CameraZoom { get; set; } = 0.88f;
         public float CameraSpeed { get; set; } = 0.1f;
         
         // Match view settings
-        public string MatchViewMode { get; set; } = "2D"; // "2D" (default) or "3D"
-        public string CameraMode { get; set; } = "Broadcast"; // "Broadcast" (default) or "High"
-        public string TimeOfDay { get; set; } = "Day"; // "Day" (default), "Sunset", "Night" or "Random"
-        public string Weather { get; set; } = "Clear"; // "Clear" (default), "Rain" or "Random"
+        public string MatchViewMode { get; set; } = "3D"; // "3D" (default) or "2D"
+        public string CameraMode { get; set; } = "TopDown"; // "TopDown" (default), "Broadcast" or "High"
+        public string TimeOfDay { get; set; } = "Random"; // "Random" (default), "Day", "Sunset" or "Night"
+        public string Weather { get; set; } = "Random"; // "Random" (default), "Clear" or "Rain"
         
         // Language settings
-        public string Language { get; set; } = "en";
+        public string Language { get; set; } = "el"; // "el" Greek (default) or "en" English
         
         public float GetMatchDurationSeconds()
         {
