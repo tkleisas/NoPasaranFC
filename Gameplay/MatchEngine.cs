@@ -1528,16 +1528,16 @@ namespace NoPasaranFC.Gameplay
             // Trigger shoot animation
             player.CurrentAnimationState = "shoot";
 
-            // Calculate horizontal and vertical velocity with stamina effect
+            // Calculate horizontal and vertical velocity with stamina effect.
+            // Same kick formula as the AI (AIShootBall): Shooting/6 + power*24.
             float staminaMultiplier = GetStaminaStatMultiplier(player);
-            float basePower = (player.Shooting / 10f + 5f) * staminaMultiplier;
-            float horizontalPower = basePower * (1f + power * 2f); // More power = faster
-            BallVelocity = shootDirection * horizontalPower * player.Speed;
+            float kickPower = (player.Shooting / 6f + power * 24f) * staminaMultiplier;
+            BallVelocity = shootDirection * kickPower * player.Speed;
             _lastPlayerTouchedBall = player;
 
             // Calculate vertical velocity (height)
             // More hold time = higher shot
-            BallVerticalVelocity = power * 800f * staminaMultiplier; // Max height with max hold
+            BallVerticalVelocity = power * 600f * staminaMultiplier; // Max height with max hold
 
             // Decrease stamina for shooting
             player.Stamina = Math.Max(0, player.Stamina - StaminaDecreasePerShot);

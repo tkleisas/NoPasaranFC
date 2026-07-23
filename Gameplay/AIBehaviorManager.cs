@@ -156,10 +156,46 @@ namespace NoPasaranFC.Gameplay
                             passScore += 300f * runDot;
                     }
                 }
+                
+                // Backward-pass tax: targets behind the ball (toward own goal)
+                // keep play circulating instead of progressing (GK exempt)
+                if (teammate.Position != PlayerPosition.Goalkeeper)
+                {
+                    float attackSign = isHomeTeam ? 1f : -1f;
+                    float targetProgress = (teammate.FieldPosition.X - _engine.BallPosition.X) * attackSign;
+                    if (targetProgress < 0f)
+                        passScore -= 200f;
+                }
 
                 // Penalty if pass path is blocked (moderate — don't prevent all contested passes)
                 if (IsPathBlocked(player.FieldPosition, teammate.FieldPosition, activeOpponents, 40f))
-                    passScore -= 800f;
+                {
+                    // Attacking passes (into the final third) accept interception
+                    // risk - that's how defenses get unlocked
+                    passScore -= distToGoal < 2500f ? 300f : 800f;
+                }
+                
+                // Through ball: teammate in behind the defensive line (at most one
+                // opponent deeper) and not too far out - the killer pass
+                if (distToGoal < 2500f)
+                {
+                    int opponentsDeeper = 0;
+                    foreach (var opp in activeOpponents)
+                    {
+                        if (Vector2.Distance(opp.FieldPosition, opponentGoalCenter) < distToGoal)
+                            opponentsDeeper++;
+                    }
+                    if (opponentsDeeper <= 1)
+                        passScore += 500f;
+                }
+                
+                // Switch of play: teammate on the opposite flank from the ball,
+                // in space - stretches compact defensive blocks
+                float centerY = MatchEngine.StadiumMargin + MatchEngine.FieldHeight / 2f;
+                bool ballWide = Math.Abs(_engine.BallPosition.Y - centerY) > MatchEngine.FieldHeight * 0.15f;
+                bool targetOppositeSide = (_engine.BallPosition.Y - centerY) * (teammate.FieldPosition.Y - centerY) < 0f;
+                if (ballWide && targetOppositeSide && nearestDefDist > 300f)
+                    passScore += 250f;
 
                 if (passScore > bestPassScore)
                 {
@@ -284,7 +320,7 @@ namespace NoPasaranFC.Gameplay
                 passDirection.X * cos - passDirection.Y * sin,
                 passDirection.X * sin + passDirection.Y * cos);
 
-            float passPower = (passer.Passing / 10f + power * 5f) * _engine.GetStaminaStatMultiplier(passer);
+            float passPower = (passer.Passing / 8f + power * 8f) * _engine.GetStaminaStatMultiplier(passer);
             _engine.BallVelocity = adjustedDirection * passPower * passer.Speed;
 
             if (needsLoftedPass)
@@ -326,7 +362,7 @@ namespace NoPasaranFC.Gameplay
             else
                 adjustedDirection = shootDirection;
 
-            float shootPower = (shooter.Shooting / 8f + power * 10f) * _engine.GetStaminaStatMultiplier(shooter);
+            float shootPower = (shooter.Shooting / 6f + power * 24f) * _engine.GetStaminaStatMultiplier(shooter);
             _engine.BallVelocity = adjustedDirection * shootPower * shooter.Speed;
             _engine.BallVerticalVelocity = 100f + (float)_engine.SharedRandom.NextDouble() * 200f;
             _engine.LastPlayerTouchedBall = shooter;
@@ -429,8 +465,10 @@ namespace NoPasaranFC.Gameplay
 
         private static bool IsChasingBall(Player player)
         {
-            return player.AIController is AIController controller
-                && controller.GetCurrentStateName() == nameof(AIStateType.ChasingBall);
+            if (player.AIController is not AIController controller) return false;
+            string state = controller.GetCurrentStateName();
+            // Legacy FSM name and utility-brain action name
+            return state == nameof(AIStateType.ChasingBall) || state == "ChaseBall";
         }
 
         public Player GetPlayerClosestToBall()

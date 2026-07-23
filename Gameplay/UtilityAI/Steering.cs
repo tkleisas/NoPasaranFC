@@ -24,6 +24,14 @@ namespace NoPasaranFC.Gameplay.UtilityAI
             return toTarget / distance * speed;
         }
         
+        /// <summary>Direct seek at full speed (no deceleration).</summary>
+        public static Vector2 Seek(Vector2 position, Vector2 target, float maxSpeed)
+        {
+            Vector2 toTarget = target - position;
+            if (toTarget.LengthSquared() < 1f) return Vector2.Zero;
+            return Vector2.Normalize(toTarget) * maxSpeed;
+        }
+        
         /// <summary>
         /// Separation from nearby teammates (personal space), blended into the
         /// desired velocity without killing forward progress.

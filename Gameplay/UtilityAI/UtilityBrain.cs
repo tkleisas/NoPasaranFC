@@ -163,11 +163,19 @@ namespace NoPasaranFC.Gameplay.UtilityAI
                 ? Vector2.Distance(player.FieldPosition, ctx.NearestOpponent.FieldPosition)
                 : float.MaxValue;
             
-            // SHOOT: close range = high score; pressure reduces it (get rid of it instead)
+            // SHOOT: dominant option in and near the box; role-weighted so
+            // forwards shoot most, but anyone can have a go
+            float roleAttack = player.Position switch
+            {
+                PlayerPosition.Forward => 1.2f,
+                PlayerPosition.Midfielder => 1.0f,
+                PlayerPosition.Defender => 0.7f,
+                _ => 0.85f,
+            };
             float shootScore = 0f;
-            if (distToGoal < 700f) shootScore = 90f;
-            else if (distToGoal < 1200f) shootScore = 45f;
-            if (pressure < 250f) shootScore -= 25f;
+            if (distToGoal < 900f) shootScore = 100f * roleAttack;
+            else if (distToGoal < 1400f) shootScore = 60f * roleAttack;
+            if (pressure < 250f) shootScore -= 10f;
             
             // CLEAR: own third + pressure = boot it
             float clearScore = 0f;
@@ -178,20 +186,29 @@ namespace NoPasaranFC.Gameplay.UtilityAI
             float passScore = float.MinValue;
             if (ctx.BestPassTarget != null && ctx.BestPassScore > 0)
             {
-                passScore = 30f + ctx.BestPassScore / 40f;
+                passScore = 30f + ctx.BestPassScore / 50f;
                 if (pressure < 300f) passScore += 25f; // under pressure: release the ball
                 if (distToGoal > 1200f) passScore += 10f; // too far to shoot: move it on
+                
+                // Cross opportunity: carrier wide in the attacking third -> feed the box
+                float centerY = MatchEngine.StadiumMargin + MatchEngine.FieldHeight / 2f;
+                if (distToGoal < 2200f &&
+                    Math.Abs(player.FieldPosition.Y - centerY) > MatchEngine.FieldHeight * 0.2f)
+                {
+                    passScore += 20f;
+                }
             }
             
-            // DRIBBLE: default carry option; better with open space ahead
-            float dribbleScore = 40f;
-            if (pressure > 400f) dribbleScore += 15f; // no one near: carry it
-            if (player.Position == PlayerPosition.Forward) dribbleScore += 5f;
+            // DRIBBLE: carrying forward is the default attacking move when the
+            // lane is open - passes should beat it only when clearly better
+            float dribbleScore = 50f;
+            if (pressure > 400f) dribbleScore += 20f; // no one near: carry it
+            dribbleScore *= roleAttack;
             
             // Pick the best
             float bestScore = shootScore;
             var type = UtilityActionType.Dribble;
-            Vector2 point = ctx.OpponentGoalCenter;
+            Vector2 point = GetDribblePoint(player, ctx);
             Player target = null;
             
             if (clearScore > bestScore) { bestScore = clearScore; type = UtilityActionType.Clear; }
@@ -252,10 +269,21 @@ namespace NoPasaranFC.Gameplay.UtilityAI
             switch (action.Type)
             {
                 case UtilityActionType.ChaseBall:
-                    player.AITargetPosition = action.Point;
+                {
+                    // Close in: seek the ball itself at full speed so contact
+                    // actually happens (Arrive's deceleration left chasers
+                    // creeping behind the ball forever without touching it)
+                    Vector2 chasePoint = ctx.DistanceToBall < 400f ? ctx.BallPosition : action.Point;
+                    player.AITargetPosition = chasePoint;
                     player.AITargetPositionSet = true;
-                    player.Velocity = Steer(player, action.Point, MaxSpeedFor(player));
+                    Vector2 chaseVelocity = ctx.DistanceToBall < 200f
+                        ? Steering.Seek(player.FieldPosition, chasePoint, MaxSpeedFor(player))
+                        : Steering.Arrive(player.FieldPosition, chasePoint, MaxSpeedFor(player));
+                    chaseVelocity = Steering.ApplySeparation(player, chaseVelocity);
+                    chaseVelocity = Steering.ApplyBoundaryAvoidance(player.FieldPosition, chaseVelocity);
+                    player.Velocity = chaseVelocity;
                     break;
+                }
                 
                 case UtilityActionType.HoldPosition:
                     player.AITargetPosition = action.Point;
@@ -334,43 +362,136 @@ namespace NoPasaranFC.Gameplay.UtilityAI
         }
         
         /// <summary>
-        /// Role-based tactical point: home position shifted by ball progress and
-        /// team possession. Continuous inputs only — no flapping by construction.
+        /// Role-based tactical point. Defending: compact shape near HomePosition.
+        /// Attacking (teammate has the ball): the line pushes up by role and wide
+        /// roles take the flanks — creating width and forward pass options.
         /// </summary>
         private static Vector2 GetTacticalPoint(Player player, AIContext ctx)
         {
-            float attackSign = ctx.IsHomeTeam ? 1f : -1f;
+            bool attacking = ctx.TeammateHasBall(player);
+            float centerY = MatchEngine.StadiumMargin + MatchEngine.FieldHeight / 2f;
             
-            // How far the role pushes up with ball position (fraction of ball's progress)
-            float roleDepth = player.Position switch
+            // Stable per-player variance so lines don't move in lockstep
+            float variance = ((player.Id * 2654435761u) % 1000) / 1000f; // 0..1 stable
+            float depthVariance = 0.85f + variance * 0.3f; // 0.85..1.15 per player
+            float laneJitter = (variance - 0.5f) * 200f; // ±100px lane offset
+            
+            float x, y;
+            if (attacking)
             {
-                PlayerPosition.Defender => 0.25f,
-                PlayerPosition.Midfielder => 0.45f,
-                PlayerPosition.Forward => 0.60f,
-                _ => 0.35f,
-            };
-            
-            // Ball progress from own goal to opponent goal (0..1)
-            float fieldSpan = MatchEngine.FieldWidth;
-            float ballProgress = ctx.IsHomeTeam
-                ? (ctx.BallPosition.X - MatchEngine.StadiumMargin) / fieldSpan
-                : (MatchEngine.StadiumMargin + fieldSpan - ctx.BallPosition.X) / fieldSpan;
-            ballProgress = MathHelper.Clamp(ballProgress, 0f, 1f);
-            
-            // Team in possession pushes the whole line up
-            float possessionPush = ctx.TeammateHasBall(player) ? 0.15f : 0f;
-            
-            float x = player.HomePosition.X
-                + attackSign * (ballProgress - 0.5f + possessionPush) * fieldSpan * roleDepth * 0.5f;
-            
-            // Slight pull toward the ball's lane, keep formation shape mostly
-            float y = MathHelper.Lerp(player.HomePosition.Y, ctx.BallPosition.Y, 0.15f);
+                // Depth: whole line pushes up toward the opponent goal by role,
+                // with per-player depth variance (no chorus-line movement)
+                float roleDepth = player.Position switch
+                {
+                    PlayerPosition.Defender => 0.55f,
+                    PlayerPosition.Midfielder => 0.70f,
+                    PlayerPosition.Forward => 0.85f,
+                    _ => 0.5f,
+                };
+                roleDepth *= depthVariance;
+                x = ctx.OwnGoalCenter.X + (ctx.OpponentGoalCenter.X - ctx.OwnGoalCenter.X) * roleDepth;
+                // Formation shape dominates (was 0.25) - keeps individual positions
+                x = MathHelper.Lerp(x, player.HomePosition.X, 0.45f);
+                
+                // Width: wide roles attack the flanks (stretch the defense)
+                float laneOffset = player.Role switch
+                {
+                    PlayerRole.LeftMidfielder or PlayerRole.LeftWinger => -0.38f,
+                    PlayerRole.RightMidfielder or PlayerRole.RightWinger => 0.38f,
+                    _ => 0f,
+                };
+                if (laneOffset != 0f)
+                {
+                    y = centerY + laneOffset * MatchEngine.FieldHeight + laneJitter;
+                }
+                else
+                {
+                    // Own lane mostly, slight ball pull
+                    y = MathHelper.Lerp(player.HomePosition.Y + laneJitter, ctx.BallPosition.Y, 0.2f);
+                }
+                
+                // Forwards: make runs BEHIND the defensive line when the ball is
+                // in the middle/attacking third - this is what through balls feed
+                if (player.Position == PlayerPosition.Forward)
+                {
+                    float carrierProgress = Math.Abs(ctx.BallPosition.X - ctx.OwnGoalCenter.X)
+                        / Math.Abs(ctx.OpponentGoalCenter.X - ctx.OwnGoalCenter.X);
+                    if (carrierProgress > 0.25f)
+                    {
+                        // Run deep: goal-ward, into a lane between defenders
+                        x = ctx.OwnGoalCenter.X + (ctx.OpponentGoalCenter.X - ctx.OwnGoalCenter.X) * 0.90f;
+                    }
+                    y = MathHelper.Lerp(y, centerY, 0.4f);
+                }
+            }
+            else
+            {
+                // Defending/neutral: home position shifted by ball progress
+                float attackSign = ctx.IsHomeTeam ? 1f : -1f;
+                float roleDepth = player.Position switch
+                {
+                    PlayerPosition.Defender => 0.25f,
+                    PlayerPosition.Midfielder => 0.45f,
+                    PlayerPosition.Forward => 0.60f,
+                    _ => 0.35f,
+                };
+                
+                float fieldSpan = MatchEngine.FieldWidth;
+                float ballProgress = ctx.IsHomeTeam
+                    ? (ctx.BallPosition.X - MatchEngine.StadiumMargin) / fieldSpan
+                    : (MatchEngine.StadiumMargin + fieldSpan - ctx.BallPosition.X) / fieldSpan;
+                ballProgress = MathHelper.Clamp(ballProgress, 0f, 1f);
+                
+                x = player.HomePosition.X
+                    + attackSign * (ballProgress - 0.5f) * fieldSpan * roleDepth * 0.5f;
+                y = MathHelper.Lerp(player.HomePosition.Y, ctx.BallPosition.Y, 0.15f);
+            }
             
             x = MathHelper.Clamp(x, MatchEngine.StadiumMargin + 100f,
                 MatchEngine.StadiumMargin + MatchEngine.FieldWidth - 100f);
             y = MathHelper.Clamp(y, MatchEngine.StadiumMargin + 100f,
                 MatchEngine.StadiumMargin + MatchEngine.FieldHeight - 100f);
+            
+            // Organic drift: slow per-player wander around the tactical point so
+            // the shape breathes instead of holding a rigid grid
+            float phase = variance * 100f + ctx.MatchTime * 0.5f;
+            x += (float)Math.Sin(phase + player.Id * 1.7f) * 60f;
+            y += (float)Math.Cos(phase * 1.3f + player.Id * 2.3f) * 50f;
+            
             return new Vector2(x, y);
+        }
+        
+        /// <summary>
+        /// Dribble target: goal center by default, but if the central lane ahead
+        /// is crowded, shift to the more open flank (wing attack).
+        /// </summary>
+        private static Vector2 GetDribblePoint(Player player, AIContext ctx)
+        {
+            float centerY = MatchEngine.StadiumMargin + MatchEngine.FieldHeight / 2f;
+            
+            // Count opponents ahead-center vs ahead on each flank
+            int centerBlock = 0, leftOpen = 0, rightOpen = 0;
+            Vector2 toGoal = ctx.OpponentGoalCenter - player.FieldPosition;
+            foreach (var opp in ctx.Opponents)
+            {
+                float d = Vector2.Distance(opp.FieldPosition, player.FieldPosition);
+                if (d > 600f) continue;
+                float yDiff = opp.FieldPosition.Y - player.FieldPosition.Y;
+                if (Math.Abs(yDiff) < 400f) centerBlock++;
+                else if (yDiff < 0) leftOpen++;
+                else rightOpen++;
+            }
+            
+            if (centerBlock >= 2)
+            {
+                // Central lane blocked: attack the emptier flank
+                float flankY = leftOpen <= rightOpen
+                    ? MatchEngine.StadiumMargin + MatchEngine.FieldHeight * 0.15f
+                    : MatchEngine.StadiumMargin + MatchEngine.FieldHeight * 0.85f;
+                return new Vector2(ctx.OpponentGoalCenter.X, flankY);
+            }
+            
+            return ctx.OpponentGoalCenter;
         }
     }
 }
