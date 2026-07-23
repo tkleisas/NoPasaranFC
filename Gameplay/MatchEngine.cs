@@ -60,6 +60,40 @@ namespace NoPasaranFC.Gameplay
             get => _lastPlayerTouchedBall;
             set => _lastPlayerTouchedBall = value;
         }
+        
+        // First-touch grace: a teammate who just received the ball can't be
+        // knocked down or tackled for a short window (stops instant turnovers
+        // on reception - real football's "first touch" protection)
+        private readonly Dictionary<Player, float> _firstTouchGrace = new Dictionary<Player, float>();
+        private const float FirstTouchGraceSeconds = 0.6f;
+        
+        /// <summary>True while the player is in their post-reception grace window.</summary>
+        public bool HasFirstTouchGrace(Player player)
+        {
+            return player != null && _firstTouchGrace.TryGetValue(player, out float remaining) && remaining > 0f;
+        }
+        
+        /// <summary>Registers a ball touch, granting grace on teammate receptions.</summary>
+        private void SetLastPlayerTouchedBall(Player player)
+        {
+            if (player != null && player != _lastPlayerTouchedBall && _lastPlayerTouchedBall != null
+                && player.TeamId == _lastPlayerTouchedBall.TeamId)
+            {
+                _firstTouchGrace[player] = FirstTouchGraceSeconds;
+            }
+            _lastPlayerTouchedBall = player;
+        }
+        
+        private void UpdateFirstTouchGrace(float deltaTime)
+        {
+            if (_firstTouchGrace.Count == 0) return;
+            var keys = new List<Player>(_firstTouchGrace.Keys);
+            foreach (var key in keys)
+            {
+                _firstTouchGrace[key] -= deltaTime;
+                if (_firstTouchGrace[key] <= 0f) _firstTouchGrace.Remove(key);
+            }
+        }
 
         // Referee
         public Vector2 RefereePosition { get; set; }
@@ -520,6 +554,7 @@ namespace NoPasaranFC.Gameplay
             MatchTime += gameTimeIncrement;
             _timeSinceKickoff += deltaTime; // Update kickoff timer
             _timeSinceSetPiece += deltaTime; // Update set piece timer
+            UpdateFirstTouchGrace(deltaTime); // Decay first-touch grace windows
             
             // Check if match should end
             if (MatchTime >= 90f)
@@ -1439,8 +1474,8 @@ namespace NoPasaranFC.Gameplay
                         // Push ball in player's movement direction
                         BallVelocity += playerDirection * pushStrength;
                         
-                        // Update last player touched
-                        _lastPlayerTouchedBall = player;
+                        // Update last player touched (grants first-touch grace on receptions)
+                        SetLastPlayerTouchedBall(player);
                     }
                     
                     // Separate ball from player to prevent phasing
@@ -1452,6 +1487,9 @@ namespace NoPasaranFC.Gameplay
         
         private void KnockDownPlayer(Player player, Vector2 impactVelocity)
         {
+            // First-touch grace: receivers can't be knocked down right after a reception
+            if (HasFirstTouchGrace(player)) return;
+            
             player.IsKnockedDown = true;
             player.KnockdownTimer = 0.5f + (float)_random.NextDouble() * 1.0f; // 0.5 to 1.5 seconds
             
@@ -2498,6 +2536,10 @@ namespace NoPasaranFC.Gameplay
 
             if (nearestOpponent != null)
             {
+                // First-touch grace: receivers can't be tackled right after a reception
+                if (HasFirstTouchGrace(nearestOpponent))
+                    return;
+                
                 // Calculate tackle success based on attributes with stamina effect
                 float staminaMultiplier = GetStaminaStatMultiplier(player);
                 float tacklerDefending = player.Defending * staminaMultiplier;

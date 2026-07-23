@@ -320,7 +320,7 @@ namespace NoPasaranFC.Gameplay
                 passDirection.X * cos - passDirection.Y * sin,
                 passDirection.X * sin + passDirection.Y * cos);
 
-            float passPower = (passer.Passing / 8f + power * 8f) * _engine.GetStaminaStatMultiplier(passer);
+            float passPower = (passer.Passing / 8f + power * 14f) * _engine.GetStaminaStatMultiplier(passer);
             _engine.BallVelocity = adjustedDirection * passPower * passer.Speed;
 
             if (needsLoftedPass)

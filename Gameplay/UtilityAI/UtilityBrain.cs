@@ -304,7 +304,7 @@ namespace NoPasaranFC.Gameplay.UtilityAI
                     if (action.TargetPlayer != null &&
                         Vector2.Distance(player.FieldPosition, ctx.BallPosition) < 120f)
                     {
-                        _passBall(player, action.TargetPlayer.FieldPosition + action.TargetPlayer.Velocity * 0.3f, 0.7f);
+                        _passBall(player, action.TargetPlayer.FieldPosition + action.TargetPlayer.Velocity * 0.3f, 0.85f);
                     }
                     player.Velocity = Vector2.Zero;
                     // Pass is instant: fall back to re-evaluating next tick
