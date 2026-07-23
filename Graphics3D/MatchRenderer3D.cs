@@ -343,15 +343,17 @@ namespace NoPasaranFC.Graphics3D
             else
                 DrawBillboardPlayers(device, engine, homeTeamId);
             
-            // Yellow ring on the ground under the controlled player
-            // (CullNone: the skinned instances leave CullClockwise active and the
-            //  ring's winding is not guaranteed)
+            // Ring on the ground under controlled player(s): P1 yellow, P2 cyan
+            // (matches the 2D indicators). CullNone: skinned instances leave
+            // CullClockwise active and the ring's winding is not guaranteed.
             device.RasterizerState = RasterizerState.CullNone;
             foreach (var player in engine.GetAllPlayers())
             {
                 if (player.IsControlled && !player.IsKnockedDown)
                 {
                     Vector3 pos = WorldUnits.ToWorld(player.FieldPosition);
+                    bool isP2 = engine.ControlledPlayer2 == player;
+                    _ringEffect.DiffuseColor = (isP2 ? Color.Cyan : Color.Yellow).ToVector3();
                     // Gentle pulse so the indicator reads clearly at broadcast distance
                     float pulse = 1.1f + 0.08f * (float)Math.Sin(Environment.TickCount64 / 150.0);
                     _ringEffect.World = Matrix.CreateScale(pulse * 1.15f, 1f, pulse * 1.15f)
@@ -783,7 +785,7 @@ namespace NoPasaranFC.Graphics3D
             const int segments = 24;
             const float inner = 0.75f;
             const float outer = 1.0f;
-            Color ringColor = Color.Yellow;
+            Color ringColor = Color.White; // tinted per draw via DiffuseColor (P1 yellow, P2 cyan)
             
             var verts = new List<VertexPositionColor>();
             var indices = new List<int>();
