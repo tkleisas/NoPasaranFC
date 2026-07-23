@@ -13,6 +13,17 @@ namespace NoPasaranFC.Gameplay
         private Dictionary<AIStateType, AIState> _states;
         private AIContext _context;
         private Random _playerRandom; // Unique random instance per player
+        
+        // Utility AI (rewrite): per-player utility brain replacing the FSM when enabled
+        private UtilityAI.UtilityBrain _utilityBrain;
+        private PassingState.PassBallHandler _passCallback;
+        private ShootingState.ShootBallHandler _shootCallback;
+        
+        /// <summary>
+        /// When true, all AIControllers run the utility brain instead of the
+        /// legacy state machine. Static so the harness can A/B it (--legacy).
+        /// </summary>
+        public static bool UseUtilityBrain = true;
 
         /// <summary>
         /// When set (headless harness), per-player Randoms are seeded deterministically
@@ -77,7 +88,17 @@ namespace NoPasaranFC.Gameplay
             // Override the shared Random with this player's unique Random instance
             _context.PlayerRandom = _playerRandom;
             
-            // Update current state
+            // Utility brain path (the rewrite): utility scoring + steering movement
+            if (UseUtilityBrain)
+            {
+                _utilityBrain ??= new UtilityAI.UtilityBrain(_playerRandom,
+                    (p, target, power) => _passCallback?.Invoke(target, power),
+                    (p, target, power) => _shootCallback?.Invoke(target, power));
+                _utilityBrain.Update(_player, _context, deltaTime);
+                return;
+            }
+            
+            // Legacy state machine path
             AIStateType nextState = _currentState.Update(_player, _context, deltaTime);
             
             // Check for state transition
@@ -96,6 +117,7 @@ namespace NoPasaranFC.Gameplay
         
         public void RegisterPassCallback(PassingState.PassBallHandler callback)
         {
+            _passCallback = callback;
             if (_states[AIStateType.Passing] is PassingState passingState)
             {
                 passingState.OnPassBall += callback;
@@ -104,6 +126,7 @@ namespace NoPasaranFC.Gameplay
         
         public void RegisterShootCallback(ShootingState.ShootBallHandler callback)
         {
+            _shootCallback = callback;
             if (_states[AIStateType.Shooting] is ShootingState shootingState)
             {
                 shootingState.OnShootBall += callback;
@@ -112,6 +135,8 @@ namespace NoPasaranFC.Gameplay
         
         public string GetCurrentStateName()
         {
+            if (UseUtilityBrain)
+                return _utilityBrain?.CurrentActionName ?? "Idle";
             return _currentState.Type.ToString();
         }
 

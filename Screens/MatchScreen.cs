@@ -872,7 +872,7 @@ namespace NoPasaranFC.Screens
                 if (GameSettings.Instance.ShowPlayerNames && !string.IsNullOrEmpty(player.Name))
                 {
                     // ~2.2m above ground in engine px (73 px/m); ground-level in TopDown
-                    var head = _renderer3D.WorldToScreen(player.FieldPosition, topDown ? 0f : 160f);
+                    var head = _renderer3D.WorldToScreen(player.FieldPosition, topDown ? 0f : 140f);
                     if (head.HasValue)
                     {
                         try
@@ -944,7 +944,7 @@ namespace NoPasaranFC.Screens
                 if (player.IsControlled && _matchEngine.IsChargingShot())
                 {
                     // ~2.2m above ground in engine px (73 px/m); ground-level in TopDown
-                    var head = _renderer3D.WorldToScreen(player.FieldPosition, topDown ? 0f : 160f);
+                    var head = _renderer3D.WorldToScreen(player.FieldPosition, topDown ? 0f : 140f);
                     if (head.HasValue)
                     {
                         float power = _matchEngine.GetShotPower();
