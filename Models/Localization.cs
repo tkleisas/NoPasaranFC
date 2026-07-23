@@ -141,6 +141,10 @@ namespace NoPasaranFC.Models
                 ["lineup.position.defender"] = "Defender",
                 ["lineup.position.midfielder"] = "Midfielder",
                 ["lineup.position.forward"] = "Forward",
+                ["lineup.goalkeepers"] = "GOALKEEPERS",
+                ["lineup.defenders"] = "DEFENDERS",
+                ["lineup.midfielders"] = "MIDFIELDERS",
+                ["lineup.forwards"] = "FORWARDS",
                 
                 // Settings
                 ["settings.title"] = "SETTINGS",
@@ -270,6 +274,10 @@ namespace NoPasaranFC.Models
                 ["lineup.position.defender"] = "Αμυντικός",
                 ["lineup.position.midfielder"] = "Μέσος",
                 ["lineup.position.forward"] = "Επιθετικός",
+                ["lineup.goalkeepers"] = "ΤΕΡΜΑΤΟΦΥΛΑΚΕΣ",
+                ["lineup.defenders"] = "ΑΜΥΝΤΙΚΟΙ",
+                ["lineup.midfielders"] = "ΜΕΣΟΙ",
+                ["lineup.forwards"] = "ΕΠΙΘΕΤΙΚΟΙ",
                 
                 // Round Results
                 ["round_results_title"] = "ΑΠΟΤΕΛΕΣΜΑΤΑ {0}ΗΣ ΑΓΩΝΙΣΤΙΚΗΣ",

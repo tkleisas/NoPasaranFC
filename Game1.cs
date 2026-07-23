@@ -318,6 +318,13 @@ public class Game1 : Game
             }
             case "state":
                 return "OK " + GetDebugState();
+            case "players":
+                return "OK " + GetPlayersReport();
+            case "setstat":
+            {
+                if (parts.Length < 4) return "ERR usage: setstat <name> <stat> <value>";
+                return SetPlayerStat(parts[1], parts[2], parts[3]);
+            }
             case "match":
                 return StartNextMatch();
             case "quit":
@@ -367,5 +374,52 @@ public class Game1 : Game
             _database, _screenManager, _contentManager, GraphicsDevice);
         _screenManager.PushScreen(lineupScreen);
         return "OK lineup";
+    }
+    
+    // ---- Player stat inspection / editing (experiment tooling) ----
+    
+    /// <summary>Players available for stat editing: match engine players if in a match, else the player team's roster.</summary>
+    private List<NoPasaranFC.Models.Player> GetEditablePlayers()
+    {
+        if (_screenManager.CurrentScreen is MatchScreen ms && ms.Engine != null)
+            return ms.Engine.GetAllPlayers().ToList();
+        var playerTeam = _championship?.Teams?.Find(t => t.IsPlayerControlled);
+        return playerTeam?.Players ?? new List<NoPasaranFC.Models.Player>();
+    }
+    
+    private string GetPlayersReport()
+    {
+        var players = GetEditablePlayers();
+        if (players.Count == 0) return "no players (start a match or load a championship)";
+        var sb = new System.Text.StringBuilder();
+        foreach (var p in players.Where(p => p.IsStarting))
+        {
+            sb.Append($"{p.Name} [{p.Position}] SPD:{p.Speed} SHT:{p.Shooting} PAS:{p.Passing} DEF:{p.Defending} AGI:{p.Agility} TEC:{p.Technique} STA:{p.Stamina:F0}; ");
+        }
+        return sb.ToString();
+    }
+    
+    private string SetPlayerStat(string name, string stat, string valueStr)
+    {
+        if (!int.TryParse(valueStr, out int value) || value < 0 || value > 99)
+            return "ERR value must be 0-99";
+        
+        var player = GetEditablePlayers().FirstOrDefault(p =>
+            p.Name.Equals(name, StringComparison.OrdinalIgnoreCase) ||
+            p.Name.StartsWith(name, StringComparison.OrdinalIgnoreCase));
+        if (player == null) return $"ERR no player matching '{name}'";
+        
+        switch (stat.ToLowerInvariant())
+        {
+            case "speed": player.Speed = value; break;
+            case "shooting": player.Shooting = value; break;
+            case "passing": player.Passing = value; break;
+            case "defending": player.Defending = value; break;
+            case "agility": player.Agility = value; break;
+            case "technique": player.Technique = value; break;
+            case "stamina": player.Stamina = value; break;
+            default: return "ERR stat must be speed|shooting|passing|defending|agility|technique|stamina";
+        }
+        return $"OK {player.Name} {stat}={value}";
     }
 }

@@ -585,8 +585,9 @@ namespace NoPasaranFC.Graphics3D
             }
         }
         
-        /// <summary>Shirt/shorts/socks colors per team, sampled from the 2D kit sprite sheets.</summary>
-        private static void GetKitColors(Player player, int homeTeamId, out Color shirt, out Color shorts, out Color socks)
+        /// <summary>Shirt/shorts/socks colors per team, sampled from the 2D kit sprite sheets.
+        /// Also used by the lineup screen for portraits and team-color accents.</summary>
+        internal static void GetKitColors(Player player, int homeTeamId, out Color shirt, out Color shorts, out Color socks)
         {
             // Goalkeepers wear a distinct kit (yellow home / lime green away)
             if (player.Position == PlayerPosition.Goalkeeper)

@@ -205,15 +205,15 @@ namespace NoPasaranFC.Gameplay.UtilityAI
             if (pressure > 400f) dribbleScore += 20f; // no one near: carry it
             dribbleScore *= roleAttack;
             
-            // Pick the best
+            // Pick the best (shoot can actually win now)
             float bestScore = shootScore;
-            var type = UtilityActionType.Dribble;
+            var type = UtilityActionType.Shoot;
             Vector2 point = GetDribblePoint(player, ctx);
             Player target = null;
             
+            if (dribbleScore > bestScore) { bestScore = dribbleScore; type = UtilityActionType.Dribble; }
             if (clearScore > bestScore) { bestScore = clearScore; type = UtilityActionType.Clear; }
             if (passScore > bestScore) { bestScore = passScore; type = UtilityActionType.Pass; target = ctx.BestPassTarget; }
-            if (type == UtilityActionType.Dribble) bestScore = dribbleScore;
             
             return new UtilityAction(type, point, bestScore, target);
         }

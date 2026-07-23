@@ -18,7 +18,7 @@ namespace NoPasaranFC.Harness
     /// velocity direction reversals, target tracking, possession).
     ///
     /// Usage: dotnet run --project NoPasaranFC.csproj -- harness &lt;scenario&gt; [--seconds N] [--seed N] [--out &lt;prefix&gt;]
-    /// Scenarios: kickoff | center_line_dribble | corner_home | gk_ball
+    /// Scenarios: kickoff | center_line_dribble | corner_home | gk_ball | in_box
     /// </summary>
     public static class HarnessRunner
     {
@@ -32,7 +32,7 @@ namespace NoPasaranFC.Harness
             if (args.Length < 1)
             {
                 Console.Error.WriteLine("usage: harness <scenario> [--seconds N] [--seed N] [--out <prefix>]");
-                Console.Error.WriteLine("scenarios: kickoff, center_line_dribble, corner_home, gk_ball");
+                Console.Error.WriteLine("scenarios: kickoff, center_line_dribble, corner_home, gk_ball, in_box");
                 return 1;
             }
 
@@ -177,6 +177,22 @@ namespace NoPasaranFC.Harness
                     engine.BallVelocity = Vector2.Zero;
                     engine.BallHeight = 0f;
                     engine.BallVerticalVelocity = 0f;
+                    break;
+
+                case "in_box":
+                    // A home forward with possession on the AWAY penalty spot: he should shoot.
+                    engine.BallPosition = new Vector2(
+                        MatchEngine.StadiumMargin + MatchEngine.FieldWidth - 803f, // 11m from away goal
+                        centerY);
+                    engine.BallVelocity = Vector2.Zero;
+                    engine.BallHeight = 0f;
+                    engine.BallVerticalVelocity = 0f;
+                    {
+                        var striker = engine.HomeTeam.Players.First(p =>
+                            p.IsStarting && p.Position == PlayerPosition.Forward);
+                        striker.FieldPosition = engine.BallPosition + new Vector2(-30f, 0f);
+                        engine.LastPlayerTouchedBall = striker;
+                    }
                     break;
 
                 default:
