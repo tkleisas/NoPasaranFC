@@ -13,14 +13,24 @@ namespace NoPasaranFC.Gameplay
         private Dictionary<AIStateType, AIState> _states;
         private AIContext _context;
         private Random _playerRandom; // Unique random instance per player
-        
+
+        /// <summary>
+        /// When set (headless harness), per-player Randoms are seeded deterministically
+        /// from this base + shirt number instead of the wall clock. Must be assigned
+        /// before the MatchEngine constructor creates the controllers.
+        /// </summary>
+        public static int? DeterministicSeedBase = null;
+
         public AIController(Player player, MatchEngine engine)
         {
             _player = player;
             _context = new AIContext();
-            
+
             // Create unique random instance based on player ID (ensures different behavior per player)
-            _playerRandom = new Random(player.Id * 12345 + Environment.TickCount);
+            _playerRandom = DeterministicSeedBase.HasValue
+                ? new Random(DeterministicSeedBase.Value + player.ShirtNumber * 12345
+                    + Database.TeamSeeder.StableNameHash(player.Team?.Name ?? string.Empty))
+                : new Random(player.Id * 12345 + Environment.TickCount);
             
             // Initialize all states - use role-specific positioning state
             _states = new Dictionary<AIStateType, AIState>

@@ -19,6 +19,12 @@ namespace NoPasaranFC.Gameplay.Celebrations
         private float _celebrationTime;
         private Random _random;
 
+        /// <summary>Reseed the selection Random for deterministic simulation (headless harness).</summary>
+        internal void SetRandomSeed(int seed)
+        {
+            _random = new Random(seed);
+        }
+
         public bool IsActive => _currentCelebration != null;
         public float CelebrationTime => _celebrationTime;
         public CelebrationBase CurrentCelebration => _currentCelebration;

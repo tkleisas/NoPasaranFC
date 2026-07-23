@@ -45,6 +45,16 @@ namespace NoPasaranFC.Gameplay
         internal Team AwayTeam => _awayTeam;
         internal Random SharedRandom => _random;
         internal float TimeSinceKickoff => _timeSinceKickoff;
+
+        /// <summary>
+        /// Reseed all engine-owned Random instances for deterministic simulation
+        /// (used by the headless harness). Call right after construction.
+        /// </summary>
+        internal void SetRandomSeed(int seed)
+        {
+            _random = new Random(seed);
+            CelebrationManager.SetRandomSeed(seed);
+        }
         internal Player LastPlayerTouchedBall
         {
             get => _lastPlayerTouchedBall;

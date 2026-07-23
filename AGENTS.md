@@ -31,6 +31,12 @@ dotnet build NoPasaranFC.Android/NoPasaranFC.Android.csproj  # Android (needs an
   running Blender instance (blender-mcp addon on 127.0.0.1:9876). Asset sources: `Content/Models3D/*.blend`.
 - **Spike**: `Spikes/SkinnedSpike` loads any skinned GLB standalone:
   `SPIKE_SHOT=/tmp/x.png SPIKE_CLIP=Running_A dotnet run --no-build -- model.glb`
+- **AI harness** (`Harness/`): headless, deterministic match simulation for AI evaluation:
+  `dotnet run --project NoPasaranFC.csproj -- harness <kickoff|center_line_dribble|corner_home|gk_ball> [--seconds N] [--seed N] [--out <prefix>]`
+  writes `<prefix>.log.jsonl` (per-frame positions/AI states) + `<prefix>.metrics.json`
+  (state churn, direction reversals, possession); `python3 Scripts/trajectory_plot.py <log.jsonl> <out.png>`
+  renders trajectory diagrams. Determinism hooks: `MatchEngine.SetRandomSeed`,
+  `AIController.DeterministicSeedBase`, `TeamSeeder.DeterministicRosterSeed` (all null = original behavior).
 
 ## Project layout
 

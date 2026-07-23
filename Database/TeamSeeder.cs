@@ -126,9 +126,18 @@ namespace NoPasaranFC.Database
             return team;
         }
 
+        /// <summary>
+        /// When set (headless harness), default rosters are generated from this seed plus a
+        /// stable hash of the team name instead of the process-randomized string.GetHashCode().
+        /// Null keeps the original behavior.
+        /// </summary>
+        public static int? DeterministicRosterSeed = null;
+
         private static void GenerateDefaultRoster(Team team, int rosterSize = 25)
         {
-            var random = new Random(team.Name.GetHashCode()); // Consistent generation per team
+            var random = new Random(DeterministicRosterSeed.HasValue
+                ? DeterministicRosterSeed.Value + StableNameHash(team.Name)
+                : team.Name.GetHashCode()); // Consistent generation per team
             
             // Generate players with varied positions (default 25)
             // Distribute positions: ~2 GK, ~8 DEF, ~10 MID, ~5 FWD (for 25 players)
@@ -168,6 +177,20 @@ namespace NoPasaranFC.Database
             }
         }
         
+        /// <summary>Stable (process-independent) FNV-1a hash, for deterministic harness runs.</summary>
+        internal static int StableNameHash(string s)
+        {
+            unchecked
+            {
+                uint hash = 2166136261u;
+                foreach (char c in s)
+                {
+                    hash = (hash ^ c) * 16777619u;
+                }
+                return (int)hash;
+            }
+        }
+
         private static string GeneratePlayerName(string teamName, PlayerPosition position, int index, Random random)
         {
             string[] firstNames = { "Κώστας", "Γιώργος", "Δημήτρης", "Νίκος", "Μιχάλης", "Σωτήρης", 
@@ -180,8 +203,9 @@ namespace NoPasaranFC.Database
                                    "Σταυρίδης", "Παύλου", "Αντωνίου", "Πετρίδης", "Μαρίνος", "Θεοδώρου",
                                    "Σαββίδης", "Φιλίππου", "Ανδρέου", "Χαραλάμπους", "Λουκά", "Χατζηγεωργίου" };
             
-            int firstIdx = (teamName.GetHashCode() + index * 3) % firstNames.Length;
-            int lastIdx = (teamName.GetHashCode() + index * 7) % lastNames.Length;
+            int nameHash = DeterministicRosterSeed.HasValue ? StableNameHash(teamName) : teamName.GetHashCode();
+            int firstIdx = (nameHash + index * 3) % firstNames.Length;
+            int lastIdx = (nameHash + index * 7) % lastNames.Length;
             
             return $"{firstNames[Math.Abs(firstIdx)]} {lastNames[Math.Abs(lastIdx)]}";
         }
