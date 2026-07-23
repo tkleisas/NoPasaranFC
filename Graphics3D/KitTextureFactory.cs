@@ -73,8 +73,10 @@ namespace NoPasaranFC.Graphics3D
 
             var texture = new Texture2D(device, baseTexture.Width, baseTexture.Height);
             texture.SetData(pixels);
-            _cache[key] = texture;
-            return texture;
+            var mipmapped = TextureTools.MakeMipmapped(device, texture);
+            texture.Dispose();
+            _cache[key] = mipmapped;
+            return mipmapped;
         }
 
         /// <summary>Darker variant of a kit color, used for shorts/socks.</summary>
@@ -157,8 +159,10 @@ namespace NoPasaranFC.Graphics3D
             
             var texture = new Texture2D(device, shirtTexture.Width, shirtTexture.Height);
             texture.SetData(pixels);
-            _cache[key] = texture;
-            return texture;
+            var mipmapped = TextureTools.MakeMipmapped(device, texture);
+            texture.Dispose();
+            _cache[key] = mipmapped;
+            return mipmapped;
         }
         
         /// <summary>Readable digit color for a kit: black on light shirts, white on dark.</summary>

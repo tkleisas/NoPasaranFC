@@ -265,7 +265,8 @@ namespace NoPasaranFC.Graphics3D.Skinning
                     if (bytes.Length > 0)
                     {
                         using (var ms = new MemoryStream(bytes.ToArray()))
-                            return Texture2D.FromStream(device, ms);
+                            // Mipmaps keep small features (faces) visible at distance
+                            return TextureTools.MakeMipmapped(device, Texture2D.FromStream(device, ms));
                     }
                 }
             }
