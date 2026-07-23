@@ -4,8 +4,8 @@
     <SupportedOSPlatformVersion>21</SupportedOSPlatformVersion>
     <OutputType>Exe</OutputType>
     <ApplicationId>com.nopasaranfc.game</ApplicationId>
-    <ApplicationVersion>5</ApplicationVersion>
-    <ApplicationDisplayVersion>2.3</ApplicationDisplayVersion>
+    <ApplicationVersion>6</ApplicationVersion>
+    <ApplicationDisplayVersion>2.4</ApplicationDisplayVersion>
     <ApplicationTitle>NO PASARAN FC</ApplicationTitle>
     <EnableDefaultItems>false</EnableDefaultItems>
     <DefineConstants>$(DefineConstants);ANDROID</DefineConstants>
