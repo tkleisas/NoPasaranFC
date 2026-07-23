@@ -81,8 +81,14 @@ public class Game1 : Game
         _graphics.IsFullScreen = fullscreen;
         _graphics.ApplyChanges();
         
+        // Reconcile with the ACTUAL backbuffer: in fullscreen, mode-setting may
+        // silently fall back to the desktop resolution (e.g. Wayland/XWayland),
+        // leaving the game thinking it's 1920x1080 while rendering 2560x1440 —
+        // which makes screens tile/position content for the wrong size.
+        SyncScreenSizeToBackbuffer();
+        
         // Update TouchUI
-        Gameplay.TouchUI.Instance.UpdateScreenSize(width, height);
+        Gameplay.TouchUI.Instance.UpdateScreenSize(ScreenWidth, ScreenHeight);
     }
     
     public static Point[] GetAvailableResolutions()
@@ -123,6 +129,11 @@ public class Game1 : Game
         // Try to load existing championship; if none exists, leave it empty so the
         // menu can launch the championship selection flow.
         _championship = _database.LoadChampionship();
+
+        // Keep logical screen size in sync with the REAL backbuffer: in fullscreen
+        // the compositor may resize the window to the desktop resolution AFTER
+        // startup (Wayland/XWayland), so a one-time check is not enough.
+        Window.ClientSizeChanged += (s, e) => SyncScreenSizeToBackbuffer();
 
         // Debug TCP console: NOPASARAN_DEBUG=1 [NOPASARAN_DEBUG_PORT=7777]
         if (Environment.GetEnvironmentVariable("NOPASARAN_DEBUG") == "1")
@@ -226,6 +237,26 @@ public class Game1 : Game
         base.Draw(gameTime);
     }
 
+    /// <summary>
+    /// Syncs the logical screen size (used by ALL screen layout code) to the
+    /// real backbuffer size. In fullscreen the window may be resized by the
+    /// compositor to the desktop resolution regardless of the preferred
+    /// backbuffer size, so this must run on every client-size change.
+    /// </summary>
+    private void SyncScreenSizeToBackbuffer()
+    {
+        if (GraphicsDevice == null) return;
+        var pp = GraphicsDevice.PresentationParameters;
+        if (pp.BackBufferWidth <= 0 || pp.BackBufferHeight <= 0) return;
+        if (pp.BackBufferWidth == ScreenWidth && pp.BackBufferHeight == ScreenHeight) return;
+        
+        ScreenWidth = pp.BackBufferWidth;
+        ScreenHeight = pp.BackBufferHeight;
+        UIScale = Math.Max(1f, ScreenHeight / 720f);
+        UIScale = Math.Clamp(UIScale, 1f, 3f);
+        Gameplay.TouchUI.Instance.UpdateScreenSize(ScreenWidth, ScreenHeight);
+    }
+    
     /// <summary>
     /// Platform-aware exit. On Android, properly finishes the activity.
     /// </summary>

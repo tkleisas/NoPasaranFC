@@ -305,8 +305,7 @@ namespace NoPasaranFC.Graphics3D
                 net.Draw(device, _camera.View, _camera.Projection);
             _ball.Draw(device, _camera.View, _camera.Projection);
             DrawPlayers(device, engine, homeTeamId);
-            DrawSetPieceArrow(device, engine);
-            _fox?.Draw(device, _camera.View, _camera.Projection, _environment);
+            DrawSetPieceArrow(device, engine);_fox?.Draw(device, _camera.View, _camera.Projection, _environment);
             _fans?.Draw(device, _camera.View, _camera.Projection, _environment);
             _rain?.Draw(device, _camera.View, _camera.Projection);
             
@@ -423,6 +422,75 @@ namespace NoPasaranFC.Graphics3D
                 device.DrawUserIndexedPrimitives(PrimitiveType.TriangleList,
                     verts.ToArray(), 0, verts.Count, indices, 0, 3);
             }
+        }
+        
+        /// <summary>
+        /// Debug overlay (D key): world-space AI visualization drawn on top of
+        /// everything - target lines + crosses (lime), velocity arrows (cyan).
+        /// Screen-space state labels are drawn by MatchScreen.
+        /// </summary>
+        public void DrawDebug(GraphicsDevice device, MatchEngine engine)
+        {
+            device.DepthStencilState = DepthStencilState.None; // always on top
+            device.RasterizerState = RasterizerState.CullNone;
+            _ringEffect.View = _camera.View;
+            _ringEffect.Projection = _camera.Projection;
+            _ringEffect.World = Matrix.Identity;
+            
+            var lines = new List<VertexPositionColor>();
+            Color targetColor = Color.Lime * 0.8f;
+            Color velocityColor = Color.Cyan * 0.9f;
+            
+            foreach (var player in engine.GetAllPlayers())
+            {
+                Vector3 pos = WorldUnits.ToWorld(player.FieldPosition) + new Vector3(0f, 0.1f, 0f);
+                
+                // Line to AI target + cross at the target point
+                if (player.AITargetPositionSet && player.AITargetPosition != Vector2.Zero)
+                {
+                    Vector3 target = WorldUnits.ToWorld(player.AITargetPosition) + new Vector3(0f, 0.1f, 0f);
+                    lines.Add(new VertexPositionColor(pos, targetColor));
+                    lines.Add(new VertexPositionColor(target, targetColor));
+                    
+                    const float cross = 0.5f;
+                    lines.Add(new VertexPositionColor(target + new Vector3(-cross, 0, 0), targetColor));
+                    lines.Add(new VertexPositionColor(target + new Vector3(cross, 0, 0), targetColor));
+                    lines.Add(new VertexPositionColor(target + new Vector3(0, 0, -cross), targetColor));
+                    lines.Add(new VertexPositionColor(target + new Vector3(0, 0, cross), targetColor));
+                }
+                
+                // Velocity arrow (scaled for visibility)
+                if (player.Velocity.LengthSquared() > 1f)
+                {
+                    Vector3 vel = new Vector3(player.Velocity.X, 0f, player.Velocity.Y)
+                        / WorldUnits.PixelsPerMeter;
+                    lines.Add(new VertexPositionColor(pos, velocityColor));
+                    lines.Add(new VertexPositionColor(pos + vel, velocityColor));
+                }
+            }
+            
+            // Ball velocity vector
+            Vector3 ballPos = WorldUnits.ToWorld(engine.BallPosition, engine.BallHeight)
+                + new Vector3(0f, 0.15f, 0f);
+            Vector3 ballVel = new Vector3(engine.BallVelocity.X, engine.BallVerticalVelocity,
+                engine.BallVelocity.Y) / WorldUnits.PixelsPerMeter;
+            lines.Add(new VertexPositionColor(ballPos, Color.Magenta));
+            lines.Add(new VertexPositionColor(ballPos + ballVel, Color.Magenta));
+            
+            if (lines.Count == 0) return;
+            
+            foreach (var pass in _ringEffect.CurrentTechnique.Passes)
+            {
+                pass.Apply();
+                device.DrawUserPrimitives(PrimitiveType.LineList,
+                    lines.ToArray(), 0, lines.Count / 2);
+            }
+            
+            // Restore sprite-batch-friendly states for HUD
+            device.DepthStencilState = DepthStencilState.None;
+            device.BlendState = BlendState.AlphaBlend;
+            device.RasterizerState = RasterizerState.CullCounterClockwise;
+            device.SamplerStates[0] = SamplerState.LinearClamp;
         }
         
         /// <summary>

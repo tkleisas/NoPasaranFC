@@ -636,9 +636,13 @@ namespace NoPasaranFC.Screens
             {
                 spriteBatch.End();
                 _renderer3D.Draw(_graphicsDevice, _matchEngine, _homeTeam.Id);
+                if (_debugOverlayEnabled)
+                    _renderer3D.DrawDebug(_graphicsDevice, _matchEngine);
                 spriteBatch.Begin();
                 
                 DrawScreenUI(spriteBatch, font, true);
+                if (_debugOverlayEnabled)
+                    Draw3DDebugLabels(spriteBatch, font);
                 return;
             }
             
@@ -959,6 +963,42 @@ namespace NoPasaranFC.Screens
                             new Rectangle(barX, barY, barWidth, barHeight), Color.White, 2);
                     }
                 }
+            }
+        }
+        
+        /// <summary>
+        /// Screen-space AI state labels for the 3D debug overlay: team direction,
+        /// role and current AI state above each player (controlled = yellow).
+        /// </summary>
+        private void Draw3DDebugLabels(SpriteBatch spriteBatch, SpriteFont font)
+        {
+            foreach (var player in _matchEngine.GetAllPlayers())
+            {
+                if (player.IsKnockedDown) continue;
+                
+                var head = _renderer3D.WorldToScreen(player.FieldPosition, 180f);
+                if (!head.HasValue) continue;
+                
+                bool playerIsHome = player.Team == _homeTeam;
+                string teamDir = playerIsHome ? "H" : "A";
+                string posLabel = player.Position.ToString().Substring(0, 2).ToUpper();
+                string aiState = player.AIController != null
+                    ? ((Gameplay.AIController)player.AIController).GetCurrentStateName()
+                    : "N/A";
+                
+                string text = player.IsControlled
+                    ? $"CTRL {teamDir} {posLabel}"
+                    : $"{teamDir} {posLabel} {aiState}";
+                Color color = player.IsControlled ? Color.Yellow
+                    : playerIsHome ? Color.Cyan : Color.Orange;
+                
+                Vector2 size = font.MeasureString(text) * 0.5f;
+                Vector2 pos = new Vector2(head.Value.X - size.X / 2, head.Value.Y - 34); // above the name label
+                
+                spriteBatch.Draw(_pixel, new Rectangle((int)(pos.X - 2), (int)(pos.Y - 1),
+                    (int)(size.X + 4), (int)(size.Y + 2)), new Color(0, 0, 0, 140));
+                spriteBatch.DrawString(font, text, pos, color, 0f, Vector2.Zero, 0.5f,
+                    SpriteEffects.None, 0f);
             }
         }
         
