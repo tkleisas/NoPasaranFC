@@ -31,6 +31,7 @@
     <Compile Include="..\Database\*.cs" Link="Database\%(Filename)%(Extension)" />
     <Compile Include="..\Gameplay\*.cs" Link="Gameplay\%(Filename)%(Extension)" />
     <Compile Include="..\Gameplay\AIStates\*.cs" Link="Gameplay\AIStates\%(Filename)%(Extension)" />
+    <Compile Include="..\Gameplay\UtilityAI\*.cs" Link="Gameplay\UtilityAI\%(Filename)%(Extension)" />
     <Compile Include="..\Gameplay\Celebrations\*.cs" Link="Gameplay\Celebrations\%(Filename)%(Extension)" />
     <Compile Include="..\Screens\*.cs" Link="Screens\%(Filename)%(Extension)" />
     <Compile Include="..\Debugging\*.cs" Link="Debugging\%(Filename)%(Extension)" />
