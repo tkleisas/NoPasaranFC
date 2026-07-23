@@ -1,0 +1,214 @@
+{
+  "Scenario": "gk_ball",
+  "Seed": 42,
+  "Seconds": 60,
+  "HomeScore": 0,
+  "AwayScore": 0,
+  "PossessionHome": 0.5897222222222223,
+  "PossessionAway": 0.4102777777777778,
+  "BallDistanceTraveled": 9167.711303664371,
+  "MaxBallStationarySeconds": 2.150000112131238,
+  "TotalStateTransitions": 1544,
+  "TotalTransitionsPerSecond": 25.733333333333334,
+  "TotalDirectionReversals": 636,
+  "Players": [
+    {
+      "Index": 0,
+      "Name": "Wacaby",
+      "Team": "home",
+      "StateTransitions": 38,
+      "TransitionsPerSecond": 0.6333333333333333,
+      "DirectionReversals": 2,
+      "MeanDistanceToTarget": 0
+    },
+    {
+      "Index": 1,
+      "Name": "Lamougio",
+      "Team": "home",
+      "StateTransitions": 0,
+      "TransitionsPerSecond": 0,
+      "DirectionReversals": 0,
+      "MeanDistanceToTarget": 0
+    },
+    {
+      "Index": 2,
+      "Name": "Dablo",
+      "Team": "home",
+      "StateTransitions": 19,
+      "TransitionsPerSecond": 0.31666666666666665,
+      "DirectionReversals": 0,
+      "MeanDistanceToTarget": 42.004523046182264
+    },
+    {
+      "Index": 3,
+      "Name": "\u03A0\u0399\u03A4\u0395\u03A1 \u03A0\u0391\u039D",
+      "Team": "home",
+      "StateTransitions": 19,
+      "TransitionsPerSecond": 0.31666666666666665,
+      "DirectionReversals": 0,
+      "MeanDistanceToTarget": 40.826905496319135
+    },
+    {
+      "Index": 4,
+      "Name": "Domingo",
+      "Team": "home",
+      "StateTransitions": 4,
+      "TransitionsPerSecond": 0.06666666666666667,
+      "DirectionReversals": 0,
+      "MeanDistanceToTarget": 156.23258449554444
+    },
+    {
+      "Index": 5,
+      "Name": "daVirtsi",
+      "Team": "home",
+      "StateTransitions": 7,
+      "TransitionsPerSecond": 0.11666666666666667,
+      "DirectionReversals": 0,
+      "MeanDistanceToTarget": 175.23700816896226
+    },
+    {
+      "Index": 6,
+      "Name": "\u039A\u0391\u039A\u0391\u03A1\u039F\u0393\u039B\u039F\u03A5",
+      "Team": "home",
+      "StateTransitions": 38,
+      "TransitionsPerSecond": 0.6333333333333333,
+      "DirectionReversals": 584,
+      "MeanDistanceToTarget": 2220.90705023951
+    },
+    {
+      "Index": 7,
+      "Name": "\u039A\u03BF\u03BB\u03BF\u03B6\u03AD\u03B9\u03C1\u03BF",
+      "Team": "home",
+      "StateTransitions": 4,
+      "TransitionsPerSecond": 0.06666666666666667,
+      "DirectionReversals": 0,
+      "MeanDistanceToTarget": 186.94859519322713
+    },
+    {
+      "Index": 8,
+      "Name": "SER",
+      "Team": "home",
+      "StateTransitions": 21,
+      "TransitionsPerSecond": 0.35,
+      "DirectionReversals": 1,
+      "MeanDistanceToTarget": 220.00058391941917
+    },
+    {
+      "Index": 9,
+      "Name": "Carlitos",
+      "Team": "home",
+      "StateTransitions": 21,
+      "TransitionsPerSecond": 0.35,
+      "DirectionReversals": 2,
+      "MeanDistanceToTarget": 228.37177281737328
+    },
+    {
+      "Index": 10,
+      "Name": "\u03A3\u03A4\u0391\u0398\u0399\u039D",
+      "Team": "home",
+      "StateTransitions": 17,
+      "TransitionsPerSecond": 0.2833333333333333,
+      "DirectionReversals": 1,
+      "MeanDistanceToTarget": 47.306134442223446
+    },
+    {
+      "Index": 11,
+      "Name": "\u0392\u03B1\u03C3\u03AF\u03BB\u03B7\u03C2 \u039C\u03B9\u03C7\u03B1\u03B7\u03BB\u03AF\u03B4\u03B7\u03C2",
+      "Team": "away",
+      "StateTransitions": 0,
+      "TransitionsPerSecond": 0,
+      "DirectionReversals": 0,
+      "MeanDistanceToTarget": 0
+    },
+    {
+      "Index": 12,
+      "Name": "\u0391\u03BD\u03B4\u03C1\u03AD\u03B1\u03C2 \u0391\u03B8\u03B1\u03BD\u03B1\u03C3\u03AF\u03BF\u03C5",
+      "Team": "away",
+      "StateTransitions": 12,
+      "TransitionsPerSecond": 0.2,
+      "DirectionReversals": 0,
+      "MeanDistanceToTarget": 118.46988238963816
+    },
+    {
+      "Index": 13,
+      "Name": "\u0392\u03B1\u03C3\u03AF\u03BB\u03B7\u03C2 \u039C\u03B9\u03C7\u03B1\u03B7\u03BB\u03AF\u03B4\u03B7\u03C2",
+      "Team": "away",
+      "StateTransitions": 14,
+      "TransitionsPerSecond": 0.23333333333333334,
+      "DirectionReversals": 1,
+      "MeanDistanceToTarget": 127.94888728274239
+    },
+    {
+      "Index": 14,
+      "Name": "\u0391\u03BD\u03B4\u03C1\u03AD\u03B1\u03C2 \u0391\u03B8\u03B1\u03BD\u03B1\u03C3\u03AF\u03BF\u03C5",
+      "Team": "away",
+      "StateTransitions": 16,
+      "TransitionsPerSecond": 0.26666666666666666,
+      "DirectionReversals": 0,
+      "MeanDistanceToTarget": 96.27286781483227
+    },
+    {
+      "Index": 15,
+      "Name": "\u039D\u03AF\u03BA\u03BF\u03C2 \u03A6\u03B9\u03BB\u03AF\u03C0\u03C0\u03BF\u03C5",
+      "Team": "away",
+      "StateTransitions": 12,
+      "TransitionsPerSecond": 0.2,
+      "DirectionReversals": 0,
+      "MeanDistanceToTarget": 112.70212586767144
+    },
+    {
+      "Index": 16,
+      "Name": "\u039A\u03CE\u03C3\u03C4\u03B1\u03C2 \u03A3\u03C4\u03B1\u03C5\u03C1\u03AF\u03B4\u03B7\u03C2",
+      "Team": "away",
+      "StateTransitions": 11,
+      "TransitionsPerSecond": 0.18333333333333332,
+      "DirectionReversals": 0,
+      "MeanDistanceToTarget": 589.7821042786704
+    },
+    {
+      "Index": 17,
+      "Name": "\u0397\u03BB\u03AF\u03B1\u03C2 \u0392\u03B1\u03C3\u03B9\u03BB\u03B5\u03AF\u03BF\u03C5",
+      "Team": "away",
+      "StateTransitions": 10,
+      "TransitionsPerSecond": 0.16666666666666666,
+      "DirectionReversals": 1,
+      "MeanDistanceToTarget": 882.3035572110282
+    },
+    {
+      "Index": 18,
+      "Name": "\u039C\u03AC\u03BD\u03BF\u03C2 \u0391\u03BD\u03B4\u03C1\u03AD\u03BF\u03C5",
+      "Team": "away",
+      "StateTransitions": 11,
+      "TransitionsPerSecond": 0.18333333333333332,
+      "DirectionReversals": 0,
+      "MeanDistanceToTarget": 541.8583095259137
+    },
+    {
+      "Index": 19,
+      "Name": "\u039B\u03B5\u03C5\u03C4\u03AD\u03C1\u03B7\u03C2 \u03A0\u03B1\u03CD\u03BB\u03BF\u03C5",
+      "Team": "away",
+      "StateTransitions": 13,
+      "TransitionsPerSecond": 0.21666666666666667,
+      "DirectionReversals": 1,
+      "MeanDistanceToTarget": 552.1460643810697
+    },
+    {
+      "Index": 20,
+      "Name": "\u03A7\u03C1\u03AE\u03C3\u03C4\u03BF\u03C2 \u0393\u03B5\u03C9\u03C1\u03B3\u03AF\u03BF\u03C5",
+      "Team": "away",
+      "StateTransitions": 830,
+      "TransitionsPerSecond": 13.833333333333334,
+      "DirectionReversals": 17,
+      "MeanDistanceToTarget": 328.82653109899826
+    },
+    {
+      "Index": 21,
+      "Name": "\u0392\u03B1\u03C3\u03AF\u03BB\u03B7\u03C2 \u039C\u03B9\u03C7\u03B1\u03B7\u03BB\u03AF\u03B4\u03B7\u03C2",
+      "Team": "away",
+      "StateTransitions": 427,
+      "TransitionsPerSecond": 7.116666666666666,
+      "DirectionReversals": 26,
+      "MeanDistanceToTarget": 461.94217475043405
+    }
+  ]
+}
