@@ -48,6 +48,9 @@ namespace NoPasaranFC.Models
         public string TimeOfDay { get; set; } = "Random"; // "Random" (default), "Day", "Sunset" or "Night"
         public string Weather { get; set; } = "Random"; // "Random" (default), "Clear" or "Rain"
         
+        // AI settings
+        public float AIDecisionInterval { get; set; } = 0.1f; // Seconds between AI utility re-evaluations (0.1-0.5)
+        
         // Language settings
         public string Language { get; set; } = "el"; // "el" Greek (default) or "en" English
         

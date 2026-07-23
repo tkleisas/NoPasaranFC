@@ -171,7 +171,39 @@ namespace NoPasaranFC.Database
             }
 
             // Add future migrations here:
-            // if (currentVersion < 6) { ... }
+            if (currentVersion < 6)
+            {
+                // Migration 6: Add AIDecisionInterval column to Settings table
+                ApplyMigration6_AddAIDecisionInterval(connection);
+                SetSchemaVersion(connection, 6);
+                currentVersion = 6;
+            }
+        }
+        
+        private void ApplyMigration6_AddAIDecisionInterval(SqliteConnection connection)
+        {
+            var checkCommand = connection.CreateCommand();
+            checkCommand.CommandText = "PRAGMA table_info(Settings)";
+
+            bool columnExists = false;
+            using (var reader = checkCommand.ExecuteReader())
+            {
+                while (reader.Read())
+                {
+                    if (reader.GetString(1) == "AIDecisionInterval")
+                    {
+                        columnExists = true;
+                        break;
+                    }
+                }
+            }
+
+            if (!columnExists)
+            {
+                var alterCommand = connection.CreateCommand();
+                alterCommand.CommandText = "ALTER TABLE Settings ADD COLUMN AIDecisionInterval REAL DEFAULT 0.1";
+                alterCommand.ExecuteNonQuery();
+            }
         }
         
         private int GetSchemaVersion(SqliteConnection connection)
@@ -677,14 +709,14 @@ namespace NoPasaranFC.Database
                     Difficulty, MatchDurationMinutes, PlayerSpeedMultiplier,
                     ShowMinimap, ShowPlayerNames, ShowStamina,
                     CameraZoom, CameraSpeed, Language, MatchViewMode,
-                    CameraMode, TimeOfDay, Weather
+                    CameraMode, TimeOfDay, Weather, AIDecisionInterval
                 ) VALUES (
                     1, @resWidth, @resHeight, @fullscreen, @vsync,
                     @masterVol, @musicVol, @sfxVol, @muteAll,
                     @difficulty, @matchDuration, @speedMulti,
                     @showMap, @showNames, @showStamina,
                     @camZoom, @camSpeed, @language, @matchViewMode,
-                    @cameraMode, @timeOfDay, @weather
+                    @cameraMode, @timeOfDay, @weather, @aiDecisionInterval
                 );
             ";
             
@@ -709,6 +741,7 @@ namespace NoPasaranFC.Database
             command.Parameters.AddWithValue("@cameraMode", settings.CameraMode ?? "Broadcast");
             command.Parameters.AddWithValue("@timeOfDay", settings.TimeOfDay ?? "Day");
             command.Parameters.AddWithValue("@weather", settings.Weather ?? "Clear");
+            command.Parameters.AddWithValue("@aiDecisionInterval", settings.AIDecisionInterval);
             
             command.ExecuteNonQuery();
         }
@@ -746,7 +779,8 @@ namespace NoPasaranFC.Database
                     MatchViewMode = reader.FieldCount > 18 && !reader.IsDBNull(18) ? reader.GetString(18) : "2D",
                     CameraMode = reader.FieldCount > 19 && !reader.IsDBNull(19) ? reader.GetString(19) : "Broadcast",
                     TimeOfDay = reader.FieldCount > 20 && !reader.IsDBNull(20) ? reader.GetString(20) : "Day",
-                    Weather = reader.FieldCount > 21 && !reader.IsDBNull(21) ? reader.GetString(21) : "Clear"
+                    Weather = reader.FieldCount > 21 && !reader.IsDBNull(21) ? reader.GetString(21) : "Clear",
+                    AIDecisionInterval = reader.FieldCount > 22 && !reader.IsDBNull(22) ? reader.GetFloat(22) : 0.1f
                 };
                 return settings;
             }

@@ -174,6 +174,7 @@ namespace NoPasaranFC.Models
                 ["settings.cameraMode"] = "Camera",
                 ["settings.timeOfDay"] = "Time of Day",
                 ["settings.weather"] = "Weather",
+                ["settings.aiDecisionInterval"] = "AI Decision Rate",
                 ["settings.languageSelect"] = "Language",
                 
                 ["settings.difficulty.easy"] = "Easy",
@@ -311,6 +312,7 @@ namespace NoPasaranFC.Models
                 ["settings.cameraMode"] = "Κάμερα",
                 ["settings.timeOfDay"] = "Ώρα Ημέρας",
                 ["settings.weather"] = "Καιρός",
+                ["settings.aiDecisionInterval"] = "Ρυθμός Αποφάσεων ΤΝ",
                 ["settings.languageSelect"] = "Γλώσσα",
                 
                 ["settings.difficulty.easy"] = "Εύκολο",

@@ -42,6 +42,7 @@ namespace NoPasaranFC.Screens
             CameraMode,
             TimeOfDay,
             Weather,
+            AIDecisionInterval,
             Language,
             Back
         }
@@ -70,6 +71,7 @@ namespace NoPasaranFC.Screens
             settings.Add(SettingType.CameraMode);
             settings.Add(SettingType.TimeOfDay);
             settings.Add(SettingType.Weather);
+            settings.Add(SettingType.AIDecisionInterval);
             settings.Add(SettingType.Language);
             settings.Add(SettingType.Back);
 #else
@@ -93,6 +95,7 @@ namespace NoPasaranFC.Screens
             settings.Add(SettingType.CameraMode);
             settings.Add(SettingType.TimeOfDay);
             settings.Add(SettingType.Weather);
+            settings.Add(SettingType.AIDecisionInterval);
             settings.Add(SettingType.Language);
             settings.Add(SettingType.Back);
 #endif
@@ -127,6 +130,7 @@ namespace NoPasaranFC.Screens
                     SettingType.CameraMode => loc.Get("settings.cameraMode"),
                     SettingType.TimeOfDay => loc.Get("settings.timeOfDay"),
                     SettingType.Weather => loc.Get("settings.weather"),
+                    SettingType.AIDecisionInterval => loc.Get("settings.aiDecisionInterval"),
                     SettingType.Language => loc.Get("settings.languageSelect"),
                     SettingType.Back => loc.Get("menu.back"),
                     _ => ""
@@ -330,6 +334,11 @@ namespace NoPasaranFC.Screens
                     _database.SaveSettings(_settings);
                     break;
                     
+                case SettingType.AIDecisionInterval:
+                    _settings.AIDecisionInterval = Math.Clamp(_settings.AIDecisionInterval + direction * 0.01f, 0.1f, 0.5f);
+                    _database.SaveSettings(_settings);
+                    break;
+                    
                 case SettingType.MatchViewMode:
                     _settings.MatchViewMode = _settings.MatchViewMode == "3D" ? "2D" : "3D";
                     _database.SaveSettings(_settings);
@@ -523,6 +532,7 @@ namespace NoPasaranFC.Screens
                 SettingType.ShowStamina => _settings.ShowStamina ? on : off,
                 SettingType.CameraZoom => $"{_settings.CameraZoom:F1}x",
                 SettingType.CameraSpeed => $"{_settings.CameraSpeed:F2}",
+                SettingType.AIDecisionInterval => $"{_settings.AIDecisionInterval:F2}s",
                 SettingType.MatchViewMode => _settings.MatchViewMode,
                 SettingType.CameraMode => loc.Get("settings.cameraMode." + (_settings.CameraMode ?? "Broadcast").ToLowerInvariant()),
                 SettingType.TimeOfDay => loc.Get("settings.timeOfDay." + (_settings.TimeOfDay ?? "Day").ToLowerInvariant()),
