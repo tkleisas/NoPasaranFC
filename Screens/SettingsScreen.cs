@@ -316,7 +316,7 @@ namespace NoPasaranFC.Screens
                     break;
                     
                 case SettingType.PlayerSpeed:
-                    _settings.PlayerSpeedMultiplier = Math.Clamp(_settings.PlayerSpeedMultiplier + direction * 0.1f, 0.5f, 2f);
+                    _settings.PlayerSpeedMultiplier = Math.Clamp(_settings.PlayerSpeedMultiplier + direction * 0.1f, 0.5f, 4f);
                     _database.SaveSettings(_settings);
                     break;
                     

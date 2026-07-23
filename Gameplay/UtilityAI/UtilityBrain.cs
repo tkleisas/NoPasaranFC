@@ -39,7 +39,7 @@ namespace NoPasaranFC.Gameplay.UtilityAI
         private readonly Random _random;
         
         // Decision tuning
-        private const float EvalInterval = 0.25f;
+        private const float EvalInterval = 0.1f; // seconds between utility re-evaluations
         private const float CommitmentBonus = 15f;
         
         /// <summary>Per-player top speed (respects the Speed stat like the old code).</summary>
