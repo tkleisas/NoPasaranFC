@@ -14,13 +14,13 @@ namespace NoPasaranFC.Gameplay.UtilityAI
         /// Seek-with-deceleration: full speed when far, smoothly decelerating
         /// inside slowRadius, arriving at zero speed exactly at the target.
         /// </summary>
-        public static Vector2 Arrive(Vector2 position, Vector2 target, float maxSpeed, float slowRadius = 120f)
+        public static Vector2 Arrive(Vector2 position, Vector2 target, float maxSpeed, float slowRadius = 100f)
         {
             Vector2 toTarget = target - position;
             float distance = toTarget.Length();
             if (distance < 1f) return Vector2.Zero;
             
-            float speed = maxSpeed * Math.Clamp(distance / slowRadius, 0.15f, 1f);
+            float speed = maxSpeed * Math.Clamp(distance / slowRadius, 0.3f, 1f);
             return toTarget / distance * speed;
         }
         

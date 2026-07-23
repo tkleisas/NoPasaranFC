@@ -41,7 +41,10 @@ namespace NoPasaranFC.Gameplay.UtilityAI
         // Decision tuning
         private const float EvalInterval = 0.25f;
         private const float CommitmentBonus = 15f;
-        private const float PlayerMaxSpeed = 137f; // matches typical AI velocity (stat 55 * 2.5)
+        
+        /// <summary>Per-player top speed (respects the Speed stat like the old code).</summary>
+        private static float MaxSpeedFor(Player player) =>
+            player.Speed * AIConstants.BaseSpeedMultiplier;
         
         // Ball callbacks (same delegates the old states used)
         private readonly Action<Player, Vector2, float> _passBall;
@@ -251,20 +254,20 @@ namespace NoPasaranFC.Gameplay.UtilityAI
                 case UtilityActionType.ChaseBall:
                     player.AITargetPosition = action.Point;
                     player.AITargetPositionSet = true;
-                    player.Velocity = Steer(player, action.Point, PlayerMaxSpeed);
+                    player.Velocity = Steer(player, action.Point, MaxSpeedFor(player));
                     break;
                 
                 case UtilityActionType.HoldPosition:
                     player.AITargetPosition = action.Point;
                     player.AITargetPositionSet = true;
-                    player.Velocity = Steer(player, action.Point, PlayerMaxSpeed * 0.8f);
+                    player.Velocity = Steer(player, action.Point, MaxSpeedFor(player) * 0.85f);
                     break;
                 
                 case UtilityActionType.Dribble:
                     // Carry toward goal; engine ball-contact physics moves the ball
                     player.AITargetPosition = action.Point;
                     player.AITargetPositionSet = true;
-                    player.Velocity = Steer(player, action.Point, PlayerMaxSpeed * 0.9f);
+                    player.Velocity = Steer(player, action.Point, MaxSpeedFor(player));
                     break;
                 
                 case UtilityActionType.Pass:
