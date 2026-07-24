@@ -27,6 +27,12 @@ namespace NoPasaranFC.Graphics3D
             return px / PixelsPerMeter;
         }
         
+        /// <summary>Meters to engine pixels.</summary>
+        public static float MToPx(float m)
+        {
+            return m * PixelsPerMeter;
+        }
+        
         /// <summary>
         /// Convert an engine pixel position (+ optional pixel height) to 3D world coordinates.
         /// World X = field length direction, Y = up, Z = field width direction.
