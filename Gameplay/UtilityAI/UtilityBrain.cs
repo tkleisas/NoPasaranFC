@@ -53,7 +53,6 @@ namespace NoPasaranFC.Gameplay.UtilityAI
         
         // Decision tuning
         private static float EvalInterval => GameSettings.Instance.AIDecisionInterval;
-        private const float CommitmentBonus = 15f;
         
         /// <summary>Per-player top speed (respects the Speed stat like the old code).</summary>
         private static float MaxSpeedFor(Player player) =>
@@ -88,6 +87,12 @@ namespace NoPasaranFC.Gameplay.UtilityAI
         }
         
         public string CurrentActionName => _current.Type.ToString();
+        
+        // Lifetime action counters (harness metrics: kicks are instant actions
+        // that never persist for a full frame, so state-name census misses them)
+        public int ShotsAttempted { get; private set; }
+        public int PassesAttempted { get; private set; }
+        public int ClearsAttempted { get; private set; }
         
         public void Update(Player player, AIContext context, float deltaTime)
         {
@@ -188,9 +193,9 @@ namespace NoPasaranFC.Gameplay.UtilityAI
                 {
                     // Closer = more attractive; must beat holdScore even for the
                     // designated chaser when the ball is far (kickoff distances)
-                    chaseScore = 85f - ctx.DistanceToBall / 40f;
-                    if (ctx.DistanceToBall < 200f) chaseScore += 20f;
-                    if (pounce) chaseScore += 25f; // box pounce: highest priority
+                    chaseScore = UtilityTuning.ChaseBaseScore - ctx.DistanceToBall / 40f;
+                    if (ctx.DistanceToBall < 200f) chaseScore += UtilityTuning.ChaseCloseBonus;
+                    if (pounce) chaseScore += UtilityTuning.PounceBonus; // box pounce: highest priority
                     else if (!ctx.ShouldChaseBall) chaseScore -= 10f; // rescue, not primary duty
                     
                     // Press hard when the ball is loose in the attacking third
@@ -200,7 +205,7 @@ namespace NoPasaranFC.Gameplay.UtilityAI
                 }
                 
                 Vector2 holdPoint = GetTacticalPoint(player, ctx);
-                float holdScore = 50f;
+                float holdScore = UtilityTuning.HoldBaseScore;
                 // Holding is more attractive when far from the ball or a teammate has it
                 if (ctx.TeammateHasBall(player)) holdScore += 10f;
                 
@@ -212,7 +217,7 @@ namespace NoPasaranFC.Gameplay.UtilityAI
             // Commitment bonus: staying with the current action beats switching
             // to something only marginally better (kills boundary oscillation)
             if (_current.Type == best.Type && best.Type != UtilityActionType.Idle)
-                best.Score += CommitmentBonus;
+                best.Score += UtilityTuning.CommitmentBonus;
             
             return best;
         }
@@ -228,37 +233,37 @@ namespace NoPasaranFC.Gameplay.UtilityAI
             // forwards shoot most, but anyone can have a go
             float roleAttack = player.Position switch
             {
-                PlayerPosition.Forward => 1.2f,
-                PlayerPosition.Midfielder => 1.0f,
-                PlayerPosition.Defender => 0.7f,
+                PlayerPosition.Forward => UtilityTuning.RoleAttackForward,
+                PlayerPosition.Midfielder => UtilityTuning.RoleAttackMidfielder,
+                PlayerPosition.Defender => UtilityTuning.RoleAttackDefender,
                 _ => 0.85f,
             };
             float shootScore = 0f;
-            float shootRangeNear = 900f * _thresholdJitter;
-            float shootRangeFar = 1400f * _thresholdJitter;
-            if (distToGoal < shootRangeNear) shootScore = 100f * roleAttack;
-            else if (distToGoal < shootRangeFar) shootScore = 60f * roleAttack;
-            if (pressure < 250f) shootScore -= 10f;
+            float shootRangeNear = UtilityTuning.ShootRangeNear * _thresholdJitter;
+            float shootRangeFar = UtilityTuning.ShootRangeFar * _thresholdJitter;
+            if (distToGoal < shootRangeNear) shootScore = UtilityTuning.ShootScoreNear * roleAttack;
+            else if (distToGoal < shootRangeFar) shootScore = UtilityTuning.ShootScoreFar * roleAttack;
+            if (pressure < 250f) shootScore -= UtilityTuning.ShootPressurePenalty;
             
             // CLEAR: own third + pressure = boot it
             float clearScore = 0f;
             if (ctx.IsInOwnThird(player) && pressure < 300f)
-                clearScore = 65f;
+                clearScore = UtilityTuning.ClearScore;
             
             // PASS: from the context's pass-target scoring, plus pressure urgency
             float passScore = float.MinValue;
             if (ctx.BestPassTarget != null && ctx.BestPassScore > 0)
             {
-                passScore = 30f + ctx.BestPassScore / 50f;
-                if (pressure < 300f) passScore += 25f; // under pressure: release the ball
-                if (distToGoal > 1200f) passScore += 10f; // too far to shoot: move it on
+                passScore = UtilityTuning.PassBaseScore + ctx.BestPassScore * UtilityTuning.PassScoreScale;
+                if (pressure < 300f) passScore += UtilityTuning.PassPressureBonus; // under pressure: release the ball
+                if (distToGoal > 1200f) passScore += UtilityTuning.PassFarBonus; // too far to shoot: move it on
                 
                 // Cross opportunity: carrier wide in the attacking third -> feed the box
                 float centerY = MatchEngine.StadiumMargin + MatchEngine.FieldHeight / 2f;
                 if (distToGoal < 2200f &&
                     Math.Abs(player.FieldPosition.Y - centerY) > MatchEngine.FieldHeight * 0.2f)
                 {
-                    passScore += 20f;
+                    passScore += UtilityTuning.CrossBonus;
                 }
             }
             
@@ -280,9 +285,10 @@ namespace NoPasaranFC.Gameplay.UtilityAI
                     }
                 }
             }
-            float dribbleScore = 50f + (3 - Math.Min(3, laneBlockers)) * 15f; // 95 open lane, 50 packed
+            float dribbleScore = UtilityTuning.DribbleBaseScore
+                + (3 - Math.Min(3, laneBlockers)) * UtilityTuning.DribbleLaneBonus; // open lane vs packed
             dribbleScore *= roleAttack;
-            if (pressure > 400f) dribbleScore += 10f;
+            if (pressure > 400f) dribbleScore += UtilityTuning.DribbleFreeSpaceBonus;
             
             // Pick the best (shoot can actually win now)
             float bestScore = shootScore;
@@ -426,6 +432,7 @@ namespace NoPasaranFC.Gameplay.UtilityAI
                         float passDist = Vector2.Distance(ctx.BallPosition, action.TargetPlayer.FieldPosition);
                         float lead = Math.Clamp(passDist / 1200f, 0.2f, 0.8f);
                         _passBall(player, action.TargetPlayer.FieldPosition + action.TargetPlayer.Velocity * lead, 0.85f);
+                        PassesAttempted++;
                         
                         // Give-and-go: run into space after releasing, offering
                         // the return pass. Target: deep, offset from the pass lane
@@ -444,6 +451,7 @@ namespace NoPasaranFC.Gameplay.UtilityAI
                     if (Vector2.Distance(player.FieldPosition, ctx.BallPosition) < 120f)
                     {
                         _shootBall(player, ctx.OpponentGoalCenter, 0.85f);
+                        ShotsAttempted++;
                     }
                     player.Velocity = Vector2.Zero;
                     _current = new UtilityAction(UtilityActionType.Idle, player.FieldPosition, 0f);
@@ -456,6 +464,7 @@ namespace NoPasaranFC.Gameplay.UtilityAI
                             MathHelper.Lerp(player.FieldPosition.X, ctx.OpponentGoalCenter.X, 0.6f),
                             ctx.BallPosition.Y + (float)(_random.NextDouble() - 0.5) * 800f);
                         _shootBall(player, clearTarget, 1.0f);
+                        ClearsAttempted++;
                     }
                     player.Velocity = Vector2.Zero;
                     _current = new UtilityAction(UtilityActionType.Idle, player.FieldPosition, 0f);
@@ -520,15 +529,15 @@ namespace NoPasaranFC.Gameplay.UtilityAI
                 // with per-player depth variance (no chorus-line movement)
                 float roleDepth = player.Position switch
                 {
-                    PlayerPosition.Defender => 0.55f,
-                    PlayerPosition.Midfielder => 0.70f,
-                    PlayerPosition.Forward => 0.85f,
+                    PlayerPosition.Defender => UtilityTuning.AttackDepthDefender,
+                    PlayerPosition.Midfielder => UtilityTuning.AttackDepthMidfielder,
+                    PlayerPosition.Forward => UtilityTuning.AttackDepthForward,
                     _ => 0.5f,
                 };
                 roleDepth *= depthVariance;
                 x = ctx.OwnGoalCenter.X + (ctx.OpponentGoalCenter.X - ctx.OwnGoalCenter.X) * roleDepth;
                 // Formation shape dominates (was 0.25) - keeps individual positions
-                x = MathHelper.Lerp(x, player.HomePosition.X, 0.45f);
+                x = MathHelper.Lerp(x, player.HomePosition.X, UtilityTuning.HomePositionLerp);
                 
                 // Width: wide roles attack the flanks (stretch the defense)
                 float laneOffset = player.Role switch
@@ -556,7 +565,7 @@ namespace NoPasaranFC.Gameplay.UtilityAI
                     // exits <0.25 - no flip-flopping at the trigger line)
                     if (_inDeepRun)
                     {
-                        x = ctx.OwnGoalCenter.X + (ctx.OpponentGoalCenter.X - ctx.OwnGoalCenter.X) * 0.90f;
+                        x = ctx.OwnGoalCenter.X + (ctx.OpponentGoalCenter.X - ctx.OwnGoalCenter.X) * UtilityTuning.DeepRunDepth;
                     }
                     y = MathHelper.Lerp(y, centerY, 0.4f);
                 }

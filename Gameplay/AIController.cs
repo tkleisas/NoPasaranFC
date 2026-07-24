@@ -139,6 +139,10 @@ namespace NoPasaranFC.Gameplay
                 return _utilityBrain?.CurrentActionName ?? "Idle";
             return _currentState.Type.ToString();
         }
+        
+        /// <summary>Lifetime kick counters from the utility brain (0 for FSM mode).</summary>
+        public int ShotsAttempted => _utilityBrain?.ShotsAttempted ?? 0;
+        public int PassesAttempted => _utilityBrain?.PassesAttempted ?? 0;
 
         public void ForceTransitionTo(AIStateType newState)
         {

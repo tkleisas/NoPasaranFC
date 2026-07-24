@@ -33,11 +33,18 @@ dotnet build NoPasaranFC.Android/NoPasaranFC.Android.csproj  # Android (needs an
 - **Spike**: `Spikes/SkinnedSpike` loads any skinned GLB standalone:
   `SPIKE_SHOT=/tmp/x.png SPIKE_CLIP=Running_A dotnet run --no-build -- model.glb`
 - **AI harness** (`Harness/`): headless, deterministic match simulation for AI evaluation:
-  `dotnet run --project NoPasaranFC.csproj -- harness <kickoff|center_line_dribble|corner_home|gk_ball> [--seconds N] [--seed N] [--out <prefix>]`
+  `dotnet run --project NoPasaranFC.csproj -- harness <kickoff|center_line_dribble|corner_home|gk_ball|in_box> [--seconds N] [--seed N] [--out <prefix>] [--params file.json] [--nolog]`
   writes `<prefix>.log.jsonl` (per-frame positions/AI states) + `<prefix>.metrics.json`
-  (state churn, direction reversals, possession); `python3 Scripts/trajectory_plot.py <log.jsonl> <out.png>`
-  renders trajectory diagrams. Determinism hooks: `MatchEngine.SetRandomSeed`,
-  `AIController.DeterministicSeedBase`, `TeamSeeder.DeterministicRosterSeed` (all null = original behavior).
+  (state churn, direction reversals, possession, attacking-third time);
+  `python3 Scripts/trajectory_plot.py <log.jsonl> <out.png>` renders trajectory diagrams.
+  Determinism hooks: `MatchEngine.SetRandomSeed`, `AIController.DeterministicSeedBase`,
+  `TeamSeeder.DeterministicRosterSeed` (all null = original behavior).
+  `--params` overrides `AIConstants`/`UtilityTuning` fields (mutable statics for this reason);
+  `--nolog` skips the frame log (metrics only).
+- **AI parameter search**: `python3 Scripts/param_search.py` — (1+λ) evolution strategy over
+  `Harness/search_space.json` (UtilityTuning knobs) using the harness as fitness evaluator
+  (goals, shots, box entries, territory, oscillation); writes a full CSV log +
+  `best_params.json` to its outdir. Run v3 artifacts + findings: `docs/param-search-v3/`.
 
 ## Project layout
 

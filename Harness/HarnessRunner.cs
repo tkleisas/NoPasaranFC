@@ -40,6 +40,8 @@ namespace NoPasaranFC.Harness
             int seconds = 60;
             int seed = 42;
             string outPrefix = null;
+            string paramsPath = null;
+            bool noLog = false;
 
             for (int i = 1; i < args.Length; i++)
             {
@@ -48,10 +50,23 @@ namespace NoPasaranFC.Harness
                     case "--seconds": seconds = int.Parse(args[++i]); break;
                     case "--seed": seed = int.Parse(args[++i]); break;
                     case "--out": outPrefix = args[++i]; break;
+                    case "--params": paramsPath = args[++i]; break;
+                    case "--nolog": noLog = true; break;
                     default:
                         Console.Error.WriteLine($"unknown argument: {args[i]}");
                         return 1;
                 }
+            }
+
+            // AIConstants + UtilityTuning overrides for offline parameter search:
+            // a flat JSON object { "FieldName": value, ... } applied before the
+            // engine exists (unknown names are ignored by both classes)
+            if (paramsPath != null)
+            {
+                var overrides = JsonSerializer.Deserialize<Dictionary<string, float>>(
+                    File.ReadAllText(paramsPath));
+                AIConstants.ApplyOverrides(overrides);
+                Gameplay.UtilityAI.UtilityTuning.ApplyOverrides(overrides);
             }
 
             outPrefix ??= $"harness_{scenario}_seed{seed}";
@@ -90,21 +105,23 @@ namespace NoPasaranFC.Harness
             var logPath = outPrefix + ".log.jsonl";
             var metrics = new MetricsCollector(players, homeTeam, awayTeam);
 
-            using (var writer = new StreamWriter(logPath, false, new UTF8Encoding(false)))
+            // --nolog: metrics only (parameter search runs don't need the 36MB frame log)
+            using (var writer = noLog ? StreamWriter.Null : new StreamWriter(logPath, false, new UTF8Encoding(false)))
             {
-                writer.WriteLine(JsonSerializer.Serialize(new Dictionary<string, object>
-                {
-                    ["meta"] = true,
-                    ["scenario"] = scenario,
-                    ["seed"] = seed,
-                    ["seconds"] = seconds,
-                    ["fps"] = 60,
-                    ["fieldWidth"] = MatchEngine.FieldWidth,
-                    ["fieldHeight"] = MatchEngine.FieldHeight,
-                    ["stadiumMargin"] = MatchEngine.StadiumMargin,
-                    ["homeTeam"] = homeTeam.Name,
-                    ["awayTeam"] = awayTeam.Name
-                }));
+                if (!noLog)
+                    writer.WriteLine(JsonSerializer.Serialize(new Dictionary<string, object>
+                    {
+                        ["meta"] = true,
+                        ["scenario"] = scenario,
+                        ["seed"] = seed,
+                        ["seconds"] = seconds,
+                        ["fps"] = 60,
+                        ["fieldWidth"] = MatchEngine.FieldWidth,
+                        ["fieldHeight"] = MatchEngine.FieldHeight,
+                        ["stadiumMargin"] = MatchEngine.StadiumMargin,
+                        ["homeTeam"] = homeTeam.Name,
+                        ["awayTeam"] = awayTeam.Name
+                    }));
 
                 int totalFrames = seconds * 60;
                 for (int frame = 0; frame < totalFrames; frame++)
@@ -112,7 +129,8 @@ namespace NoPasaranFC.Harness
                     Step();
                     float t = (frame + 1) * FixedDeltaTime;
                     metrics.RecordFrame(engine, players, FixedDeltaTime);
-                    WriteFrame(writer, engine, players, homeTeam, t);
+                    if (!noLog)
+                        WriteFrame(writer, engine, players, homeTeam, t);
                 }
             }
 
@@ -239,7 +257,8 @@ namespace NoPasaranFC.Harness
             Console.WriteLine($"=== Harness: {scenario} (seed {seed}, {seconds}s) ===");
             Console.WriteLine($"Log: {logPath}");
             Console.WriteLine($"Score: {m.HomeScore}-{m.AwayScore}   Possession: home {m.PossessionHome:P0} / away {m.PossessionAway:P0}");
-            Console.WriteLine($"Ball distance traveled: {m.BallDistanceTraveled:F0}px ({m.BallDistanceTraveled / 73f:F1}m)   " +
+            Console.WriteLine($"Attacking third: home {m.BallInHomeAttackingThirdSeconds:F1}s / away {m.BallInAwayAttackingThirdSeconds:F1}s   " +
+                              $"Shots: {m.HomeShots}-{m.AwayShots}   Box entries: {m.HomeBoxEntries}-{m.AwayBoxEntries}   " +
                               $"Max stationary: {m.MaxBallStationarySeconds:F1}s");
             Console.WriteLine();
             Console.WriteLine($"{"#",-3}{"Player",-28}{"Team",-6}{"Transitions",-12}{"Trans/s",-9}{"Reversals",-10}{"MeanDistToTarget",-16}");
@@ -266,6 +285,7 @@ namespace NoPasaranFC.Harness
             public double TargetDistanceSum;
             public int TargetDistanceSamples;
             public string LastState;
+            public int ShotsSeen;
             public Vector2 LastVelocity;
             public bool HasLastVelocity;
         }
@@ -281,6 +301,12 @@ namespace NoPasaranFC.Harness
             public double PossessionAway { get; set; }
             public double BallDistanceTraveled { get; set; }
             public double MaxBallStationarySeconds { get; set; }
+            public double BallInHomeAttackingThirdSeconds { get; set; }
+            public double BallInAwayAttackingThirdSeconds { get; set; }
+            public int HomeShots { get; set; }
+            public int AwayShots { get; set; }
+            public int HomeBoxEntries { get; set; }
+            public int AwayBoxEntries { get; set; }
             public int TotalStateTransitions { get; set; }
             public double TotalTransitionsPerSecond { get; set; }
             public int TotalDirectionReversals { get; set; }
@@ -308,6 +334,11 @@ namespace NoPasaranFC.Harness
             private double _ballDistance;
             private double _currentStationaryTime;
             private double _maxStationaryTime;
+            private double _homeAttackingThirdTime;
+            private double _awayAttackingThirdTime;
+            private int _homeShots, _awayShots;
+            private int _homeBoxEntries, _awayBoxEntries;
+            private bool _ballInHomeBox, _ballInAwayBox;
             private Vector2 _lastBallPosition;
             private bool _hasLastBallPosition;
 
@@ -341,6 +372,22 @@ namespace NoPasaranFC.Harness
                 {
                     _currentStationaryTime = 0;
                 }
+                
+                // Territorial pressure: time the ball spends in each attacking third.
+                // Home attacks +X (right), away attacks -X (left).
+                float thirdWidth = MatchEngine.FieldWidth / 3f;
+                float ballFieldX = engine.BallPosition.X - MatchEngine.StadiumMargin;
+                if (ballFieldX > 2f * thirdWidth) _homeAttackingThirdTime += dt;
+                else if (ballFieldX < thirdWidth) _awayAttackingThirdTime += dt;
+                
+                // Penalty-box entries (16.5m = 1205px deep): count each new entry
+                const float BoxDepth = 1205f;
+                bool inHomeBox = ballFieldX > MatchEngine.FieldWidth - BoxDepth;
+                bool inAwayBox = ballFieldX < BoxDepth;
+                if (inHomeBox && !_ballInHomeBox) _homeBoxEntries++;
+                if (inAwayBox && !_ballInAwayBox) _awayBoxEntries++;
+                _ballInHomeBox = inHomeBox;
+                _ballInAwayBox = inAwayBox;
 
                 // Possession: team of the nearest player to the ball
                 Player nearest = null;
@@ -367,6 +414,18 @@ namespace NoPasaranFC.Harness
                     {
                         m.StateTransitions++;
                         m.LastState = state;
+                    }
+                    
+                    // Kick counters (instant actions the per-frame census can't see)
+                    if (p.AIController is AIController aic)
+                    {
+                        int shots = aic.ShotsAttempted;
+                        if (shots > m.ShotsSeen)
+                        {
+                            if (p.Team == _homeTeam) _homeShots += shots - m.ShotsSeen;
+                            else _awayShots += shots - m.ShotsSeen;
+                            m.ShotsSeen = shots;
+                        }
                     }
 
                     if (m.HasLastVelocity &&
@@ -414,6 +473,12 @@ namespace NoPasaranFC.Harness
                     PossessionAway = totalPossession > 0 ? _awayPossessionTime / totalPossession : 0,
                     BallDistanceTraveled = _ballDistance,
                     MaxBallStationarySeconds = _maxStationaryTime,
+                    BallInHomeAttackingThirdSeconds = _homeAttackingThirdTime,
+                    BallInAwayAttackingThirdSeconds = _awayAttackingThirdTime,
+                    HomeShots = _homeShots,
+                    AwayShots = _awayShots,
+                    HomeBoxEntries = _homeBoxEntries,
+                    AwayBoxEntries = _awayBoxEntries,
                     TotalStateTransitions = rows.Sum(r => r.StateTransitions),
                     TotalTransitionsPerSecond = rows.Sum(r => r.StateTransitions) / (double)seconds,
                     TotalDirectionReversals = rows.Sum(r => r.DirectionReversals),
