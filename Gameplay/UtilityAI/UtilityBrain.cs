@@ -158,18 +158,26 @@ namespace NoPasaranFC.Gameplay.UtilityAI
                 }
                 
                 float chaseScore = 0f;
-                if (ctx.ShouldChaseBall ||
+                float ballProgress = Math.Abs(ctx.BallPosition.X - ctx.OwnGoalCenter.X)
+                    / Math.Abs(ctx.OpponentGoalCenter.X - ctx.OwnGoalCenter.X);
+                
+                // Pounce: ball in the attacking third, loose or opponent-owned,
+                // and I'm close — attack it regardless of chase rank (rebounds,
+                // defensive mistakes; this is what forwards exist for)
+                bool pounce = ballProgress > 0.6f && ctx.DistanceToBall < 400f &&
+                    (ctx.BallCarrier == null || ctx.BallCarrier.TeamId != player.TeamId);
+                
+                if (ctx.ShouldChaseBall || pounce ||
                     (ballLoose && ctx.BallCarrier != null && ctx.DistanceToBall < 800f))
                 {
                     // Closer = more attractive; must beat holdScore even for the
                     // designated chaser when the ball is far (kickoff distances)
                     chaseScore = 85f - ctx.DistanceToBall / 40f;
                     if (ctx.DistanceToBall < 200f) chaseScore += 20f;
-                    if (!ctx.ShouldChaseBall) chaseScore -= 10f; // rescue, not primary duty
+                    if (pounce) chaseScore += 25f; // box pounce: highest priority
+                    else if (!ctx.ShouldChaseBall) chaseScore -= 10f; // rescue, not primary duty
                     
                     // Press hard when the ball is loose in the attacking third
-                    float ballProgress = Math.Abs(ctx.BallPosition.X - ctx.OwnGoalCenter.X)
-                        / Math.Abs(ctx.OpponentGoalCenter.X - ctx.OwnGoalCenter.X);
                     if (ballProgress > 0.6f) chaseScore += 15f;
                     // And when it's loose right next to us, rank be damned
                     if (ctx.BallCarrier == null && ctx.DistanceToBall < 350f) chaseScore += 25f;
