@@ -1,18 +1,17 @@
 # NO PASARAN! Football Championship ⚽
 
-A top-down 2D soccer game built with C# .NET and MonoGame, inspired by classic games like Sensible Soccer and Tecmo World Cup.
+A soccer game built with C# (.NET 9) and MonoGame 3.8, inspired by classics like Sensible Soccer — with a full **3D match view**: rigged, animated players, real venues, day/night, weather, and TV-style goal replays.
 
-**Now available on Windows, Linux, macOS, and Android!**
+**Available on Windows, Linux, macOS, and Android!**
 
-## 🎥 Gameplay Video
-
-[![No Pasaran FC v1.0.4 Gameplay](https://img.youtube.com/vi/0NB9AkLI7O0/0.jpg)](https://www.youtube.com/watch?v=0NB9AkLI7O0)
-
-*Watch gameplay footage from version 1.0.4*
+![NO PASARAN! menu](docs/screenshots/menu.png)
 
 ## Game Overview
 
-Manage and play as **NO PASARAN!** in an 8-team championship. Control one player at a time while AI manages your teammates and opponents. Features full roster management, animated sprites, audio system, and comprehensive match gameplay.
+Manage and play as **NO PASARAN!** in an 8-team championship. Control one player at a time while AI manages your teammates and opponents. Two match view modes, selectable in Settings:
+
+- **3D** (default): perspective 3D view with skinned, animated players, municipal stadiums, animated fans, day/sunset/night lighting, rain, and slow-motion goal replays.
+- **2D**: the original top-down sprite view (Sensible Soccer style), fully preserved.
 
 ### Teams
 - **NO PASARAN!** (Player-controlled)
@@ -24,386 +23,205 @@ Manage and play as **NO PASARAN!** in an 8-team championship. Control one player
 - ASTERAS EXARXION (ΑΣΤΕΡΑΣ ΕΞΑΡΧΙΩΝ)
 - TIGANITIS (ΤΗΓΑΝΙΤΗΣ)
 
+## 📸 Screenshots
+
+### 3D mode — ΓΗΠΕΔΟ ΣΠΕΡΧΟΓΕΙΑΣ (Sperchogeia)
+Olive grove ring, Taygetos backdrop, fence sponsor banners, floodlight pylons:
+
+![Sperchogeia venue by day](docs/screenshots/sperchogeia_day.png)
+
+Night match in the rain:
+
+![Night rain match](docs/screenshots/night_rain.png)
+
+### 3D mode — Παναγιώτης Μπαχράμης (Bahramis)
+Yellow-seat stand with animated NO PASARAN! supporters waving Palestinian flags:
+
+![Bahramis venue](docs/screenshots/bahramis.png)
+
+### Goal replays
+Every goal is re-shown over the post-goal countdown: the build-up at 1.4x from a high sideline camera, then the payoff in 0.5x **slow motion** from a goal-side camera — with the cloth net deforming around the ball, exactly like the live goal. Hold X to skip.
+
+![Replay build-up, high sideline camera](docs/screenshots/replay_buildup.png)
+![Replay slow-motion payoff with deforming net](docs/screenshots/replay_slowmo.png)
+
+### Goal celebrations
+Scoring teams celebrate with distinct choreographed routines, the camera follows them, and the fans go wild:
+
+![Goal celebration](docs/screenshots/goal_celebration.png)
+
+### Camera modes & the classic 2D view
+Broadcast / High / TopDown cameras in 3D, plus the original 2D sprite mode:
+
+![TopDown 3D camera](docs/screenshots/topdown_3d.png)
+![Classic 2D mode](docs/screenshots/mode_2d.png)
+
 ## ✨ Features
 
 ### 🎮 Core Gameplay
-- **Championship Mode**: Full round-robin league season with all 8 teams
-- **Top-down Match View**: Classic 2D scrolling football perspective (3200x2400 field)
-- **Smooth Camera System**: Follows ball with zoom controls (0.5x-2.0x)
-- **Strategic Minimap**: Shows entire field with player positions and camera viewport
-- **Advanced AI State Machine**: 
-  - **Position-Aware Behavior**: Distinct roles for Goalkeepers, Defenders, Midfielders, and Forwards
-  - **Dynamic Passing**: AI analyzes pass corridors and teammates' positions
-  - **Aerial Passing**: Intelligent lofted passes to bypass defenders or switch play
-  - **Smart Dribbling**: Direct movement with automatic ball kicking and shielding
-  - **Defensive Coordination**: Team-aware pressing and goal protection
-- **Match Simulation**: 
-  - Full simulation of all non-player matches
-  - Realistic results based on team strength stats
-  - Detailed "Round Results" screen after every matchweek
-- **Ball Physics**: Realistic velocity, friction, bouncing, and aerial trajectories
-- **Tackle System**: Stat-based success probability (enemy players only)
-- **Goal Detection**: Proper goal line crossing with mesh net visualization
-  - Realistic goalposts with side and crossbar ricochets
-  - Goal net back collision and ball depth rendering
-  - Delayed celebration trigger for realistic scoring
-- **Ball Out Handling**: Corner kicks, goal kicks, throw-ins with automatic positioning
-  - Proper last-touch detection for corners vs goal kicks
-- **Match Duration**: Configurable 1-10 minutes (default: 90 seconds game time)
+- **Championship Mode**: Full round-robin league season with all 8 teams, standings, round results, seasons
+- **Two view modes**: full 3D (default) and classic top-down 2D, selectable in Settings
+- **Ball Physics**: Velocity, friction, bouncing, and aerial trajectories (height simulated separately)
+- **Tackle System**: Stat-based success probability with knockdowns
+- **Goal Detection**: Goal-line crossing with crossbar/post ricochets
+- **Cloth Nets**: Physics-based goal nets that deform on ball impact and sway in the wind
+- **Set Pieces**: Throw-ins, corner kicks, goal kicks with charge aiming; proper last-touch detection
+- **Match Simulation**: Realistic simulation of all non-player matches based on team strength
+- **Stamina System**: Players tire during the match, affecting speed and performance
 - **Difficulty System**: Easy/Normal/Hard affects AI reaction speed and accuracy
-- **Stamina System**: Players tire during match, affecting speed and performance
+- **Match Duration**: Configurable 1-10 minutes
+- **Local Co-op**: Player 2 can join mid-match (distinct indicators)
+
+### 🏟️ 3D Mode
+- **Rigged, animated players**: skinned GLB models (male + female bodies) with the KayKit clip library — running, walking, tackling, celebrations, knockdowns
+- **Per-team kits**: shirt/shorts/socks recolored from the player atlas (luminance-normalized), back numbers, distinct goalkeeper kits
+- **Two venues**, selectable in Settings:
+  - **Παναγιώτης Μπαχράμης** — municipal ground with chain-link fence, yellow bucket-seat stand, scoreboard arch, trees and houses
+  - **ΓΗΠΕΔΟ ΣΠΕΡΧΟΓΕΙΑΣ** — rural ground in an olive grove with the Taygetos ridge behind, sponsor banners on the fence, floodlight pylons, dirt road
+- **Animated fans**: adults and children in team colors, seated and standing, waving Palestinian flags; they celebrate goals
+- **Match atmosphere**: team benches with substitutes and animated coaches directing play, referee and linesmen, corner flags, easter-egg fox wandering the apron
+- **Day/Sunset/Night + weather**: clear or rain (random by default), floodlights at night, environment-aware lighting on every object
+- **Goal replays**: two-angle replay (high sideline build-up → slow-motion goal-side payoff) with cloth-net deformation, skippable
+- **Celebration camera**: follows the celebrating players after every goal
+- **Camera modes**: Broadcast / High / TopDown, with configurable zoom and follow speed
+
+### 🧠 AI
+- **Role-based behavior**: distinct logic for Goalkeepers, Defenders, Midfielders, Forwards
+- **Dynamic passing**: pass corridor analysis, aerial passes to switch play, forward-progress bias
+- **Smart dribbling**: ball shielding, sideline-aware attacking runs
+- **Defensive coordination**: team-aware pressing and emergency goal protection
+- **Anti-oscillation**: target inertia + start/stop hysteresis (no jittery state flipping)
+- **Tuneable decision interval** (0.1-0.5s) in Settings
 
 ### 👥 Team & Player Management
-- **Flexible Rosters**: Full squads with any number of players (minimum 11, no upper limit)
-- **Lineup Selection**: Pre-match screen to choose your starting 11
-  - Interactive formation preview (4-4-2)
-  - Real-time validation with color-coded status
-  - Scrollable player list with stats
-  - Keyboard-friendly navigation with debouncing
-  - ESC returns to menu without exiting game
+- **Flexible Rosters**: Full squads (minimum 11, no upper limit)
+- **Lineup Selection**: Pre-match screen with formation preview and stat display
 - **Player Attributes**: Speed, Shooting, Passing, Defending, Agility, Technique, Stamina
-- **Position System**: Goalkeeper, Defender, Midfielder, Forward
-- **Shirt Numbers**: Each player has unique sequential number
-- **JSON Seeding**: Load teams from `teams_seed.json` with UTF-8 support (any roster size)
-- **Auto-Generation**: Teams without JSON data get procedurally generated players
-- **Stamina Bars**: Visual indicators showing player fatigue (configurable thickness)
+- **In-game stat editing** via the debug console for gameplay experiments
+- **JSON Seeding**: Load teams from `teams_seed.json` with UTF-8 support
 
-### 🎨 Graphics & Animation
-- **Animated Sprites**: 4-directional player movement with 4-frame walking cycles
-- **Sprite Sheets**: Separate home (blue) and away (red) team sprites
-- **Ball Animation**: 64-frame rolling animation tied to velocity
-- **Double-Scale Rendering**: Players at 128x128, ball at 32x32
-- **Visual Effects**: 
-  - Player shadows and stamina bars
-  - FIFA-accurate field markings with proper line thickness
-  - Realistic goalposts with mesh netting and wind animation
-  - Stadium stands rendering
-  - Single-player yellow selection indicator
-- **Score Display**: Red text with yellow shadow for high visibility
-- **Goal Celebration**: Dynamic ball-particle text formation system
-- **Ball Depth Rendering**: Ball draws behind goalposts when scored
-- **Localization**: Full Greek/English UI with UTF-8 encoding
+### 🔊 Audio
+- **Music**: Menu, match, and victory tracks — No Pasaran main theme ("Εμπρός Νό Πασαράν!") by comrade Kyriakos
+- **Sound Effects**: Whistles, kicks, tackles, goals, crowd cheers
+- **Volume Controls**: Separate music/SFX sliders, master mute
 
-### 🔊 Audio System
-- **Music Tracks**: Menu, match, and victory music (looping)
-No Pasaran main theme ("Εμπρός Νό Πασαράν!") by comrade Kyriakos
-- **Sound Effects**: 
-  - Menu navigation (move, select, back)
-  - Match sounds (whistle start/end, kick, tackle, goal)
-  - Crowd reactions (cheer)
-- **Volume Controls**: Separate music and SFX sliders (0-100%)
-- **Smart Playback**: 
-  - Non-retriggerable sounds to prevent overlapping
-  - Kick cooldown system (0.1s) prevents rapid-fire audio
-  - Volume-based kick intensity
-- **Mute Option**: Master audio toggle
-- **Graceful Handling**: Missing audio files don't crash game
+### ⚙️ Settings (all persisted)
+- **Video**: Resolution, Fullscreen, VSync
+- **Audio**: Master/Music/SFX volumes, mute
+- **Gameplay**: Difficulty, match duration, player speed (0.5x-4.0x), AI decision interval
+- **Display**: Minimap, player names, stamina bars
+- **View**: 3D/2D mode, camera mode (Broadcast/High/TopDown), zoom, follow speed
+- **Atmosphere**: Venue (Bahramis/Sperchogeia), time of day (Day/Sunset/Night/Random), weather (Clear/Rain/Random)
+- **Language**: English / Ελληνικά (Greek default on first run)
 
-### ⚙️ Settings & Customization
-- **Video Settings**: Resolution (800x600 to 1920x1080), Fullscreen, VSync
-- **Audio Settings**: Master/Music/SFX volumes, Mute all
-- **Gameplay Settings**: 
-  - Difficulty (Easy/Normal/Hard) - affects AI behavior
-  - Match duration (1-10 minutes)
-  - Player speed multiplier (0.5x-2.0x)
-- **Display Options**: Show/hide minimap, player names, stamina bars
-- **Camera Settings**: 
-  - Zoom level (0.5x-2.0x) - affects sprites and field view
-  - Camera follow speed (0.05-0.5)
-- **Language**: English/Greek (ελληνικά) - fully localized menus
-- **Persistent Storage**: All settings saved to database
-
-### 💾 Data Management
-- **SQLite Database**: Automatic save/load for all game data
-- **Persistent Rosters**: Teams with unlimited roster sizes saved
-- **Match Results**: Complete match history and statistics
-- **Championship Progress**: Current matchweek, standings, fixtures
-- **Settings Persistence**: All configuration saved across sessions
-- **New Season**: Reset championship while keeping teams
-
-### 📊 Statistics & UI
-- **League Standings**: Column-aligned table with wins, draws, losses, goals, points
-- **Live Match HUD**: 
-  - High-visibility red score display with yellow shadow
-  - Match time and controls display
-  - Stamina bars for all players (when enabled)
-- **Formation Preview**: Visual representation in lineup screen with shirt numbers
-- **Season Completion**: Indicator when all matches played
-- **Final Score Overlay**: 5-second display after match ("ΤΕΛΙΚΟ ΣΚΟΡ")
-- **Round Results**: Summary screen showing scores from all matches in the week
-- **Countdown System**: 3-2-1 countdown before kickoff ("ΠΑΜΕ!")
-- **Single Whistle**: Match end whistle plays only once
+### 💾 Data
+- **SQLite persistence**: rosters, fixtures, results, standings, settings
+- **Schema migrations**: settings DB upgrades automatically on update
+- **New Season**: reset the championship while keeping teams
 
 ## How to Run
 
 ### Prerequisites
+- **Desktop** (Windows/Linux/macOS): .NET 9.0 SDK
+- **Android**: .NET 9.0 SDK with the Android workload, Android SDK, device or emulator
 
-#### Desktop (Windows/Linux/macOS)
-- .NET 9.0 SDK (or .NET 8.0+)
-
-#### Android
-- .NET 9.0 SDK with Android workload
-- Android SDK (included with Visual Studio or Android Studio)
-- Android device with USB debugging enabled, or Android emulator
-
-### Build and Run
-
-#### Desktop - From Command Line (Recommended)
+### Desktop
 ```bash
-cd NoPasaranFC
-dotnet build
-dotnet run
+dotnet build NoPasaranFC.csproj
+dotnet run --project NoPasaranFC.csproj
 ```
+> Build the project, not the solution, unless you have the Android workload installed.
 
-#### Desktop - From Visual Studio
-1. Open `NoPasaranFC.sln` in Visual Studio
-2. Set `NoPasaranFC` as startup project
-3. Press F5 or click Run
-
-#### Android - Build and Deploy
-```powershell
-# Clean build and deploy to connected device
-.\clean-and-build-android.ps1
-```
-
-Or manually:
+### Android
 ```bash
-dotnet build NoPasaranFC.Android\NoPasaranFC.Android.csproj -t:Install -c Debug
+dotnet build NoPasaranFC.Android/NoPasaranFC.Android.csproj -t:Install -c Debug
 ```
-
-#### Android - Build APK for Distribution
-```powershell
-# Creates NoPasaranFC.apk in project root
-.\build-apk.ps1
-```
-
-The APK can be sideloaded onto any Android device (enable "Install from unknown sources" in device settings).
+Or use `clean-and-build-android.ps1` / `build-apk.ps1` on Windows. The APK can be sideloaded onto any Android device.
 
 ## 🎮 Controls
 
-**Supports Keyboard, Xbox-compatible GamePads, and Touch Controls (Android)!**
+**Keyboard, Xbox-compatible gamepads, and touch (Android) are supported.**
 
-### Menu Navigation
-| Action | Keyboard | GamePad | Touch (Android) |
-|--------|----------|---------|-----------------|
+### Menus
+| Action | Keyboard | GamePad | Touch |
+|--------|----------|---------|-------|
 | Navigate | Up/Down Arrows | D-Pad / Left Stick | Virtual Joystick |
-| Confirm | Enter | A Button / Start | A Button |
-| Back/Exit | Escape | B Button | B Button |
-
-### Lineup Selection
-| Action | Keyboard | GamePad | Touch (Android) |
-|--------|----------|---------|-----------------|
-| Navigate | Up/Down Arrows | D-Pad / Left Stick | Virtual Joystick |
-| Toggle Starter | Space | X Button | X Button |
-| Quick Scroll | Page Up/Down | — | — |
-| Confirm Lineup | Enter | A Button | A Button |
-| Cancel | Escape | B Button | B Button |
+| Confirm | Enter | A / Start | A Button |
+| Back | Escape | B | B Button |
 
 ### During Match
-| Action | Keyboard | GamePad | Touch (Android) |
-|--------|----------|---------|-----------------|
-| Move Player | Arrow Keys / WASD | Left Stick / D-Pad | Virtual Joystick |
-| Shoot/Pass | X (tap/hold) | A Button (tap/hold) | A Button |
-| Switch Player | Space | X Button | X Button |
-| Pause/Exit | Escape | B Button | B Button |
+| Action | Keyboard | GamePad | Touch |
+|--------|----------|---------|-------|
+| Move Player | Arrow Keys | Left Stick / D-Pad | Virtual Joystick |
+| Shoot (hold to charge) | X | A | A Button |
+| Switch Player | Space | X | X Button |
+| Skip celebration / replay | X (after 5s) | A | A Button |
+| Pause/Exit | Escape | B | B Button |
+| Player 2 join (local co-op) | Right Shift / Right Alt | — | — |
 
-### Settings Screen
-| Action | Keyboard | GamePad | Touch (Android) |
-|--------|----------|---------|-----------------|
-| Navigate | Up/Down Arrows | D-Pad / Left Stick | Virtual Joystick |
-| Adjust Values | Left/Right Arrows | — | Joystick Left/Right |
-| Quick Scroll | Page Up/Down | — | — |
-| Save | Enter | A Button | A Button |
-| Cancel | Escape | B Button | B Button |
+See **GAMEPAD_SUPPORT.md** for controller details.
 
-See **GAMEPAD_SUPPORT.md** for detailed controller information.
-
-## 📁 Game Structure
-
-### Models
-- **Player**: Attributes, position, shirt number, starting status, animation state
-- **Team**: 22-player roster, championship statistics, player-controlled flag
-- **Match**: Fixtures, scores, played status
-- **Championship**: League management, fixtures, standings
-- **GameSettings**: Video, audio, gameplay, camera, language settings
-
-### Screens
-- **MenuScreen**: Main navigation with Greek language support
-- **LineupScreen**: Pre-match starting XI selection
-- **StandingsScreen**: League table with detailed statistics
-- **MatchScreen**: Playable matches with scrolling camera
-- **SettingsScreen**: Comprehensive configuration options
-- **RoundResultsScreen**: Matchweek summary display
-
-### Gameplay Systems
-- **MatchEngine**: Ball physics, AI, collisions, goal detection
-- **Camera**: Smooth scrolling with configurable zoom
-- **Minimap**: Strategic overview of entire field
-- **AudioManager**: Music and sound effect management
-- **GoalCelebration**: Dynamic text rendering with ball particles
-- **TeamSeeder**: JSON-based team/player loading
-- **MatchSimulator**: Simulates results for non-player matches
-
-### Database
-- **File**: `nopasaran.db` (SQLite)
-- **Tables**: Teams, Players, Matches, Championship, Settings
-- **Features**: Auto-save/load, UTF-8 encoding, foreign key constraints
-- **Schema**: Supports flexible roster sizes, starting lineups, shirt numbers
-
-## Project Structure
+## 📁 Project Structure
 
 ```
 NoPasaranFC/
-├── Models/           # Game data models
-├── Database/         # SQLite persistence layer
-├── Gameplay/         # Match engine and game logic
-├── Screens/          # UI screens and navigation
-├── Content/          # Game assets (fonts, sprites)
-├── Game1.cs          # Main game loop
-└── NoPasaranFC.Android/  # Android-specific project
-    ├── Activity1.cs      # Android main activity
-    └── AndroidManifest.xml
+├── Models/             # Player, Team, Match, Championship, GameSettings, Localization, Version
+├── Database/           # SQLite manager + JSON seeders
+├── Gameplay/           # MatchEngine (pure simulation!), AI (UtilityAI/), celebrations, 2D camera, audio
+├── Graphics3D/         # 3D renderer: Camera3D, World3D (venues), Ball3D, MatchRenderer3D,
+│                       # PlayerAnimator, GoalNet3D, FanSection, TeamBench, MatchOfficials,
+│                       # ReplayBuffer, MatchEnvironment, RainSystem, Skinning/ (GLB loader)
+├── Screens/            # Menu, Match, Lineup, Standings, Settings, RoundResults, ...
+├── Debugging/          # Debug TCP console, input seam, screen capture
+├── Harness/            # Headless deterministic match simulation for AI evaluation
+├── Content/            # Fonts, sprites, audio, Models3D/ (GLB + .blend sources)
+└── NoPasaranFC.Android/
 ```
 
-## 🔧 Technical Details
+Key architectural rule: `MatchEngine` is pure 2D simulation (73 px = 1 m). The 3D renderer only reads engine state — never the reverse.
 
-### Technology Stack
-- **Framework**: .NET 9.0 (compatible with .NET 8.0+)
-- **Game Engine**: MonoGame 3.8 (DesktopGL for desktop, Android for mobile)
-- **Database**: SQLite 9.0 (Microsoft.Data.Sqlite)
-- **Graphics**: 2D sprite sheets with animation
-- **Audio**: .wav (SFX), .mp3/.ogg (music)
-- **Platforms**: Windows, Linux, macOS, Android
+## 🔧 Debug Tooling
 
-### Android-Specific Features
-- **Touch Controls**: Virtual joystick and buttons (A, B, X)
-- **Adaptive UI**: Scaled for different screen densities
-- **Platform-Aware Settings**: Android settings screen excludes desktop-only options (Resolution, Fullscreen, VSync)
-- **Database Path**: Uses Android's internal storage for SQLite database
-- **Immersive Mode**: Full-screen experience with hidden system bars
-
-### Performance
-- **Field Size**: 3200x2400 pixels with 200px margins
-- **Camera Viewport**: Configurable zoom (0.5x-2.0x)
-- **Animation**: 8 FPS sprite animation with delta-time
-- **Ball Physics**: 60 FPS physics with friction and gravity
-- **AI Update**: Position-based behavior for all non-controlled players
-
-### Asset Pipeline
-- **Sprites**: 64x64 frames in 4x4 grids (256x256 total)
-- **Ball**: 32x32 frames in 8x8 grid (64 frames)
-- **Font**: Inconsolata LGC Bold 24pt with Greek character support
-- **Content Build**: MonoGame Content Pipeline (.mgcb)
-
-### File Structure
-```
-NoPasaranFC/
-├── Content/
-│   ├── Audio/
-│   │   ├── Music/          # .mp3 music files
-│   │   └── SFX/            # .wav sound effects
-│   ├── Sprites/            # Player and ball sprite sheets
-│   └── Font.spritefont     # UI font with Greek support
-├── Database/
-│   ├── DatabaseManager.cs  # SQLite persistence
-│   ├── TeamSeeder.cs       # JSON loading system
-│   └── teams_seed.json     # Team/player data
-├── Gameplay/
-│   ├── MatchEngine.cs      # Core match logic
-│   ├── Camera.cs           # Scrolling camera
-│   ├── AudioManager.cs     # Sound management
-│   └── GoalCelebration.cs  # Goal effects
-├── Models/
-│   ├── Player.cs           # Player data & animation
-│   ├── Team.cs             # Team & roster
-│   ├── Championship.cs     # League management
-│   └── GameSettings.cs     # Configuration
-└── Screens/
-    ├── MenuScreen.cs       # Main menu
-    ├── LineupScreen.cs     # Squad selection
-    ├── MatchScreen.cs      # Match gameplay
-    ├── StandingsScreen.cs  # League table
-    ├── SettingsScreen.cs   # Options
-    └── RoundResultsScreen.cs # Matchweek summary
-```
+- **Debug TCP console** (`NOPASARAN_DEBUG=1`): screenshots, input injection, state dumps, ball teleport, player stat editing, match jumping. Client: `python3 Scripts/dbg.py "state" "shot /tmp/x.png 3"`
+- **AI harness**: `dotnet run --project NoPasaranFC.csproj -- harness <scenario> --seconds N --seed 42 --out <prefix>` — headless deterministic matches with per-frame logs and trajectory plots (`Scripts/trajectory_plot.py`)
+- **Blender pipeline**: `python3 Scripts/blender_exec.py <script.py>` runs scripts inside a running Blender (blender-mcp) for asset authoring
 
 ## 📝 Documentation
 
-- **AGENTS.md**: Complete development history and feature list
-- **ROSTER_SYSTEM.md**: Team and player management guide
-- **LINEUP_SCREEN.md**: Lineup selection screen documentation
-- **AUDIO_SYSTEM.md**: Audio implementation details
-- **SPRITE_GUIDE.md**: Sprite asset creation guide
-- **FONT_CHARACTER_SUPPORT.md**: Font configuration reference
-- **GOAL_CELEBRATION_SYSTEM.md**: Goal celebration mechanics
-- **BALL_OUT_SYSTEM.md**: Ball out-of-bounds handling
-- **DIFFICULTY_STAMINA_SYSTEM.md**: Difficulty and stamina mechanics
-- **LOCALIZATION.md**: Translation and language system
-- **GAMEPAD_SUPPORT.md**: Controller configuration guide
-- **AI_*.md**: Comprehensive AI documentation (Passing, Positioning, State Machine)
-- **SETTINGS_*.md**: Settings system documentation
+- **AGENTS.md**: project conventions, architecture rules, feature summary
+- **GOAL_CELEBRATION_SYSTEM.md**, **BALL_OUT_SYSTEM.md**, **DIFFICULTY_STAMINA_SYSTEM.md**, **LOCALIZATION.md**, **GAMEPAD_SUPPORT.md**
+- **AI_\*.md**: AI design and fix history
+- Detailed design/fix documents live in the repo root
 
-## 🚀 Current Status (v1.2.0)
+## 🚀 Current Status (v2.6.0)
 
-### What's New in v1.2.0
-- 📱 **Android Support**: Full mobile port with touch controls
-- 🕹️ **Virtual Controls**: Joystick and buttons optimized for touchscreen
-- 📐 **Adaptive UI**: Automatic scaling for different screen sizes
-- ⚙️ **Platform-Aware Settings**: Android excludes desktop-only options
-- 🎬 **Animation Fixes**: Resolved stuck tackle animation issue
-- 🗃️ **Database Improvements**: Platform-specific storage paths
+**Fully playable on desktop and Android**, with the 3D view as the default experience.
 
-### What's New in v1.1.0
-- 🧠 **Advanced AI State Machine**: Complete overhaul of AI with position-aware roles (GK/DEF/MID/FWD)
-- ✈️ **Aerial Passing**: Intelligent lofted passes to switch play and bypass defenders
-- 🏟️ **Match Simulation**: Full simulation of league matches with realistic results
-- 📊 **Round Results**: New screen showing scores from all matches in the week
-- 🥅 **Dynamic Goal Nets**: Physics-based nets that react to ball impact and wind
-- 👟 **Improved Dribbling**: Smoother ball control with automatic kicking
-- 🛡️ **Defensive Tactics**: Team-aware pressing and emergency goal protection
-- 🔤 **Font Update**: Switched to Inconsolata LGC for better cross-platform support
-
-### Status
-**Fully Playable on Desktop and Android!** All core features implemented and polished:
-- ✅ Championship mode with 8 teams and full season tracking
-- ✅ Advanced match gameplay with state-machine AI
-- ✅ Flexible rosters (11+) with pre-match lineup selection
-- ✅ Database persistence with UTF-8 support
-- ✅ Complete audio system (music + SFX with smart playback)
-- ✅ Animated sprites with stamina visualization
-- ✅ Comprehensive settings system (platform-aware)
-- ✅ Full Greek/English localization
-- ✅ Gamepad support (Xbox-compatible controllers)
-- ✅ Touch controls for Android
-- ✅ Difficulty levels with stamina system
-- ✅ Realistic field dimensions and goalposts
-- ✅ Corner/goal kick logic with last-touch detection
+Recent highlights:
+- **v2.6.0**: ΓΗΠΕΔΟ ΣΠΕΡΧΟΓΕΙΑΣ venue (olive grove, Taygetos, sponsor banners, floodlights), venue selector in Settings; two-angle slow-motion goal replays with deforming nets
+- **v2.5.0**: Attacking AI depth, referee waypoints, benches with animated coaches
+- **v2.4.0**: Utility-AI rewrite, headless AI harness with trajectory plots, in-game stat editing
+- **v2.3.0**: Team benches, match officials, cloth goal nets
+- **v2.0.0**: Full 3D match view — skinned players, kits, Bahramis venue, fans, day/night, weather, celebrations
+- **v1.2.0**: Android port with touch controls
+- **v1.1.0**: AI state machine, aerial passing, match simulation, dynamic goal nets
 
 ## 🎯 Future Enhancements
 
-Potential improvements for future versions:
-- [ ] iOS support
-- [ ] Substitution system during matches
-- [ ] Fouls and yellow/red cards
+- [ ] Penalty kicks (needs a foul system) and cards
 - [ ] Offsides detection
-- [ ] Advanced formations (4-3-3, 3-5-2, etc.)
-- [ ] Player transfers and training modes
-- [ ] Tournament/knockout competition modes
-- [ ] Local multiplayer (2-player matches)
-- [ ] Match replays and highlights system
-- [ ] Weather effects (rain, snow)
-- [ ] Custom team creation and editing
-- [ ] Advanced AI tactics and strategies
-- [ ] Player morale and form system
-
-See **AGENTS.md** for complete development roadmap.
+- [ ] More venues; venue selection per home team
+- [ ] Substitutions, transfers/training
+- [ ] Tournament/knockout modes
+- [ ] Detailed match statistics
+- [ ] iOS support
 
 ## 👥 Credits
 
 **Engineering**
 - [tkleisas](https://github.com/tkleisas) — project creator & lead developer
 - Stathis — goal celebration system
-- [Kimi](https://www.kimi.com/code) (AI coding agent) — 3D match view, skinned animation system, Blender asset pipeline, debug tooling
+- [Kimi](https://www.kimi.com/code) (AI coding agent) — 3D match view, venues, skinned animation, replays, Blender asset pipeline, debug tooling
 
 **Assets**
 - [KayKit](https://kaylousberg.com) (CC0) — character skeleton & animation library
@@ -413,4 +231,3 @@ See **AGENTS.md** for complete development roadmap.
 ## License
 
 This game is provided under an MIT License. The license text can be found in LICENSE.txt
- 
