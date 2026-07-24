@@ -226,8 +226,10 @@ namespace NoPasaranFC.Gameplay
             Camera = new Camera(viewportWidth, viewportHeight, zoom);
             _normalZoom = zoom; // Store normal zoom for restoration after celebration
 
-            // Initialize referee position (center of field)
-            RefereePosition = new Vector2(StadiumMargin + FieldWidth / 2, StadiumMargin + FieldHeight / 2);
+            // Initialize referee position beside the center circle (not on the spot,
+            // where he'd overlap the kickoff taker)
+            RefereePosition = new Vector2(StadiumMargin + FieldWidth / 2 + 450f,
+                StadiumMargin + FieldHeight / 2 + 550f);
             _refereeVelocity = Vector2.Zero;
             
             // Initialize goal celebration
@@ -1326,28 +1328,31 @@ namespace NoPasaranFC.Gameplay
                 return;
             }
             
-            // Referee follows play like a real one: jogs to stay ~400-600px from
-            // the ball, sprints when play breaks away
+            // Referee follows play like a real one: holds an ANGLED position to
+            // the side of play (arcs around the action instead of bee-lining
+            // at the ball or backpedaling), sprints when play breaks away
             Vector2 targetPosition = BallPosition;
-            Vector2 toBall = targetPosition - RefereePosition;
-            float distance = toBall.Length();
             
-            // Ball exactly on the referee (kickoff): stand still, don't normalize zero
+            // Which side of the ball is he on? Stay on that side (slow-flip)
+            float side = Math.Sign(RefereePosition.Y - targetPosition.Y);
+            if (side == 0f) side = 1f;
+            // Desired spot: ~450px to the side and slightly behind play
+            Vector2 desiredSpot = targetPosition + new Vector2(0f, side * 450f);
+            
+            Vector2 toSpot = desiredSpot - RefereePosition;
+            float distance = toSpot.Length();
+            
             if (distance < 0.001f)
             {
                 _refereeVelocity = Vector2.Zero;
                 return;
             }
             
-            // Hysteresis bands: back off inside 250, jog outside 450, settle in
-            // between — no boundary flip-flopping
             Vector2 desired;
-            if (distance > 600f)
-                desired = toBall / distance * 400f; // Sprint to catch up with play
-            else if (distance > 450f)
-                desired = toBall / distance * 220f; // Jog into position
-            else if (distance < 250f)
-                desired = -toBall / distance * 120f; // Back off from the play
+            if (distance > 700f)
+                desired = toSpot / distance * 400f; // Sprint to catch up
+            else if (distance > 200f)
+                desired = toSpot / distance * 200f; // Jog into the arc
             else
                 desired = Vector2.Zero; // In position: settle
             
