@@ -1514,10 +1514,14 @@ namespace NoPasaranFC.Gameplay
                     
                     // Push ball in the direction the player is moving
                     // The push strength depends on player velocity and ball's current state.
-                    // Gentle touches: big taps made the ball uncontrollable
-                    // (perpetual hot-potato, no sustained carries)
+                    // Gentle touches for regular contact (stops hot-potato), but the
+                    // ball carrier gets real dribble taps (keeps the ball moving
+                    // with them instead of lagging behind and getting lost)
                     float playerSpeed = player.Velocity.Length();
-                    float pushStrength = Math.Min(playerSpeed * 0.15f, 60f);
+                    bool isCarrier = player == _lastPlayerTouchedBall;
+                    float pushStrength = isCarrier
+                        ? Math.Min(playerSpeed * 0.5f, 140f)
+                        : Math.Min(playerSpeed * 0.15f, 60f);
                     
                     // If ball is already moving away from player, don't add too much velocity
                     float currentBallSpeed = BallVelocity.Length();

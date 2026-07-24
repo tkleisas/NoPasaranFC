@@ -43,6 +43,14 @@ namespace NoPasaranFC.Gameplay.UtilityAI
         private float _runAfterPassUntil = -1f;
         private Vector2 _runAfterPassTarget;
         
+        // Timed-run hysteresis: enter the deep run when the ball is clearly in
+        // through-pass position, stay until play clearly breaks down
+        private bool _inDeepRun;
+        
+        // Dribble collect/guide hysteresis: collect the ball when far (>120),
+        // guide it forward when close (<70) — no flapping at the boundary
+        private bool _collectingBall;
+        
         // Decision tuning
         private static float EvalInterval => GameSettings.Instance.AIDecisionInterval;
         private const float CommitmentBonus = 15f;
@@ -112,13 +120,13 @@ namespace NoPasaranFC.Gameplay.UtilityAI
             
             UtilityAction best;
             
-            // Carrier actions (Pass/Shoot/Dribble/Clear) only available when the
-            // ball is actually at the player's feet; a "carrier" outside kick
-            // range must first close the distance (no pass-blocked freeze)
-            bool hasBallAtFeet = (ctx.HasBallPossession || ctx.BallCarrier == player)
-                && ctx.DistanceToBall < 120f;
+            // Carrier mode: anyone who owns the ball stays in carrier actions
+            // (Dribble collects the ball itself) across a huge radius — no
+            // Dribble<->Chase boundary to flip on
+            bool isCarrier = (ctx.HasBallPossession || ctx.BallCarrier == player)
+                && ctx.DistanceToBall < 800f;
             
-            if (hasBallAtFeet)
+            if (isCarrier)
             {
                 // --- I have the ball: Shoot / Pass / Dribble / Clear ---
                 best = ScoreCarrierActions(player, ctx);
@@ -137,11 +145,10 @@ namespace NoPasaranFC.Gameplay.UtilityAI
                 // A stalled controlled carrier means the ball is effectively loose
                 // (harness without human input, or an AFK player) - chase it.
                 bool ballLoose = IsBallEffectivelyLoose(ctx);
-                bool designatedCarrier = ctx.BallCarrier == player;
                 
                 // Give-and-go: just passed -> sprint into space for the return ball.
                 // Beats holding position; cancelled if we get the ball back sooner
-                if (_runAfterPassUntil > ctx.MatchTime && !designatedCarrier)
+                if (_runAfterPassUntil > ctx.MatchTime && ctx.BallCarrier != player)
                 {
                     return new UtilityAction(UtilityActionType.RunAfterPass, _runAfterPassTarget, 90f);
                 }
@@ -151,15 +158,21 @@ namespace NoPasaranFC.Gameplay.UtilityAI
                 }
                 
                 float chaseScore = 0f;
-                if (ctx.ShouldChaseBall || designatedCarrier ||
+                if (ctx.ShouldChaseBall ||
                     (ballLoose && ctx.BallCarrier != null && ctx.DistanceToBall < 800f))
                 {
                     // Closer = more attractive; must beat holdScore even for the
                     // designated chaser when the ball is far (kickoff distances)
                     chaseScore = 85f - ctx.DistanceToBall / 40f;
                     if (ctx.DistanceToBall < 200f) chaseScore += 20f;
-                    if (designatedCarrier) chaseScore += 20f; // it's YOUR ball, go get it
-                    else if (!ctx.ShouldChaseBall) chaseScore -= 10f; // rescue, not primary duty
+                    if (!ctx.ShouldChaseBall) chaseScore -= 10f; // rescue, not primary duty
+                    
+                    // Press hard when the ball is loose in the attacking third
+                    float ballProgress = Math.Abs(ctx.BallPosition.X - ctx.OwnGoalCenter.X)
+                        / Math.Abs(ctx.OpponentGoalCenter.X - ctx.OwnGoalCenter.X);
+                    if (ballProgress > 0.6f) chaseScore += 15f;
+                    // And when it's loose right next to us, rank be damned
+                    if (ctx.BallCarrier == null && ctx.DistanceToBall < 350f) chaseScore += 25f;
                 }
                 
                 Vector2 holdPoint = GetTacticalPoint(player, ctx);
@@ -287,11 +300,14 @@ namespace NoPasaranFC.Gameplay.UtilityAI
             {
                 case UtilityActionType.Shoot:
                 case UtilityActionType.Pass:
-                case UtilityActionType.Dribble:
                 case UtilityActionType.Clear:
-                    // Carrier actions die the moment the ball leaves the feet
+                    // Kick actions die when the ball leaves kick range
                     return (ctx.HasBallPossession || ctx.BallCarrier == player)
-                        && ctx.DistanceToBall < 120f;
+                        && ctx.DistanceToBall < 140f;
+                case UtilityActionType.Dribble:
+                    // Dribble stays alive while we own the ball (it collects)
+                    return (ctx.HasBallPossession || ctx.BallCarrier == player)
+                        && ctx.DistanceToBall < 800f;
                 case UtilityActionType.ChaseBall:
                     // Stop chasing if a teammate now controls it
                     return !ctx.TeammateHasBall(player) || ctx.DistanceToBall < 150f;
@@ -315,13 +331,17 @@ namespace NoPasaranFC.Gameplay.UtilityAI
                 {
                     // Close in: seek the ball itself at full speed so contact
                     // actually happens (Arrive's deceleration left chasers
-                    // creeping behind the ball forever without touching it)
+                    // creeping behind the ball forever without touching it).
+                    // Own ball: gentle approach — full seek would sprint past it
+                    bool ownBall = ctx.BallCarrier == player;
                     Vector2 chasePoint = ctx.DistanceToBall < 400f ? ctx.BallPosition : action.Point;
                     player.AITargetPosition = chasePoint;
                     player.AITargetPositionSet = true;
-                    Vector2 chaseVelocity = ctx.DistanceToBall < 200f
-                        ? Steering.Seek(player.FieldPosition, chasePoint, MaxSpeedFor(player))
-                        : Steering.Arrive(player.FieldPosition, chasePoint, MaxSpeedFor(player));
+                    Vector2 chaseVelocity;
+                    if (!ownBall && ctx.DistanceToBall < 200f)
+                        chaseVelocity = Steering.Seek(player.FieldPosition, chasePoint, MaxSpeedFor(player));
+                    else
+                        chaseVelocity = Steering.Arrive(player.FieldPosition, chasePoint, MaxSpeedFor(player));
                     chaseVelocity = Steering.ApplySeparation(player, chaseVelocity);
                     chaseVelocity = Steering.ApplyBoundaryAvoidance(player.FieldPosition, chaseVelocity);
                     player.Velocity = chaseVelocity;
@@ -335,11 +355,33 @@ namespace NoPasaranFC.Gameplay.UtilityAI
                     break;
                 
                 case UtilityActionType.Dribble:
-                    // Carry toward goal; engine ball-contact physics moves the ball
-                    player.AITargetPosition = action.Point;
+                {
+                    // Collect/guide with hysteresis: when far, go TO the ball;
+                    // when close, guide it forward. Both point at the ball until
+                    // contact, so there is no direction-reversing flip.
+                    if (ctx.DistanceToBall > 120f) _collectingBall = true;
+                    else if (ctx.DistanceToBall < 70f) _collectingBall = false;
+                    
+                    Vector2 target;
+                    if (_collectingBall)
+                    {
+                        target = ctx.BallPosition;
+                    }
+                    else
+                    {
+                        // Guide: stay INSIDE contact range (56px) so the ball
+                        // keeps being nudged forward - a big lead just parks
+                        // the carrier ahead of a stationary ball
+                        Vector2 toGoal = action.Point - ctx.BallPosition;
+                        if (toGoal.LengthSquared() > 1f) toGoal.Normalize();
+                        target = ctx.BallPosition + toGoal * 40f;
+                    }
+                    
+                    player.AITargetPosition = target;
                     player.AITargetPositionSet = true;
-                    player.Velocity = Steer(player, action.Point, MaxSpeedFor(player));
+                    player.Velocity = Steer(player, target, MaxSpeedFor(player) * 0.7f);
                     break;
+                }
                 
                 case UtilityActionType.RunAfterPass:
                     // Sprint into space for the return ball (give-and-go)
@@ -427,10 +469,18 @@ namespace NoPasaranFC.Gameplay.UtilityAI
         /// Attacking (teammate has the ball): the line pushes up by role and wide
         /// roles take the flanks — creating width and forward pass options.
         /// </summary>
-        private static Vector2 GetTacticalPoint(Player player, AIContext ctx)
+        private Vector2 GetTacticalPoint(Player player, AIContext ctx)
         {
             bool attacking = ctx.TeammateHasBall(player);
             float centerY = MatchEngine.StadiumMargin + MatchEngine.FieldHeight / 2f;
+            
+            // Timed-run hysteresis (per player): run deep when the ball is clearly
+            // in through-pass position (>0.40), keep running until play clearly
+            // breaks down (<0.25) — kills the depth flip-flop at the trigger line
+            float carrierProgress = Math.Abs(ctx.BallPosition.X - ctx.OwnGoalCenter.X)
+                / Math.Abs(ctx.OpponentGoalCenter.X - ctx.OwnGoalCenter.X);
+            if (carrierProgress > 0.40f) _inDeepRun = true;
+            else if (carrierProgress < 0.25f) _inDeepRun = false;
             
             // Stable per-player variance so lines don't move in lockstep
             float variance = ((player.Id * 2654435761u) % 1000) / 1000f; // 0..1 stable
@@ -476,11 +526,10 @@ namespace NoPasaranFC.Gameplay.UtilityAI
                 // permanent camping at the offside line)
                 if (player.Position == PlayerPosition.Forward)
                 {
-                    float carrierProgress = Math.Abs(ctx.BallPosition.X - ctx.OwnGoalCenter.X)
-                        / Math.Abs(ctx.OpponentGoalCenter.X - ctx.OwnGoalCenter.X);
-                    if (carrierProgress > 0.35f)
+                    // Deep run while the hysteresis flag is set (entered >0.40,
+                    // exits <0.25 - no flip-flopping at the trigger line)
+                    if (_inDeepRun)
                     {
-                        // Run deep: goal-ward, into a lane between defenders
                         x = ctx.OwnGoalCenter.X + (ctx.OpponentGoalCenter.X - ctx.OwnGoalCenter.X) * 0.90f;
                     }
                     y = MathHelper.Lerp(y, centerY, 0.4f);
