@@ -73,6 +73,8 @@ namespace NoPasaranFC.Gameplay
             return player != null && _firstTouchGrace.TryGetValue(player, out float remaining) && remaining > 0f;
         }
         
+        private Player _previousToucher; // the player who had it before the current toucher
+        
         /// <summary>Registers a ball touch, granting grace on teammate receptions.</summary>
         private void SetLastPlayerTouchedBall(Player player)
         {
@@ -81,8 +83,13 @@ namespace NoPasaranFC.Gameplay
             {
                 _firstTouchGrace[player] = FirstTouchGraceSeconds;
             }
+            if (player != _lastPlayerTouchedBall)
+                _previousToucher = _lastPlayerTouchedBall;
             _lastPlayerTouchedBall = player;
         }
+        
+        /// <summary>The player who touched the ball before the current toucher.</summary>
+        internal Player PreviousToucher => _previousToucher;
         
         private void UpdateFirstTouchGrace(float deltaTime)
         {
@@ -1387,6 +1394,14 @@ namespace NoPasaranFC.Gameplay
                                     p2Force *= 1.5f;
                                 }
                                 
+                                // Carrier shielding: the ball carrier braces and is
+                                // harder to knock down (attacks shouldn't die on
+                                // every collision with the defensive wall)
+                                if (p2 == _lastPlayerTouchedBall && nearBall)
+                                    p1Force *= 0.5f;
+                                if (p1 == _lastPlayerTouchedBall && nearBall)
+                                    p2Force *= 0.5f;
+                                
                                 // Random factor
                                 float randomFactor = (float)_random.NextDouble();
                                 
@@ -1460,9 +1475,11 @@ namespace NoPasaranFC.Gameplay
                     pushDirection.Normalize();
                     
                     // Push ball in the direction the player is moving
-                    // The push strength depends on player velocity and ball's current state
+                    // The push strength depends on player velocity and ball's current state.
+                    // Gentle touches: big taps made the ball uncontrollable
+                    // (perpetual hot-potato, no sustained carries)
                     float playerSpeed = player.Velocity.Length();
-                    float pushStrength = Math.Min(playerSpeed * 0.3f, 200f); // Cap the push strength
+                    float pushStrength = Math.Min(playerSpeed * 0.15f, 60f);
                     
                     // If ball is already moving away from player, don't add too much velocity
                     float currentBallSpeed = BallVelocity.Length();

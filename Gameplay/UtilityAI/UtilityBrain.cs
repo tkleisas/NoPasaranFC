@@ -199,11 +199,27 @@ namespace NoPasaranFC.Gameplay.UtilityAI
                 }
             }
             
-            // DRIBBLE: carrying forward is the default attacking move when the
-            // lane is open - passes should beat it only when clearly better
-            float dribbleScore = 50f;
-            if (pressure > 400f) dribbleScore += 20f; // no one near: carry it
+            // DRIBBLE: carrying forward is how lines break - dominant when the
+            // lane toward goal is open; passing is for pressure or better options
+            int laneBlockers = 0;
+            Vector2 toGoal = ctx.OpponentGoalCenter - player.FieldPosition;
+            if (toGoal.LengthSquared() > 1f)
+            {
+                Vector2 goalDir = Vector2.Normalize(toGoal);
+                foreach (var opp in ctx.Opponents)
+                {
+                    Vector2 rel = opp.FieldPosition - player.FieldPosition;
+                    float ahead = Vector2.Dot(rel, goalDir);
+                    if (ahead > 0f && ahead < 800f)
+                    {
+                        float lateral = Math.Abs(rel.X * goalDir.Y - rel.Y * goalDir.X);
+                        if (lateral < 350f) laneBlockers++;
+                    }
+                }
+            }
+            float dribbleScore = 50f + (3 - Math.Min(3, laneBlockers)) * 15f; // 95 open lane, 50 packed
             dribbleScore *= roleAttack;
+            if (pressure > 400f) dribbleScore += 10f;
             
             // Pick the best (shoot can actually win now)
             float bestScore = shootScore;

@@ -120,6 +120,11 @@ namespace NoPasaranFC.Gameplay
                 float targetProgress = (teammate.FieldPosition.X - _engine.BallPosition.X) * attackSign;
                 if (targetProgress > 0f)
                     passScore += 300f;
+                
+                // Anti keep-ball loop: never pass straight back to the player who
+                // just played the ball to you (kills the two-player ping-pong)
+                if (teammate == _engine.PreviousToucher)
+                    passScore -= 500f;
 
                 // Distance scoring: value all useful distances, prefer medium but don't punish long
                 if (dist > AIConstants.MinPassDistance && dist < 800f)
