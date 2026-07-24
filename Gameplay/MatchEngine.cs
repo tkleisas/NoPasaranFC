@@ -1316,31 +1316,44 @@ namespace NoPasaranFC.Gameplay
         
         private void UpdateReferee(float deltaTime)
         {
+            // NaN recovery: a zero-length normalize (ball exactly on the referee)
+            // poisons the position forever - reset to the center if it happens
+            if (float.IsNaN(RefereePosition.X) || float.IsNaN(RefereePosition.Y))
+            {
+                RefereePosition = new Vector2(StadiumMargin + FieldWidth / 2,
+                    StadiumMargin + FieldHeight / 2);
+                _refereeVelocity = Vector2.Zero;
+                return;
+            }
+            
             // Referee follows play like a real one: jogs to stay ~400-600px from
             // the ball, sprints when play breaks away
             Vector2 targetPosition = BallPosition;
             Vector2 toBall = targetPosition - RefereePosition;
             float distance = toBall.Length();
             
+            // Ball exactly on the referee (kickoff): stand still, don't normalize zero
+            if (distance < 0.001f)
+            {
+                _refereeVelocity = Vector2.Zero;
+                return;
+            }
+            
+            // Hysteresis bands: back off inside 250, jog outside 450, settle in
+            // between — no boundary flip-flopping
+            Vector2 desired;
             if (distance > 600f)
-            {
-                toBall.Normalize();
-                _refereeVelocity = toBall * 400f; // Sprint to catch up with play
-            }
-            else if (distance > 350f)
-            {
-                toBall.Normalize();
-                _refereeVelocity = toBall * 220f; // Jog into position
-            }
-            else if (distance < 200f)
-            {
-                toBall.Normalize();
-                _refereeVelocity = -toBall * 120f; // Back off from the play
-            }
+                desired = toBall / distance * 400f; // Sprint to catch up with play
+            else if (distance > 450f)
+                desired = toBall / distance * 220f; // Jog into position
+            else if (distance < 250f)
+                desired = -toBall / distance * 120f; // Back off from the play
             else
-            {
-                _refereeVelocity *= 0.97f; // Settle smoothly when in position
-            }
+                desired = Vector2.Zero; // In position: settle
+            
+            // Smooth velocity changes (no rapid direction oscillation)
+            float blend = Math.Min(1f, deltaTime * 3f);
+            _refereeVelocity = Vector2.Lerp(_refereeVelocity, desired, blend);
             
             RefereePosition += _refereeVelocity * deltaTime;
             

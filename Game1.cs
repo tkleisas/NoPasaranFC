@@ -342,7 +342,7 @@ public class Game1 : Game
         {
             var e = ms.Engine;
             s += $" match[state={e.CurrentState} time={e.MatchTime:F1} score={e.HomeScore}-{e.AwayScore} " +
-                 $"ball=({e.BallPosition.X:F0},{e.BallPosition.Y:F0},h={e.BallHeight:F0})]";
+                 $"ball=({e.BallPosition.X:F0},{e.BallPosition.Y:F0},h={e.BallHeight:F0}) ref=({e.RefereePosition.X:F0},{e.RefereePosition.Y:F0})]";
             
             // Animation state census (helps diagnose stuck/oscillating animations)
             var counts = new Dictionary<string, int>();
