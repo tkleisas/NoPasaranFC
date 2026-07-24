@@ -4,7 +4,7 @@ using NoPasaranFC.Models;
 
 namespace NoPasaranFC.Gameplay.UtilityAI
 {
-    public enum UtilityActionType { Idle, ChaseBall, HoldPosition, Dribble, Pass, Shoot, Clear }
+    public enum UtilityActionType { Idle, ChaseBall, HoldPosition, Dribble, Pass, Shoot, Clear, RunAfterPass }
     
     /// <summary>The chosen action for a decision period.</summary>
     public class UtilityAction
@@ -37,6 +37,11 @@ namespace NoPasaranFC.Gameplay.UtilityAI
         private float _evalTimer;
         private float _carrierStallTimer;
         private readonly Random _random;
+        
+        // Give-and-go: after passing, the passer makes a run into space so the
+        // receiver has a return option (the wall pass)
+        private float _runAfterPassUntil = -1f;
+        private Vector2 _runAfterPassTarget;
         
         // Decision tuning
         private static float EvalInterval => GameSettings.Instance.AIDecisionInterval;
@@ -133,6 +138,17 @@ namespace NoPasaranFC.Gameplay.UtilityAI
                 // (harness without human input, or an AFK player) - chase it.
                 bool ballLoose = IsBallEffectivelyLoose(ctx);
                 bool designatedCarrier = ctx.BallCarrier == player;
+                
+                // Give-and-go: just passed -> sprint into space for the return ball.
+                // Beats holding position; cancelled if we get the ball back sooner
+                if (_runAfterPassUntil > ctx.MatchTime && !designatedCarrier)
+                {
+                    return new UtilityAction(UtilityActionType.RunAfterPass, _runAfterPassTarget, 90f);
+                }
+                if (_runAfterPassUntil <= ctx.MatchTime)
+                {
+                    _runAfterPassUntil = -1f;
+                }
                 
                 float chaseScore = 0f;
                 if (ctx.ShouldChaseBall || designatedCarrier ||
@@ -279,6 +295,9 @@ namespace NoPasaranFC.Gameplay.UtilityAI
                 case UtilityActionType.ChaseBall:
                     // Stop chasing if a teammate now controls it
                     return !ctx.TeammateHasBall(player) || ctx.DistanceToBall < 150f;
+                case UtilityActionType.RunAfterPass:
+                    // Run dies when the window closes or we get the return ball
+                    return _runAfterPassUntil > ctx.MatchTime && ctx.BallCarrier != player;
                 default:
                     return true;
             }
@@ -322,13 +341,31 @@ namespace NoPasaranFC.Gameplay.UtilityAI
                     player.Velocity = Steer(player, action.Point, MaxSpeedFor(player));
                     break;
                 
+                case UtilityActionType.RunAfterPass:
+                    // Sprint into space for the return ball (give-and-go)
+                    player.AITargetPosition = action.Point;
+                    player.AITargetPositionSet = true;
+                    player.Velocity = Steer(player, action.Point, MaxSpeedFor(player));
+                    break;
+                
                 case UtilityActionType.Pass:
                     // Near-ball gate: only kick if we still actually have the ball
                     // (possession can change between decision ticks - no far kicks)
                     if (action.TargetPlayer != null &&
                         Vector2.Distance(player.FieldPosition, ctx.BallPosition) < 120f)
                     {
-                        _passBall(player, action.TargetPlayer.FieldPosition + action.TargetPlayer.Velocity * 0.3f, 0.85f);
+                        // Lead the receiver by ball travel time, not a flat 0.3s
+                        float passDist = Vector2.Distance(ctx.BallPosition, action.TargetPlayer.FieldPosition);
+                        float lead = Math.Clamp(passDist / 1200f, 0.2f, 0.8f);
+                        _passBall(player, action.TargetPlayer.FieldPosition + action.TargetPlayer.Velocity * lead, 0.85f);
+                        
+                        // Give-and-go: run into space after releasing, offering
+                        // the return pass. Target: deep, offset from the pass lane
+                        _runAfterPassUntil = ctx.MatchTime + 5f;
+                        float side = player.FieldPosition.Y < action.TargetPlayer.FieldPosition.Y ? -1f : 1f;
+                        _runAfterPassTarget = new Vector2(
+                            MathHelper.Lerp(player.FieldPosition.X, ctx.OpponentGoalCenter.X, 0.55f),
+                            player.FieldPosition.Y + side * 500f);
                     }
                     player.Velocity = Vector2.Zero;
                     // Pass is instant: fall back to re-evaluating next tick
@@ -435,12 +472,13 @@ namespace NoPasaranFC.Gameplay.UtilityAI
                 }
                 
                 // Forwards: make runs BEHIND the defensive line when the ball is
-                // in the middle/attacking third - this is what through balls feed
+                // genuinely in position for the through pass (timed runs, not
+                // permanent camping at the offside line)
                 if (player.Position == PlayerPosition.Forward)
                 {
                     float carrierProgress = Math.Abs(ctx.BallPosition.X - ctx.OwnGoalCenter.X)
                         / Math.Abs(ctx.OpponentGoalCenter.X - ctx.OwnGoalCenter.X);
-                    if (carrierProgress > 0.25f)
+                    if (carrierProgress > 0.35f)
                     {
                         // Run deep: goal-ward, into a lane between defenders
                         x = ctx.OwnGoalCenter.X + (ctx.OpponentGoalCenter.X - ctx.OwnGoalCenter.X) * 0.90f;
