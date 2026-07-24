@@ -19,6 +19,18 @@ namespace NoPasaranFC.Screens
         
         /// <summary>Debug console access to live match state (read-only usage).</summary>
         public MatchEngine Engine => _matchEngine;
+        
+        /// <summary>Replay/celebration diagnostics for the debug console.</summary>
+        public string ReplayDebug
+        {
+            get
+            {
+                if (_renderer3D == null) return "replay[2D mode]";
+                return $"replay[active={_renderer3D.IsReplayActive} " +
+                       $"wall={_renderer3D.ReplayWallDuration:F1}s slowmo={_renderer3D.ReplayInSlowMo} " +
+                       $"celebrationMgr={_matchEngine?.CelebrationManager?.IsActive}]";
+            }
+        }
         private Team _homeTeam;
         private Team _awayTeam;
         private Match _match;
@@ -65,6 +77,7 @@ namespace NoPasaranFC.Screens
         // replayed over the post-goal countdown, skippable with the shoot key
         private MatchEngine.MatchState _previousMatchState = MatchEngine.MatchState.CameraInit;
         private float _lastDeltaTime = 1f / 60f;
+        private bool _replaySkipArmed = true; // skip key must be released once after capture
         
         // Sprite sheet configuration
         private const int SpriteFrameSize = 64; // Each frame is 64x64 in the sprite sheet
@@ -344,11 +357,26 @@ namespace NoPasaranFC.Screens
                 
                 if (matchState == MatchEngine.MatchState.Countdown &&
                     _previousMatchState == MatchEngine.MatchState.GoalCelebration)
+                {
                     _renderer3D.CaptureReplay();
+                    // Size the countdown to the replay (slow-mo makes it longer
+                    // than the default 3.5s); skipped replays cut it short below
+                    if (_renderer3D.IsReplayActive)
+                        _matchEngine.SetCountdownRemaining(_renderer3D.ReplayWallDuration + 0.3f);
+                    // The skip key must be released once before it can skip: the
+                    // press that skipped the celebration must not eat the replay
+                    _replaySkipArmed = false;
+                }
+                
+                if (!isShootKeyDown)
+                    _replaySkipArmed = true;
                 
                 if (matchState == MatchEngine.MatchState.Countdown &&
-                    _renderer3D.IsReplayActive && isShootKeyDown)
+                    _renderer3D.IsReplayActive && isShootKeyDown && _replaySkipArmed)
+                {
                     _renderer3D.SkipReplay();
+                    _matchEngine.SetCountdownRemaining(Math.Min(_matchEngine.CountdownTimer, 1.2f));
+                }
                 if (_previousMatchState == MatchEngine.MatchState.Countdown &&
                     matchState != MatchEngine.MatchState.Countdown)
                     _renderer3D.ClearReplay();
@@ -901,6 +929,15 @@ namespace NoPasaranFC.Screens
             Vector2 hintPos = new Vector2(labelPos.X, labelPos.Y + labelSize.Y + 8);
             spriteBatch.DrawString(font, hint, hintPos + new Vector2(1, 1), Color.Black);
             spriteBatch.DrawString(font, hint, hintPos, Color.LightGray);
+            
+            // Amber SLOW MOTION tag under the ribbon during the payoff segment
+            if (_renderer3D != null && _renderer3D.ReplayInSlowMo)
+            {
+                const string slowMo = "SLOW MOTION";
+                Vector2 slowMoPos = new Vector2(labelPos.X, hintPos.Y + font.MeasureString(hint).Y + 6);
+                spriteBatch.DrawString(font, slowMo, slowMoPos + new Vector2(1, 1), Color.Black);
+                spriteBatch.DrawString(font, slowMo, slowMoPos, Color.Orange);
+            }
         }
 
 #if !ANDROID

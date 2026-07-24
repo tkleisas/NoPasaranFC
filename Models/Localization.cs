@@ -191,6 +191,9 @@ namespace NoPasaranFC.Models
                 ["settings.weather.clear"] = "Clear",
                 ["settings.weather.rain"] = "Rain",
                 ["settings.weather.random"] = "Random",
+                ["settings.venue"] = "Venue",
+                ["settings.venue.bahramis"] = "Bahramis",
+                ["settings.venue.sperchogeia"] = "Sperchogeia",
                 
                 ["settings.on"] = "ON",
                 ["settings.off"] = "OFF",
@@ -329,6 +332,9 @@ namespace NoPasaranFC.Models
                 ["settings.weather.clear"] = "Αίθριος",
                 ["settings.weather.rain"] = "Βροχή",
                 ["settings.weather.random"] = "Τυχαίος",
+                ["settings.venue"] = "Γήπεδο",
+                ["settings.venue.bahramis"] = "Μπαχράμης",
+                ["settings.venue.sperchogeia"] = "Σπερχόγεια",
                 
                 ["settings.on"] = "ΝΑΙ",
                 ["settings.off"] = "ΟΧΙ",

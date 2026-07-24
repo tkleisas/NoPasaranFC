@@ -178,6 +178,40 @@ namespace NoPasaranFC.Database
                 SetSchemaVersion(connection, 6);
                 currentVersion = 6;
             }
+
+            if (currentVersion < 7)
+            {
+                // Migration 7: Add Venue column to Settings table
+                ApplyMigration7_AddVenue(connection);
+                SetSchemaVersion(connection, 7);
+                currentVersion = 7;
+            }
+        }
+        
+        private void ApplyMigration7_AddVenue(SqliteConnection connection)
+        {
+            var checkCommand = connection.CreateCommand();
+            checkCommand.CommandText = "PRAGMA table_info(Settings)";
+
+            bool columnExists = false;
+            using (var reader = checkCommand.ExecuteReader())
+            {
+                while (reader.Read())
+                {
+                    if (reader.GetString(1) == "Venue")
+                    {
+                        columnExists = true;
+                        break;
+                    }
+                }
+            }
+
+            if (!columnExists)
+            {
+                var alterCommand = connection.CreateCommand();
+                alterCommand.CommandText = "ALTER TABLE Settings ADD COLUMN Venue TEXT DEFAULT 'Bahramis'";
+                alterCommand.ExecuteNonQuery();
+            }
         }
         
         private void ApplyMigration6_AddAIDecisionInterval(SqliteConnection connection)
@@ -709,14 +743,14 @@ namespace NoPasaranFC.Database
                     Difficulty, MatchDurationMinutes, PlayerSpeedMultiplier,
                     ShowMinimap, ShowPlayerNames, ShowStamina,
                     CameraZoom, CameraSpeed, Language, MatchViewMode,
-                    CameraMode, TimeOfDay, Weather, AIDecisionInterval
+                    CameraMode, TimeOfDay, Weather, AIDecisionInterval, Venue
                 ) VALUES (
                     1, @resWidth, @resHeight, @fullscreen, @vsync,
                     @masterVol, @musicVol, @sfxVol, @muteAll,
                     @difficulty, @matchDuration, @speedMulti,
                     @showMap, @showNames, @showStamina,
                     @camZoom, @camSpeed, @language, @matchViewMode,
-                    @cameraMode, @timeOfDay, @weather, @aiDecisionInterval
+                    @cameraMode, @timeOfDay, @weather, @aiDecisionInterval, @venue
                 );
             ";
             
@@ -742,6 +776,7 @@ namespace NoPasaranFC.Database
             command.Parameters.AddWithValue("@timeOfDay", settings.TimeOfDay ?? "Day");
             command.Parameters.AddWithValue("@weather", settings.Weather ?? "Clear");
             command.Parameters.AddWithValue("@aiDecisionInterval", settings.AIDecisionInterval);
+            command.Parameters.AddWithValue("@venue", settings.Venue ?? "Bahramis");
             
             command.ExecuteNonQuery();
         }
@@ -780,7 +815,8 @@ namespace NoPasaranFC.Database
                     CameraMode = reader.FieldCount > 19 && !reader.IsDBNull(19) ? reader.GetString(19) : "Broadcast",
                     TimeOfDay = reader.FieldCount > 20 && !reader.IsDBNull(20) ? reader.GetString(20) : "Day",
                     Weather = reader.FieldCount > 21 && !reader.IsDBNull(21) ? reader.GetString(21) : "Clear",
-                    AIDecisionInterval = reader.FieldCount > 22 && !reader.IsDBNull(22) ? reader.GetFloat(22) : 0.1f
+                    AIDecisionInterval = reader.FieldCount > 22 && !reader.IsDBNull(22) ? reader.GetFloat(22) : 0.1f,
+                    Venue = reader.FieldCount > 23 && !reader.IsDBNull(23) ? reader.GetString(23) : "Bahramis"
                 };
                 return settings;
             }

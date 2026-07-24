@@ -25,7 +25,8 @@ dotnet build NoPasaranFC.Android/NoPasaranFC.Android.csproj  # Android (needs an
 
 - **Debug TCP console**: launch with `NOPASARAN_DEBUG=1` (port via `NOPASARAN_DEBUG_PORT`, default 7777).
   Commands: `shot <path> [delayFrames]` (screenshot), `key|down|up <Keys name>` (inject input),
-  `state` (screen, fps, match + animation census), `match` (jump to next match), `quit`.
+  `state` (screen, fps, match + animation census + replay diagnostics), `match` (jump to next match),
+  `players`, `setstat <name> <stat> <value>`, `ball <x> <y> [vx vy]` (teleport ball), `quit`.
   Client: `python3 Scripts/dbg.py "state" "shot /tmp/x.png 3"`.
 - **Blender pipeline**: `python3 Scripts/blender_exec.py <script.py>` runs a Python script inside a
   running Blender instance (blender-mcp addon on 127.0.0.1:9876). Asset sources: `Content/Models3D/*.blend`.
@@ -71,9 +72,12 @@ dotnet build NoPasaranFC.Android/NoPasaranFC.Android.csproj  # Android (needs an
   goal kicks with charge aiming), goal detection with crossbar/post ricochets, cloth nets
 - AI: role-based states (GK/DEF/MID/FWD), passing/shooting/dribbling decisions, sideline avoidance
 - 3D mode: skinned players (male + female bodies), per-team kits with back numbers, GK distinct kits,
-  Bahramis venue (fence, yellow-seat stand, scoreboard, trees, houses), animated fans (+ children,
-  Palestinian flags), corner flags, easter-egg fox, rain, day/sunset/night, celebration camera,
-  goal replays (goal build-up re-shown over the post-goal countdown, goal-side camera, hold X to skip;
+  two venues selectable in Settings: Bahramis (fence, yellow-seat stand, scoreboard, trees, houses)
+  and Sperchogeia (olive grove ring, Taygetos backdrop, fence sponsor banners, floodlight pylons),
+  animated fans (+ children, Palestinian flags), corner flags, easter-egg fox, rain, day/sunset/night,
+  celebration camera, goal replays (build-up at 1.4x from a high sideline camera, then the last 2s of
+  footage in 0.5x slow motion from a goal-side camera with live cloth-net deformation, over the
+  extended post-goal countdown, hold X to skip;
   recording in `Graphics3D/ReplayBuffer.cs`, playback in `MatchRenderer3D.DrawReplay`)
 - 2D mode: sprite players with kit sheets, scrolling camera, minimap (minimap present in both modes)
 - Local co-op: Player 2 can join (distinct indicators)
@@ -83,7 +87,7 @@ dotnet build NoPasaranFC.Android/NoPasaranFC.Android.csproj  # Android (needs an
 
 - Penalty kicks (needs foul system)
 - AI balance/oscillation tuning follow-up (knobs: `AIConstants`, `PlayerAnimator`)
-- More venues; venue selection per home team
+- More venues; venue selection per home team (venue is a Settings option since v2.6.0)
 - Tournament mode, substitutions, transfers/training
 - Detailed match statistics, replays
 

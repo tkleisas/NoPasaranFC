@@ -117,6 +117,17 @@ namespace NoPasaranFC.Gameplay
         public MatchState CurrentState { get; private set; }
         public float CountdownTimer { get; private set; }
         public int CountdownNumber { get; private set; }
+        
+        /// <summary>
+        /// Adjusts the remaining countdown time (used to size the post-goal
+        /// countdown to the goal replay, and to cut it short when the replay
+        /// is skipped). No-op outside the Countdown state.
+        /// </summary>
+        public void SetCountdownRemaining(float seconds)
+        {
+            if (CurrentState == MatchState.Countdown)
+                CountdownTimer = Math.Max(0f, seconds);
+        }
         public GoalCelebration GoalCelebration { get; private set; }
         public CelebrationManager CelebrationManager { get; private set; }
         public float FinalScoreTimer { get; private set; }

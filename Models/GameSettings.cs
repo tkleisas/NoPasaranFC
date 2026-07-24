@@ -51,6 +51,9 @@ namespace NoPasaranFC.Models
         // AI settings
         public float AIDecisionInterval { get; set; } = 0.1f; // Seconds between AI utility re-evaluations (0.1-0.5)
         
+        // Match venue
+        public string Venue { get; set; } = "Bahramis"; // "Bahramis" (default) or "Sperchogeia"
+        
         // Language settings
         public string Language { get; set; } = "el"; // "el" Greek (default) or "en" English
         

@@ -47,7 +47,8 @@ namespace NoPasaranFC.Graphics3D
         private const float StandStepHeight = 0.4f;
         private const int Rows = 3;
         
-        public FanSection(GraphicsDevice device, SkinnedModel playerModel, SkinnedModel femaleModel = null)
+        public FanSection(GraphicsDevice device, SkinnedModel playerModel, SkinnedModel femaleModel = null,
+            bool alongFence = false)
         {
             var rng = new Random(4242);
             
@@ -59,20 +60,25 @@ namespace NoPasaranFC.Graphics3D
             };
             
             // Two seated rows + a standing row in front of the stand
+            // (alongFence: everybody stands at ground level by the fence, wider spread)
             int fanCount = 0;
             for (int row = 0; row < Rows; row++)
             {
-                float stepTopY = (row + 1) * StandStepHeight;
-                float rowZ = StandFrontZ - 0.45f - row * StandStepDepth;
+                float stepTopY = alongFence ? 0f : (row + 1) * StandStepHeight;
+                float rowZ = alongFence
+                    ? StandFrontZ - 0.4f - row * 0.9f
+                    : StandFrontZ - 0.45f - row * StandStepDepth;
                 
-                int seatsInRow = 5 + rng.Next(3);
+                int seatsInRow = alongFence ? 8 + rng.Next(3) : 5 + rng.Next(3);
                 for (int s = 0; s < seatsInRow; s++)
                 {
-                    float x = -12f + fanCount * 2.1f + (float)rng.NextDouble() * 0.8f;
-                    if (x > 13f) continue;
+                    float x = alongFence
+                        ? -18f + fanCount * 2.1f + (float)rng.NextDouble() * 0.8f
+                        : -12f + fanCount * 2.1f + (float)rng.NextDouble() * 0.8f;
+                    if (x > (alongFence ? 19f : 13f)) continue;
                     
                     bool isChild = rng.NextDouble() < 0.25;
-                    bool seated = row > 0; // front row stands, upper rows sit
+                    bool seated = !alongFence && row > 0; // front row stands, upper rows sit
                     // ~40% female fans when the female model is available
                     var fanModel = femaleModel != null && rng.NextDouble() < 0.4 ? femaleModel : playerModel;
                     var atlas = fanModel.Parts[0].Texture;

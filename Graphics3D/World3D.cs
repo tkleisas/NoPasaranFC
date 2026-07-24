@@ -7,8 +7,8 @@ using NoPasaranFC.Gameplay;
 
 namespace NoPasaranFC.Graphics3D
 {
-    /// <summary>Match venue: the generic bowl stadium or the Bahramis municipal ground.</summary>
-    public enum Venue { Bowl, Bahramis }
+    /// <summary>Match venue: the generic bowl stadium, the Bahramis municipal ground, or the Sperchogeia ground.</summary>
+    public enum Venue { Bowl, Bahramis, Sperchogeia }
     
     /// <summary>
     /// Static 3D world geometry for the match view: pitch, field markings,
@@ -54,6 +54,14 @@ namespace NoPasaranFC.Graphics3D
         private Texture2D _scoreboardTexture;
         private VertexPositionTexture[] _scoreboardVertices;
         private int[] _scoreboardIndices;
+        
+        // Sperchogeia venue: sponsor banners hung on the fence (text baked to an atlas)
+        private BasicEffect _bannerEffect;
+        private Texture2D _bannerTexture;
+        private readonly List<VertexPositionTexture> _bannerVertList = new List<VertexPositionTexture>();
+        private readonly List<int> _bannerIndexList = new List<int>();
+        private VertexPositionTexture[] _bannerVertices;
+        private int[] _bannerIndices;
         
         // Field dimensions in meters (same constants as MatchScreen.DrawFieldMarkings)
         private readonly float _halfLength = WorldUnits.PitchLengthMeters / 2f;   // 52.5
@@ -103,7 +111,10 @@ namespace NoPasaranFC.Graphics3D
                     LightingEnabled = false
                 };
                 
-                _scoreboardTexture = CreateScoreboardTexture(device, content);
+                string signText = _venue == Venue.Sperchogeia
+                    ? "ΓΗΠΕΔΟ ΣΠΕΡΧΟΓΕΙΑΣ"
+                    : "ΠΑΝΑΓΙΩΤΗΣ ΜΠΑΧΡΑΜΗΣ";
+                _scoreboardTexture = CreateScoreboardTexture(device, content, signText);
                 _scoreboardEffect = new BasicEffect(device)
                 {
                     VertexColorEnabled = false,
@@ -111,6 +122,18 @@ namespace NoPasaranFC.Graphics3D
                     Texture = _scoreboardTexture,
                     LightingEnabled = false
                 };
+                
+                if (_venue == Venue.Sperchogeia)
+                {
+                    _bannerTexture = CreateBannerTexture(device, content);
+                    _bannerEffect = new BasicEffect(device)
+                    {
+                        VertexColorEnabled = false,
+                        TextureEnabled = true,
+                        Texture = _bannerTexture,
+                        LightingEnabled = false
+                    };
+                }
             }
             
             BuildPitch();
@@ -125,6 +148,11 @@ namespace NoPasaranFC.Graphics3D
             {
                 _fenceVertices = _fenceVertList.ToArray();
                 _fenceIndices = _fenceIndexList.ToArray();
+                if (_bannerVertList.Count > 0)
+                {
+                    _bannerVertices = _bannerVertList.ToArray();
+                    _bannerIndices = _bannerIndexList.ToArray();
+                }
             }
         }
         
@@ -136,6 +164,7 @@ namespace NoPasaranFC.Graphics3D
             if (_crowdEffect != null) environment.ApplyTo(_crowdEffect, false);
             if (_fenceEffect != null) environment.ApplyTo(_fenceEffect, false);
             if (_scoreboardEffect != null) environment.ApplyTo(_scoreboardEffect, false);
+            if (_bannerEffect != null) environment.ApplyTo(_bannerEffect, false);
         }
         
         /// <summary>Cycles the crowd textures for a shimmering crowd effect (Bowl only).</summary>
@@ -211,6 +240,21 @@ namespace NoPasaranFC.Graphics3D
                     device.DrawUserIndexedPrimitives(PrimitiveType.TriangleList,
                         _scoreboardVertices, 0, _scoreboardVertices.Length,
                         _scoreboardIndices, 0, _scoreboardIndices.Length / 3);
+                }
+                
+                // Sponsor banners on the fence (Sperchogeia only)
+                if (_bannerVertices != null)
+                {
+                    _bannerEffect.View = view;
+                    _bannerEffect.Projection = projection;
+                    _bannerEffect.World = Matrix.Identity;
+                    foreach (var pass in _bannerEffect.CurrentTechnique.Passes)
+                    {
+                        pass.Apply();
+                        device.DrawUserIndexedPrimitives(PrimitiveType.TriangleList,
+                            _bannerVertices, 0, _bannerVertices.Length,
+                            _bannerIndices, 0, _bannerIndices.Length / 3);
+                    }
                 }
                 
                 // See-through chain-link fence (alpha-blended wires, no depth
@@ -293,6 +337,13 @@ namespace NoPasaranFC.Graphics3D
                 AddGroundQuad(verts, indices, -64f, -46f, -57.5f, 44f, -0.01f, asphalt); // West (-X)
                 AddGroundQuad(verts, indices, 57.5f, -46f, 62f, 44f, -0.01f, asphalt);   // East (+X)
             }
+            else if (_venue == Venue.Sperchogeia)
+            {
+                // Olive-grove floor out to the mountain feet, dirt road on the west
+                AddGroundQuad(verts, indices, -180f, -160f, 180f, 130f, -0.018f, new Color(96, 100, 58));
+                AddGroundQuad(verts, indices, -100f, -85f, 100f, 85f, -0.015f, new Color(122, 118, 70));
+                AddGroundQuad(verts, indices, -78f, -90f, -70f, 90f, -0.012f, new Color(110, 95, 75)); // West dirt road
+            }
             
             // Green apron around the pitch
             float apron = 6f;
@@ -310,9 +361,13 @@ namespace NoPasaranFC.Graphics3D
                 BuildStands(verts, indices);
                 BuildAdBoards(verts, indices);
             }
-            else
+            else if (_venue == Venue.Bahramis)
             {
                 BuildBahramisVenue(verts, indices);
+            }
+            else
+            {
+                BuildSperchogeiaVenue(verts, indices);
             }
             
             _opaqueVertices = verts.ToArray();
@@ -594,6 +649,313 @@ namespace NoPasaranFC.Graphics3D
             BuildHouses(verts, indices, random);
         }
         
+        #region Sperchogeia venue (olive grove, Taygetos backdrop)
+        
+        /// <summary>
+        /// ΓΗΠΕΔΟ ΣΠΕΡΧΟΓΕΙΑΣ: a rural ground near Kalamata. Same fence and sign
+        /// arch pattern as Bahramis, but no bucket-seat stand — instead a dense
+        /// olive grove ring, sponsor banners on the fence, floodlight pylons,
+        /// a few red-roofed houses to the NE and the Taygetos ridge behind.
+        /// </summary>
+        private void BuildSperchogeiaVenue(List<VertexPositionColor> verts, List<int> indices)
+        {
+            var random = new Random(1934);
+            
+            BuildFence(verts, indices);
+            BuildScoreboard(verts, indices);
+            BuildSponsorBanners();
+            BuildOliveGrove(verts, indices, random);
+            BuildFloodlights(verts, indices);
+            BuildMountains(verts, indices, random);
+            
+            // Red-roofed houses on the NE side
+            for (int i = 0; i < 5; i++)
+                AddHouse(verts, indices, random,
+                    62f + 30f * (float)random.NextDouble(),
+                    -52f - 28f * (float)random.NextDouble());
+        }
+        
+        /// <summary>
+        /// Sponsor banners hung on the pitch side of the fence: 4 baked designs
+        /// in one texture atlas, repeated along the far touchline and the ends.
+        /// </summary>
+        private void BuildSponsorBanners()
+        {
+            const float bannerW = 8f, bannerH = 1.2f, bannerY0 = 0.45f;
+            float y1 = bannerY0 + bannerH;
+            float zFar = -FenceZ + 0.08f;   // pitch side of the far fence
+            float zNear = FenceZ - 0.08f;
+            float xEast = FenceX - 0.08f;
+            float xWest = -FenceX + 0.08f;
+            int design = 0;
+            
+            // Far touchline (-Z): 10 banners, facing the pitch (+Z)
+            for (int i = 0; i < 10; i++)
+            {
+                float x0 = -45f + i * 10f;
+                float x1 = x0 + bannerW;
+                float u0 = (design % 4) * 0.25f, u1 = u0 + 0.25f;
+                AddTexturedQuad(_bannerVertList, _bannerIndexList,
+                    new Vector3(x0, bannerY0, zFar), new Vector2(u0, 1f),
+                    new Vector3(x1, bannerY0, zFar), new Vector2(u1, 1f),
+                    new Vector3(x1, y1, zFar), new Vector2(u1, 0f),
+                    new Vector3(x0, y1, zFar), new Vector2(u0, 0f));
+                design++;
+            }
+            
+            // Near touchline (+Z): a few banners away from the center camera zone
+            for (int i = 0; i < 3; i++)
+            {
+                float x0 = -44f + i * 10f;
+                float x1 = x0 + bannerW;
+                float u0 = (design % 4) * 0.25f, u1 = u0 + 0.25f;
+                // Facing -Z (toward the pitch), so U runs right-to-left
+                AddTexturedQuad(_bannerVertList, _bannerIndexList,
+                    new Vector3(x1, bannerY0, zNear), new Vector2(u0, 1f),
+                    new Vector3(x0, bannerY0, zNear), new Vector2(u1, 1f),
+                    new Vector3(x0, y1, zNear), new Vector2(u1, 0f),
+                    new Vector3(x1, y1, zNear), new Vector2(u0, 0f));
+                design++;
+            }
+            
+            // East end (+X): 3 banners facing -X (skip the west end: sign arch there)
+            for (int i = 0; i < 3; i++)
+            {
+                float z0 = -12f + i * 11f;
+                float z1 = z0 + bannerW;
+                float u0 = (design % 4) * 0.25f, u1 = u0 + 0.25f;
+                AddTexturedQuad(_bannerVertList, _bannerIndexList,
+                    new Vector3(xEast, bannerY0, z1), new Vector2(u0, 1f),
+                    new Vector3(xEast, bannerY0, z0), new Vector2(u1, 1f),
+                    new Vector3(xEast, y1, z0), new Vector2(u1, 0f),
+                    new Vector3(xEast, y1, z1), new Vector2(u0, 0f));
+                design++;
+            }
+            
+            // West end (-X), away from the sign arch (arch spans z -6..6)
+            for (int i = 0; i < 2; i++)
+            {
+                float z0 = 12f + i * 11f;
+                float z1 = z0 + bannerW;
+                float u0 = (design % 4) * 0.25f, u1 = u0 + 0.25f;
+                AddTexturedQuad(_bannerVertList, _bannerIndexList,
+                    new Vector3(xWest, bannerY0, z0), new Vector2(u0, 1f),
+                    new Vector3(xWest, bannerY0, z1), new Vector2(u1, 1f),
+                    new Vector3(xWest, y1, z1), new Vector2(u1, 0f),
+                    new Vector3(xWest, y1, z0), new Vector2(u0, 0f));
+                design++;
+            }
+        }
+        
+        /// <summary>
+        /// Bakes the 4-design sponsor atlas (2048x256, 512px per design) with
+        /// bright backgrounds and dark Greek/Latin text in the game font.
+        /// </summary>
+        private static Texture2D CreateBannerTexture(GraphicsDevice device, ContentManager content)
+        {
+            const int width = 2048, height = 256, segW = 512;
+            var target = new RenderTarget2D(device, width, height);
+            device.SetRenderTarget(target);
+            device.Clear(Color.White);
+            
+            var designs = new[]
+            {
+                ("NO PASARAN FC", new Color(190, 25, 30), Color.White),
+                ("ΚΑΛΑΜΑΤΑ", new Color(25, 60, 160), Color.White),
+                ("ΣΠΕΡΧΟΓΕΙΑ", new Color(30, 110, 45), Color.White),
+                ("ΕΛΙΑ & ΚΡΑΣΙ", new Color(235, 225, 200), new Color(60, 50, 35)),
+            };
+            
+            var spriteBatch = new SpriteBatch(device);
+            spriteBatch.Begin();
+            try
+            {
+                // 1x1 white pixel for the background fills
+                var pixel = new Texture2D(device, 1, 1);
+                pixel.SetData(new[] { Color.White });
+                
+                SpriteFont font = null;
+                if (content != null)
+                {
+                    try { font = content.Load<SpriteFont>("Font"); }
+                    catch (Exception) { font = null; }
+                }
+                
+                for (int i = 0; i < designs.Length; i++)
+                {
+                    var (text, bg, fg) = designs[i];
+                    spriteBatch.Draw(pixel, new Rectangle(i * segW, 0, segW, height), bg);
+                    if (font != null)
+                    {
+                        Vector2 size = font.MeasureString(text);
+                        float scale = Math.Min(segW * 0.85f / size.X, height * 0.55f / size.Y);
+                        Vector2 position = new Vector2(i * segW + segW / 2f, height / 2f) - size * scale / 2f;
+                        spriteBatch.DrawString(font, text, position, fg,
+                            0f, Vector2.Zero, scale, SpriteEffects.None, 0f);
+                    }
+                }
+            }
+            finally
+            {
+                spriteBatch.End();
+                device.SetRenderTarget(null);
+            }
+            return target;
+        }
+        
+        /// <summary>
+        /// Dense olive grove ring in rough rows around the venue (the ground
+        /// sits inside cultivated olive fields). Skips the road, sign arch
+        /// and floodlight footprints.
+        /// </summary>
+        private void BuildOliveGrove(List<VertexPositionColor> verts, List<int> indices, Random random)
+        {
+            for (int row = 0; row < 6; row++)
+            {
+                float offset = 8f + row * 7.5f;
+                for (float t = -95f; t <= 95f; t += 8.5f)
+                {
+                    float jx = t + (float)(random.NextDouble() * 2.0 - 1.0) * 2.5f;
+                    float jz = offset + (float)(random.NextDouble() * 2.0 - 1.0) * 2.5f;
+                    
+                    // North and South rows
+                    TryAddOlive(verts, indices, random, jx, -(FenceZ + jz));
+                    TryAddOlive(verts, indices, random, jx, FenceZ + jz);
+                    
+                    // East and West rows (only within the grove's z span)
+                    if (Math.Abs(t) <= 60f)
+                    {
+                        TryAddOlive(verts, indices, random, FenceX + jz, jx * 0.6f);
+                        TryAddOlive(verts, indices, random, -(FenceX + jz), jx * 0.6f);
+                    }
+                }
+            }
+        }
+        
+        private void TryAddOlive(List<VertexPositionColor> verts, List<int> indices, Random random, float x, float z)
+        {
+            // Keep the west dirt road clear
+            if (x > -80f && x < -68f) return;
+            // Keep the sign arch surroundings clear
+            if (x < -FenceX - 1f && x > -FenceX - 14f && Math.Abs(z) < 10f) return;
+            // Keep the floodlight footprints clear
+            if (Math.Abs(Math.Abs(x) - (FenceX + 3f)) < 2.5f && Math.Abs(Math.Abs(z) - (FenceZ + 3f)) < 2.5f) return;
+            AddOliveTree(verts, indices, random, x, z);
+        }
+        
+        /// <summary>Low-poly olive: short gnarled trunk + 2-4 silvery-green blobs.</summary>
+        private static void AddOliveTree(List<VertexPositionColor> verts, List<int> indices, Random random, float x, float z)
+        {
+            float scale = 0.7f + 0.6f * (float)random.NextDouble();
+            Color trunk = new Color(105, 85, 60);
+            AddBox(verts, indices,
+                new Vector3(x - 0.17f, 0f, z - 0.17f), new Vector3(x + 0.17f, 1.1f * scale + 0.3f, z + 0.17f), trunk);
+            
+            Color foliage = new Color(100, 118, 72); // Silvery olive green
+            int blobs = 2 + random.Next(3);
+            for (int i = 0; i < blobs; i++)
+            {
+                float ox = (float)(random.NextDouble() * 2.0 - 1.0) * 1.0f * scale;
+                float oz = (float)(random.NextDouble() * 2.0 - 1.0) * 1.0f * scale;
+                float oy = (1.3f + (float)random.NextDouble() * 0.9f) * scale + 0.3f;
+                float r = (1.0f + 0.7f * (float)random.NextDouble()) * scale;
+                int jitter = random.Next(-12, 13);
+                Color c = new Color(
+                    Math.Clamp(foliage.R + jitter, 0, 255),
+                    Math.Clamp(foliage.G + jitter, 0, 255),
+                    Math.Clamp(foliage.B + jitter, 0, 255));
+                AddSphere(verts, indices, new Vector3(x + ox, oy, z + oz), r, c, 6, 4);
+            }
+        }
+        
+        /// <summary>
+        /// Four corner floodlight pylons: gray lattice pole, head frame with
+        /// six pale lamp boxes aimed over the pitch.
+        /// </summary>
+        private void BuildFloodlights(List<VertexPositionColor> verts, List<int> indices)
+        {
+            Color pole = new Color(115, 118, 122);
+            Color lamp = new Color(255, 244, 190);
+            const float h = 17f;
+            
+            foreach (float sx in new[] { -1f, 1f })
+            {
+                foreach (float sz in new[] { -1f, 1f })
+                {
+                    float x = sx * (FenceX + 3f);
+                    float z = sz * (FenceZ + 3f);
+                    
+                    // Pole
+                    AddBox(verts, indices,
+                        new Vector3(x - 0.2f, 0f, z - 0.2f), new Vector3(x + 0.2f, h, z + 0.2f), pole);
+                    // Head frame (2.4m wide, 1.4m tall) facing the pitch
+                    float hw = 1.2f;
+                    AddBox(verts, indices,
+                        new Vector3(x - hw, h, z - 0.1f), new Vector3(x + hw, h + 0.12f, z + 0.1f), pole);
+                    AddBox(verts, indices,
+                        new Vector3(x - hw, h + 1.4f, z - 0.1f), new Vector3(x + hw, h + 1.52f, z + 0.1f), pole);
+                    // Six lamps in two rows of three
+                    for (int row = 0; row < 2; row++)
+                    {
+                        for (int col = 0; col < 3; col++)
+                        {
+                            float lx = x - 0.8f + col * 0.8f;
+                            float ly = h + 0.25f + row * 0.75f;
+                            AddBox(verts, indices,
+                                new Vector3(lx - 0.22f, ly, z - 0.18f),
+                                new Vector3(lx + 0.22f, ly + 0.5f, z + 0.18f), lamp);
+                        }
+                    }
+                }
+            }
+        }
+        
+        /// <summary>
+        /// Taygetos ridge on the northern horizon: a dark olive foothill ridge
+        /// plus taller gray peaks with white snow caps (stacked triangles).
+        /// </summary>
+        private void BuildMountains(List<VertexPositionColor> verts, List<int> indices, Random random)
+        {
+            // Foothills: low dark ridge at z ~ -100
+            Color foothill = new Color(72, 82, 55);
+            float x = -190f;
+            while (x < 190f)
+            {
+                float w = 40f + 30f * (float)random.NextDouble();
+                float h = 10f + 8f * (float)random.NextDouble();
+                AddTriangle(verts, indices,
+                    new Vector3(x, 0f, -100f), new Vector3(x + w, 0f, -100f),
+                    new Vector3(x + w * 0.5f, h, -108f), foothill);
+                x += w * 0.7f;
+            }
+            
+            // Main ridge: tall gray peaks with snow caps at z ~ -135
+            Color rock = new Color(120, 118, 110);
+            Color rockDark = new Color(95, 95, 88);
+            Color snow = new Color(235, 238, 240);
+            x = -200f;
+            while (x < 200f)
+            {
+                float w = 55f + 35f * (float)random.NextDouble();
+                float h = 28f + 16f * (float)random.NextDouble();
+                float px = x + w * 0.5f;
+                Color c = random.Next(2) == 0 ? rock : rockDark;
+                AddTriangle(verts, indices,
+                    new Vector3(x, 0f, -135f), new Vector3(x + w, 0f, -135f),
+                    new Vector3(px, h, -145f), c);
+                // Snow cap: smaller triangle on the upper part, slightly in front
+                float snowBase = h * 0.62f;
+                float halfAtSnow = (w * 0.5f) * (1f - 0.62f);
+                AddTriangle(verts, indices,
+                    new Vector3(px - halfAtSnow, snowBase, -134.5f),
+                    new Vector3(px + halfAtSnow, snowBase, -134.5f),
+                    new Vector3(px, h, -144.5f), snow);
+                x += w * 0.75f;
+            }
+        }
+        
+        #endregion
+        
         #region Fence
         
         private void BuildFence(List<VertexPositionColor> verts, List<int> indices)
@@ -824,10 +1186,10 @@ namespace NoPasaranFC.Graphics3D
         
         /// <summary>
         /// Renders the scoreboard name texture at load: white background, dark
-        /// navy "ΠΑΝΑΓΙΩΤΗΣ ΜΠΑΧΡΑΜΗΣ" in the game font (has Greek glyphs).
+        /// navy venue name in the game font (has Greek glyphs).
         /// Falls back to a blank white panel if the font can't load.
         /// </summary>
-        private static Texture2D CreateScoreboardTexture(GraphicsDevice device, ContentManager content)
+        private static Texture2D CreateScoreboardTexture(GraphicsDevice device, ContentManager content, string text)
         {
             const int width = 1024;
             const int height = 256;
@@ -839,7 +1201,6 @@ namespace NoPasaranFC.Graphics3D
                 if (content != null)
                 {
                     var font = content.Load<SpriteFont>("Font");
-                    const string text = "ΠΑΝΑΓΙΩΤΗΣ ΜΠΑΧΡΑΜΗΣ";
                     Vector2 size = font.MeasureString(text);
                     float scale = Math.Min(width * 0.85f / size.X, height * 0.55f / size.Y);
                     Vector2 position = new Vector2(width / 2f, height / 2f) - size * scale / 2f;

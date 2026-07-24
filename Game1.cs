@@ -327,6 +327,20 @@ public class Game1 : Game
             }
             case "match":
                 return StartNextMatch();
+            case "ball":
+            {
+                if (parts.Length < 3 || !float.TryParse(parts[1], out float bx) || !float.TryParse(parts[2], out float by))
+                    return "ERR usage: ball <x> <y> [vx vy]  (engine pixel coords)";
+                if (_screenManager.CurrentScreen is not MatchScreen bms || bms.Engine == null)
+                    return "ERR no active match";
+                bms.Engine.BallPosition = new Vector2(bx, by);
+                Vector2 vel = Vector2.Zero;
+                if (parts.Length >= 5 &&
+                    float.TryParse(parts[3], out float bvx) && float.TryParse(parts[4], out float bvy))
+                    vel = new Vector2(bvx, bvy);
+                bms.Engine.BallVelocity = vel;
+                return "OK";
+            }
             case "quit":
                 ExitGame();
                 return "OK";
@@ -356,6 +370,7 @@ public class Game1 : Game
             }
             s += " anims[" + string.Join(",", counts.Select(kv => $"{kv.Key}:{kv.Value}")) + "]";
             if (controlled != null) s += $" controlled={controlled}";
+            s += " " + ms.ReplayDebug;
         }
         return s;
     }

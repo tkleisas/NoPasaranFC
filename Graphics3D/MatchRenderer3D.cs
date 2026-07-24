@@ -23,6 +23,7 @@ namespace NoPasaranFC.Graphics3D
     {
         private readonly Camera3D _camera;
         private readonly World3D _world;
+        private readonly Venue _venue;
         private readonly Ball3D _ball;
         private readonly BasicEffect _billboardEffect;
         private readonly BasicEffect _ringEffect;
@@ -58,7 +59,10 @@ namespace NoPasaranFC.Graphics3D
         // from a goal-side camera over the post-goal countdown
         private readonly ReplayBuffer _replayBuffer = new ReplayBuffer();
         private ReplaySequence _replay;
-        private float _replayClock;
+        private float _replayClock;          // wall-clock seconds into playback
+        private float _replayWallDuration;   // total wall-clock playback length
+        private float _replayPayoffStart;    // footage seconds where slow-mo begins
+        private bool _replayWasSlowMo;       // current segment (for cut detection + ribbon)
         private Vector3 _replayCameraFocus;
         private int _replayGoalSide = 1; // +1 = goal at +X, -1 = goal at -X
         private ReplayBuffer.PlayerFrame[] _replayFrames; // scratch for GetInterpolated
@@ -114,7 +118,8 @@ namespace NoPasaranFC.Graphics3D
         public MatchRenderer3D(GraphicsDevice device, ContentManager content)
         {
             _camera = new Camera3D(Game1.ScreenWidth, Game1.ScreenHeight);
-            _world = new World3D(device, content);
+            _venue = GameSettings.Instance.Venue == "Sperchogeia" ? Venue.Sperchogeia : Venue.Bahramis;
+            _world = new World3D(device, content, _venue);
             _ball = new Ball3D(device);
             
             _billboardEffect = new BasicEffect(device)
@@ -174,9 +179,10 @@ namespace NoPasaranFC.Graphics3D
                 _fox = null;
             }
             
-            // Supporters on the stand (reuses the player models/atlases)
+            // Supporters on the stand (reuses the player models/atlases);
+            // Sperchogeia has no stand - fans stand along the fence
             if (_playerModel != null)
-                _fans = new FanSection(device, _playerModel, _playerModelF);
+                _fans = new FanSection(device, _playerModel, _playerModelF, _venue == Venue.Sperchogeia);
         }
         
         /// <summary>Creates the team dugouts once the match engine exists.</summary>
@@ -320,13 +326,18 @@ namespace NoPasaranFC.Graphics3D
             
             _world.Update(dt);
             
-            // Cloth nets react to the ball when it's inside the goal volume
-            Vector3 ballWorld = WorldUnits.ToWorld(engine.BallPosition, engine.BallHeight)
-                + new Vector3(0f, Ball3D.RadiusMeters, 0f);
-            Vector3 ballVelWorld = new Vector3(engine.BallVelocity.X, 0f, engine.BallVelocity.Y)
-                / WorldUnits.PixelsPerMeter;
-            foreach (var net in _nets)
-                net.Update(dt, ballWorld, ballVelWorld);
+            // Cloth nets react to the ball when it's inside the goal volume.
+            // During a replay DrawReplay feeds the RECORDED ball instead -
+            // skip here so the nets aren't stepped twice with two balls.
+            if (!replayActive)
+            {
+                Vector3 ballWorld = WorldUnits.ToWorld(engine.BallPosition, engine.BallHeight)
+                    + new Vector3(0f, Ball3D.RadiusMeters, 0f);
+                Vector3 ballVelWorld = new Vector3(engine.BallVelocity.X, 0f, engine.BallVelocity.Y)
+                    / WorldUnits.PixelsPerMeter;
+                foreach (var net in _nets)
+                    net.Update(dt, ballWorld, ballVelWorld);
+            }
             
             _rain?.Update(dt, _camera.Target);
             _fox?.Update(dt, engine);
@@ -891,10 +902,16 @@ namespace NoPasaranFC.Graphics3D
         /// Snapshots the recorded build-up when a goal is scored. Skipped when
         /// less than 2 seconds are on tape (e.g. a goal straight after kickoff).
         /// The buffer is reset so the next replay is built up from fresh play.
+        ///
+        /// Playback runs in two segments (see DrawReplay): the build-up at
+        /// BuildupSpeed from a high sideline camera, then the last
+        /// SlowMoSeconds of footage (shot + goal + net) at SlowMoSpeed from the
+        /// low goal-side camera. Wall-clock duration is longer than the raw
+        /// footage because of the slow motion.
         /// </summary>
         public void CaptureReplay()
         {
-            const float ReplaySeconds = 3.5f; // matches the post-goal countdown length
+            const float ReplaySeconds = 4.5f;
             const float MinSeconds = 2f;
             
             _replay = _replayBuffer.RecordedSeconds >= MinSeconds
@@ -908,6 +925,12 @@ namespace NoPasaranFC.Graphics3D
                 _replayFrames = new ReplayBuffer.PlayerFrame[_replay.PlayerCount];
                 _replayYaws = new float[_replay.PlayerCount];
                 
+                // Slow-mo covers the tail of the footage (goal + aftermath)
+                _replayPayoffStart = Math.Max(0f, _replay.Duration - SlowMoSeconds);
+                _replayWallDuration = _replayPayoffStart / BuildupSpeed
+                    + (_replay.Duration - _replayPayoffStart) / SlowMoSpeed;
+                _replayWasSlowMo = false;
+                
                 // The ball ends up inside the scored-on goal; its final side picks the camera end
                 _replay.GetInterpolated(_replay.Duration, out ReplayBuffer.BallFrame lastBall, _replayFrames);
                 _replayGoalSide = WorldUnits.ToWorld(lastBall.Position).X >= 0f ? 1 : -1;
@@ -917,14 +940,25 @@ namespace NoPasaranFC.Graphics3D
             }
         }
         
+        // Replay playback pacing (wall clock = footage time / speed per segment)
+        private const float BuildupSpeed = 1.4f;   // build-up slightly sped up
+        private const float SlowMoSpeed = 0.5f;    // payoff at half speed
+        private const float SlowMoSeconds = 2f;    // footage seconds covered by slow-mo
+        
         /// <summary>True while a captured goal replay is still playing back.</summary>
-        public bool IsReplayActive => _replay != null && _replayClock < _replay.Duration;
+        public bool IsReplayActive => _replay != null && _replayClock < _replayWallDuration;
+        
+        /// <summary>Wall-clock length of the whole replay (build-up + slow-mo payoff).</summary>
+        public float ReplayWallDuration => _replayWallDuration;
+        
+        /// <summary>True during the slow-motion payoff segment (for the ribbon).</summary>
+        public bool ReplayInSlowMo => _replayWasSlowMo;
         
         /// <summary>Fast-forwards the replay to its end (player holds the shoot key).</summary>
         public void SkipReplay()
         {
             if (_replay != null)
-                _replayClock = _replay.Duration;
+                _replayClock = _replayWallDuration;
         }
         
         /// <summary>Drops any captured replay (called when the post-goal countdown ends).</summary>
@@ -932,10 +966,13 @@ namespace NoPasaranFC.Graphics3D
         
         /// <summary>
         /// Draws the captured goal build-up instead of the live scene (post-goal
-        /// countdown window). Cinematic camera: low, just inside the scored-on
-        /// goal's end, ~12m to the side of the goal mouth, panning to track the
-        /// recorded ball. Players are the live skinned instances, re-posed from
-        /// the recording (yaw from velocity, clip from speed).
+        /// countdown window). Two TV-style segments with a hard cut between them:
+        ///   1. Build-up: high sideline camera, footage at BuildupSpeed
+        ///   2. Payoff:   low goal-side camera, last SlowMoSeconds of footage at
+        ///      SlowMoSpeed (shot, goal and net deformation in slow motion)
+        /// Players are the live skinned instances, re-posed from the recording
+        /// (yaw from velocity, clip from speed); the cloth nets get the recorded
+        /// ball so they deform exactly like the live goal.
         /// </summary>
         public void DrawReplay(GraphicsDevice device, MatchEngine engine, float dt)
         {
@@ -946,17 +983,44 @@ namespace NoPasaranFC.Graphics3D
                 return;
             }
             
-            _replayClock = Math.Min(_replayClock + dt, _replay.Duration);
-            _replay.GetInterpolated(_replayClock, out ReplayBuffer.BallFrame ball, _replayFrames);
+            // Wall clock -> footage time (per-segment playback speed)
+            _replayClock = Math.Min(_replayClock + dt, _replayWallDuration);
+            float buildupWall = _replayPayoffStart / BuildupSpeed;
+            bool slowMo = _replayClock >= buildupWall;
+            float timeScale = slowMo ? SlowMoSpeed : BuildupSpeed;
+            float footageT = slowMo
+                ? _replayPayoffStart + (_replayClock - buildupWall) * SlowMoSpeed
+                : _replayClock * BuildupSpeed;
+            footageT = Math.Min(footageT, _replay.Duration);
+            float simDt = dt * timeScale; // animations, ball roll and net physics follow the footage
             
-            // Cinematic camera: goal-side view of the scored-on goal, smoothly
-            // tracking the recorded ball (frame-rate independent lerp)
+            _replay.GetInterpolated(footageT, out ReplayBuffer.BallFrame ball, _replayFrames);
+            
             Vector3 ballWorld = WorldUnits.ToWorld(ball.Position, ball.Height);
+            
+            // Hard cut between segments: snap the focus, don't sweep across the pitch
+            if (slowMo != _replayWasSlowMo)
+            {
+                _replayCameraFocus = ballWorld;
+                _replayWasSlowMo = slowMo;
+            }
+            
             float follow = 1f - (float)Math.Pow(1f - 0.12f, dt * 60f);
             _replayCameraFocus = Vector3.Lerp(_replayCameraFocus, ballWorld, follow);
             float halfLength = WorldUnits.PitchLengthMeters / 2f;
-            Vector3 cameraPos = new Vector3(_replayGoalSide * (halfLength - 2f), 2.5f, 12f);
-            _camera.SetView(cameraPos, _replayCameraFocus + new Vector3(0f, 0.5f, 0f));
+            
+            if (slowMo)
+            {
+                // Low cinematic camera just inside the scored-on goal's end
+                Vector3 cameraPos = new Vector3(_replayGoalSide * (halfLength - 2f), 2.5f, 12f);
+                _camera.SetView(cameraPos, _replayCameraFocus + new Vector3(0f, 0.5f, 0f));
+            }
+            else
+            {
+                // High sideline broadcast camera tracking the build-up
+                Vector3 cameraPos = _replayCameraFocus + new Vector3(0f, 14f, 25f);
+                _camera.SetView(cameraPos, _replayCameraFocus);
+            }
             
             // Full clear (color + depth) - 3D scene replaces the 2D world entirely
             device.Clear(ClearOptions.Target | ClearOptions.DepthBuffer,
@@ -967,11 +1031,20 @@ namespace NoPasaranFC.Graphics3D
             
             _world.Draw(device, _camera.View, _camera.Projection);
             _environment.Draw(device, _camera.View, _camera.Projection); // Floodlights (night only)
+            
+            // Cloth nets deform from the RECORDED ball (same feed as live play,
+            // velocity scaled to the playback speed so the impulse matches)
+            Vector3 netBall = ballWorld + new Vector3(0f, Ball3D.RadiusMeters, 0f);
+            Vector3 netBallVel = new Vector3(ball.Velocity.X, 0f, ball.Velocity.Y)
+                / WorldUnits.PixelsPerMeter * timeScale;
             foreach (var net in _nets)
+            {
+                net.Update(simDt, netBall, netBallVel);
                 net.Draw(device, _camera.View, _camera.Projection);
+            }
             
             // Ball from the recording (rolls from its recorded velocity, keeps its shadow)
-            _ball.Update(ball.Position, ball.Velocity, ball.Height, dt);
+            _ball.Update(ball.Position, ball.Velocity * timeScale, ball.Height, simDt);
             _ball.Draw(device, _camera.View, _camera.Projection);
             
             // Players from the recording, reusing the live skinned instances
@@ -999,7 +1072,7 @@ namespace NoPasaranFC.Graphics3D
                     : "Idle";
                 if (!animator.Instance.Play(clip, loop: true) && clip != "Idle")
                     animator.Instance.Play("Idle", loop: true); // graceful fallback for missing clips
-                animator.Instance.Update(dt);
+                animator.Instance.Update(simDt);
                 animator.Instance.Environment = _environment;
                 
                 Matrix world = Matrix.CreateScale(PlayerModelScale)
