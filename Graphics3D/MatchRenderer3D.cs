@@ -46,6 +46,13 @@ namespace NoPasaranFC.Graphics3D
         
         // Animated supporters on the stand (null if no player model)
         private FanSection _fans;
+        
+        // Team dugouts with substitutes and coaches
+        private TeamBench _homeBench;
+        private TeamBench _awayBench;
+        
+        // Match officials (referee + linesmen)
+        private MatchOfficials _officials;
 
         // KayKit chibi is ~2.3 units tall; scale to ~1.7m
         private const float PlayerModelScale = 0.75f;
@@ -158,6 +165,27 @@ namespace NoPasaranFC.Graphics3D
             // Supporters on the stand (reuses the player models/atlases)
             if (_playerModel != null)
                 _fans = new FanSection(device, _playerModel, _playerModelF);
+        }
+        
+        /// <summary>Creates the team dugouts once the match engine exists.</summary>
+        public void InitializeBenches(GraphicsDevice device, MatchEngine engine, int homeTeamId)
+        {
+            if (_playerModel == null) return;
+            
+            Texture2D atlas = _playerModel.Parts[0].Texture;
+            float benchZ = -WorldUnits.PitchWidthMeters / 2f - 3.5f; // far touchline, in front of the stand
+            
+            // Benches flank the main stand (stand is x ∈ [-15, +15])
+            foreach (var (team, offset) in new[] { (engine.HomeTeam, -22f), (engine.AwayTeam, 22f) })
+            {
+                GetKitColors(team.Players[0], homeTeamId, out Color shirt, out Color shorts, out Color socks);
+                var bench = new TeamBench(device, team, new Vector2(offset, benchZ),
+                    _playerModel, _playerModelF, atlas, shirt, shorts, socks);
+                if (team == engine.HomeTeam) _homeBench = bench;
+                else _awayBench = bench;
+            }
+            
+            _officials = new MatchOfficials(device, _playerModel, atlas);
         }
 
         /// <summary>
@@ -283,6 +311,10 @@ namespace NoPasaranFC.Graphics3D
             _rain?.Update(dt, _camera.Target);
             _fox?.Update(dt, engine);
             _fans?.Update(dt, engine);
+            float ballWorldX = WorldUnits.ToWorld(engine.BallPosition).X;
+            _homeBench?.Update(dt, ballWorldX);
+            _awayBench?.Update(dt, ballWorldX);
+            _officials?.Update(dt, engine);
             
             if (_playerModel != null)
                 UpdatePlayerAnimators(engine, dt);
@@ -305,8 +337,12 @@ namespace NoPasaranFC.Graphics3D
                 net.Draw(device, _camera.View, _camera.Projection);
             _ball.Draw(device, _camera.View, _camera.Projection);
             DrawPlayers(device, engine, homeTeamId);
-            DrawSetPieceArrow(device, engine);_fox?.Draw(device, _camera.View, _camera.Projection, _environment);
+            DrawSetPieceArrow(device, engine);
+            _fox?.Draw(device, _camera.View, _camera.Projection, _environment);
             _fans?.Draw(device, _camera.View, _camera.Projection, _environment);
+            _homeBench?.Draw(device, _camera.View, _camera.Projection, _environment);
+            _awayBench?.Draw(device, _camera.View, _camera.Projection, _environment);
+            _officials?.Draw(device, _camera.View, _camera.Projection, _environment);
             _rain?.Draw(device, _camera.View, _camera.Projection);
             
             // Restore GraphicsDevice states for SpriteBatch (HUD drawn after us)

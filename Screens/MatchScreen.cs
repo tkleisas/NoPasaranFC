@@ -125,6 +125,7 @@ namespace NoPasaranFC.Screens
                     if (GameSettings.Instance.MatchViewMode == "3D")
                     {
                         _renderer3D = new Graphics3D.MatchRenderer3D(graphicsDevice, _content);
+                        _renderer3D.InitializeBenches(graphicsDevice, _matchEngine, _homeTeam.Id);
                     }
                     
                     // Initialize all players with their own animation system instance

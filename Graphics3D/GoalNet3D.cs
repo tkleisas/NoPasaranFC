@@ -15,14 +15,14 @@ namespace NoPasaranFC.Graphics3D
     public class GoalNet3D
     {
         // Physics constants (frame-based, same feel as the 2D GoalNet)
-        private const float Damping = 0.85f;
-        private const float Stiffness = 0.3f;
-        private const float NeighborStiffness = 0.12f;
-        private const float WindStrength = 0.015f;
+        private const float Damping = 0.92f;        // Loose = visible oscillation after impact
+        private const float Stiffness = 0.08f;      // Slow spring-back so the bulge persists
+        private const float NeighborStiffness = 0.15f;
+        private const float WindStrength = 0.008f;
         private const float MaxStep = 0.6f;         // Velocity clamp per frame (m)
-        private const float MaxDisplacement = 1.2f; // Safety tether to rest position (m)
-        private const float ImpulseRadius = 0.55f;  // Ball influence radius (m)
-        private const float ImpulseFactor = 0.03f;  // Fraction of ball velocity transferred
+        private const float MaxDisplacement = 1.8f; // Safety tether to rest position (m)
+        private const float ImpulseRadius = 1.1f;   // Ball influence radius (m)
+        private const float ImpulseFactor = 0.35f;  // Fraction of ball velocity transferred
         
         private static readonly Color NetColor = new Color(255, 255, 255, 128);
         
@@ -58,7 +58,7 @@ namespace NoPasaranFC.Graphics3D
             _panels = new[]
             {
                 // Back plane (width x height)
-                new ClothPanel(13, 6, (i, j, u, v) =>
+                new ClothPanel(17, 9, (i, j, u, v) =>
                     new Vector3(backX, v * _height, MathHelper.Lerp(-_halfWidth, _halfWidth, u))),
                 // Top plane (width x depth)
                 new ClothPanel(13, 4, (i, j, u, v) =>
