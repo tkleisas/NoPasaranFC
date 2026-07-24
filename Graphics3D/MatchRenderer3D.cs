@@ -53,6 +53,18 @@ namespace NoPasaranFC.Graphics3D
         
         // Match officials (referee + linesmen)
         private MatchOfficials _officials;
+        
+        // Goal replay: live play is recorded into a ring buffer and replayed
+        // from a goal-side camera over the post-goal countdown
+        private readonly ReplayBuffer _replayBuffer = new ReplayBuffer();
+        private ReplaySequence _replay;
+        private float _replayClock;
+        private Vector3 _replayCameraFocus;
+        private int _replayGoalSide = 1; // +1 = goal at +X, -1 = goal at -X
+        private ReplayBuffer.PlayerFrame[] _replayFrames; // scratch for GetInterpolated
+        private float[] _replayYaws;                      // per-player facing during replay
+        private Player[] _replayPlayers;                  // player order matching the recording
+        private int _homeTeamId;
 
         // KayKit chibi is ~2.3 units tall; scale to ~1.7m
         private const float PlayerModelScale = 0.75f;
@@ -170,6 +182,7 @@ namespace NoPasaranFC.Graphics3D
         /// <summary>Creates the team dugouts once the match engine exists.</summary>
         public void InitializeBenches(GraphicsDevice device, MatchEngine engine, int homeTeamId)
         {
+            _homeTeamId = homeTeamId;
             if (_playerModel == null) return;
             
             Texture2D atlas = _playerModel.Parts[0].Texture;
@@ -272,6 +285,10 @@ namespace NoPasaranFC.Graphics3D
         {
             float dt = (float)gameTime.ElapsedGameTime.TotalSeconds;
             
+            // While a goal replay overlays the post-goal countdown, DrawReplay
+            // drives the camera, ball and player poses from the recording instead
+            bool replayActive = IsReplayActive && engine.CurrentState == MatchEngine.MatchState.Countdown;
+            
             _camera.UpdateViewport(Game1.ScreenWidth, Game1.ScreenHeight);
             _camera.SetCelebrating(engine.CurrentState == MatchEngine.MatchState.GoalCelebration);
             
@@ -295,8 +312,11 @@ namespace NoPasaranFC.Graphics3D
                 if (count > 0)
                     cameraFocus = sum / count;
             }
-            _camera.Follow(cameraFocus, dt);
-            _ball.Update(engine.BallPosition, engine.BallVelocity, engine.BallHeight, dt);
+            if (!replayActive)
+            {
+                _camera.Follow(cameraFocus, dt);
+                _ball.Update(engine.BallPosition, engine.BallVelocity, engine.BallHeight, dt);
+            }
             
             _world.Update(dt);
             
@@ -316,10 +336,13 @@ namespace NoPasaranFC.Graphics3D
             _awayBench?.Update(dt, ballWorldX);
             _officials?.Update(dt, engine);
             
-            if (_playerModel != null)
-                UpdatePlayerAnimators(engine, dt);
-            else
-                UpdateBillboardAnimations(engine, dt);
+            if (!replayActive)
+            {
+                if (_playerModel != null)
+                    UpdatePlayerAnimators(engine, dt);
+                else
+                    UpdateBillboardAnimations(engine, dt);
+            }
         }
         
         public void Draw(GraphicsDevice device, MatchEngine engine, int homeTeamId)
@@ -851,6 +874,152 @@ namespace NoPasaranFC.Graphics3D
             
             _ringVertices = verts.ToArray();
             _ringIndices = indices.ToArray();
+        }
+        
+        #endregion
+        
+        #region Goal replay
+        
+        /// <summary>Records one frame of live play into the replay ring buffer (call every Playing update).</summary>
+        public void RecordReplayFrame(MatchEngine engine)
+        {
+            _replayBuffer.Record(engine);
+            _replayPlayers = engine.GetAllPlayers().ToArray();
+        }
+        
+        /// <summary>
+        /// Snapshots the recorded build-up when a goal is scored. Skipped when
+        /// less than 2 seconds are on tape (e.g. a goal straight after kickoff).
+        /// The buffer is reset so the next replay is built up from fresh play.
+        /// </summary>
+        public void CaptureReplay()
+        {
+            const float ReplaySeconds = 3.5f; // matches the post-goal countdown length
+            const float MinSeconds = 2f;
+            
+            _replay = _replayBuffer.RecordedSeconds >= MinSeconds
+                ? _replayBuffer.Snapshot(ReplaySeconds)
+                : null;
+            _replayBuffer.Reset();
+            _replayClock = 0f;
+            
+            if (_replay != null)
+            {
+                _replayFrames = new ReplayBuffer.PlayerFrame[_replay.PlayerCount];
+                _replayYaws = new float[_replay.PlayerCount];
+                
+                // The ball ends up inside the scored-on goal; its final side picks the camera end
+                _replay.GetInterpolated(_replay.Duration, out ReplayBuffer.BallFrame lastBall, _replayFrames);
+                _replayGoalSide = WorldUnits.ToWorld(lastBall.Position).X >= 0f ? 1 : -1;
+                
+                _replay.GetInterpolated(0f, out ReplayBuffer.BallFrame firstBall, _replayFrames);
+                _replayCameraFocus = WorldUnits.ToWorld(firstBall.Position, firstBall.Height);
+            }
+        }
+        
+        /// <summary>True while a captured goal replay is still playing back.</summary>
+        public bool IsReplayActive => _replay != null && _replayClock < _replay.Duration;
+        
+        /// <summary>Fast-forwards the replay to its end (player holds the shoot key).</summary>
+        public void SkipReplay()
+        {
+            if (_replay != null)
+                _replayClock = _replay.Duration;
+        }
+        
+        /// <summary>Drops any captured replay (called when the post-goal countdown ends).</summary>
+        public void ClearReplay() => _replay = null;
+        
+        /// <summary>
+        /// Draws the captured goal build-up instead of the live scene (post-goal
+        /// countdown window). Cinematic camera: low, just inside the scored-on
+        /// goal's end, ~12m to the side of the goal mouth, panning to track the
+        /// recorded ball. Players are the live skinned instances, re-posed from
+        /// the recording (yaw from velocity, clip from speed).
+        /// </summary>
+        public void DrawReplay(GraphicsDevice device, MatchEngine engine, float dt)
+        {
+            // No replay on tape (or billboard fallback without skinned players): live scene
+            if (!IsReplayActive || _playerModel == null || _replayPlayers == null)
+            {
+                Draw(device, engine, _homeTeamId);
+                return;
+            }
+            
+            _replayClock = Math.Min(_replayClock + dt, _replay.Duration);
+            _replay.GetInterpolated(_replayClock, out ReplayBuffer.BallFrame ball, _replayFrames);
+            
+            // Cinematic camera: goal-side view of the scored-on goal, smoothly
+            // tracking the recorded ball (frame-rate independent lerp)
+            Vector3 ballWorld = WorldUnits.ToWorld(ball.Position, ball.Height);
+            float follow = 1f - (float)Math.Pow(1f - 0.12f, dt * 60f);
+            _replayCameraFocus = Vector3.Lerp(_replayCameraFocus, ballWorld, follow);
+            float halfLength = WorldUnits.PitchLengthMeters / 2f;
+            Vector3 cameraPos = new Vector3(_replayGoalSide * (halfLength - 2f), 2.5f, 12f);
+            _camera.SetView(cameraPos, _replayCameraFocus + new Vector3(0f, 0.5f, 0f));
+            
+            // Full clear (color + depth) - 3D scene replaces the 2D world entirely
+            device.Clear(ClearOptions.Target | ClearOptions.DepthBuffer,
+                _environment.SkyColor, 1f, 0);
+            
+            device.DepthStencilState = DepthStencilState.Default;
+            device.RasterizerState = RasterizerState.CullNone;
+            
+            _world.Draw(device, _camera.View, _camera.Projection);
+            _environment.Draw(device, _camera.View, _camera.Projection); // Floodlights (night only)
+            foreach (var net in _nets)
+                net.Draw(device, _camera.View, _camera.Projection);
+            
+            // Ball from the recording (rolls from its recorded velocity, keeps its shadow)
+            _ball.Update(ball.Position, ball.Velocity, ball.Height, dt);
+            _ball.Draw(device, _camera.View, _camera.Projection);
+            
+            // Players from the recording, reusing the live skinned instances
+            int count = Math.Min(_replayPlayers.Length, _replay.PlayerCount);
+            for (int i = 0; i < count; i++)
+            {
+                var player = _replayPlayers[i];
+                if (!_playerAnimators.TryGetValue(player, out var animator))
+                    continue;
+                
+                // Per-team kit textures, applied once per player (normally done by now)
+                if (_kitsApplied.Add(player))
+                    ApplyKit(device, player, _homeTeamId, animator);
+                
+                var frame = _replayFrames[i];
+                
+                // Facing from recorded velocity; keep the last direction when nearly stopped
+                if (frame.Velocity.LengthSquared() > 1f)
+                    _replayYaws[i] = (float)Math.Atan2(frame.Velocity.X, frame.Velocity.Y) + PlayerAnimator.ModelYawOffset;
+                
+                float speed = frame.Velocity.Length();
+                string clip = frame.KnockedDown ? "Lie_Idle"
+                    : speed > 120f ? "Running_A"
+                    : speed > 5f ? "Walking_A"
+                    : "Idle";
+                if (!animator.Instance.Play(clip, loop: true) && clip != "Idle")
+                    animator.Instance.Play("Idle", loop: true); // graceful fallback for missing clips
+                animator.Instance.Update(dt);
+                animator.Instance.Environment = _environment;
+                
+                Matrix world = Matrix.CreateScale(PlayerModelScale)
+                    * Matrix.CreateRotationY(_replayYaws[i])
+                    * Matrix.CreateTranslation(WorldUnits.ToWorld(frame.Position));
+                animator.Instance.Draw(device, world, _camera.View, _camera.Projection);
+            }
+            
+            _fox?.Draw(device, _camera.View, _camera.Projection, _environment);
+            _fans?.Draw(device, _camera.View, _camera.Projection, _environment);
+            _homeBench?.Draw(device, _camera.View, _camera.Projection, _environment);
+            _awayBench?.Draw(device, _camera.View, _camera.Projection, _environment);
+            _officials?.Draw(device, _camera.View, _camera.Projection, _environment);
+            _rain?.Draw(device, _camera.View, _camera.Projection);
+            
+            // Restore GraphicsDevice states for SpriteBatch (HUD drawn after us)
+            device.DepthStencilState = DepthStencilState.None;
+            device.BlendState = BlendState.AlphaBlend;
+            device.RasterizerState = RasterizerState.CullCounterClockwise;
+            device.SamplerStates[0] = SamplerState.LinearClamp;
         }
         
         #endregion

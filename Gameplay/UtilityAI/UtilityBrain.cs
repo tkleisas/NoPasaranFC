@@ -121,6 +121,14 @@ namespace NoPasaranFC.Gameplay.UtilityAI
             else
             {
                 // --- I don't: chase or hold tactical position ---
+                // Kickoff encroachment rule: the non-kickoff team must not move
+                // toward the ball until the kickoff has been played
+                if (!ctx.KickoffTaken && player.TeamId != ctx.KickoffTeamId)
+                {
+                    return new UtilityAction(UtilityActionType.HoldPosition,
+                        GetTacticalPoint(player, ctx), 100f);
+                }
+                
                 // A stalled controlled carrier means the ball is effectively loose
                 // (harness without human input, or an AFK player) - chase it.
                 bool ballLoose = IsBallEffectivelyLoose(ctx);

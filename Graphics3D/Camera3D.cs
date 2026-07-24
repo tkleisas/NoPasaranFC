@@ -104,6 +104,17 @@ namespace NoPasaranFC.Graphics3D
             UpdateView();
         }
         
+        /// <summary>
+        /// Directly place the camera (used by the goal replay's cinematic camera).
+        /// The next Follow() call resumes the normal rig, lerping away from lookAt.
+        /// </summary>
+        public void SetView(Vector3 position, Vector3 lookAt)
+        {
+            Position = position;
+            Target = lookAt;
+            View = Matrix.CreateLookAt(position, lookAt, Vector3.Up);
+        }
+
         private void UpdateView()
         {
             // Zoom > base => closer/lower; zoom < base => further/higher

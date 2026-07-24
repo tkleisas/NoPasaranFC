@@ -88,6 +88,8 @@ namespace NoPasaranFC.Gameplay
         public Player BestPassTarget { get; set; }
         public float BestPassScore { get; set; } = float.MinValue; // Score of BestPassTarget (MinValue = no option)
         public Player BallCarrier { get; set; } // Player in clean control of the ball (null = loose ball)
+        public bool KickoffTaken { get; set; } = true; // false while waiting for the kickoff to be played
+        public int KickoffTeamId { get; set; } = -1; // team that has the kickoff
 
         // True when a teammate (not this player) has clean control of the ball
         public bool TeammateHasBall(Player player)

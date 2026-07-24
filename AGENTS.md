@@ -72,7 +72,9 @@ dotnet build NoPasaranFC.Android/NoPasaranFC.Android.csproj  # Android (needs an
 - AI: role-based states (GK/DEF/MID/FWD), passing/shooting/dribbling decisions, sideline avoidance
 - 3D mode: skinned players (male + female bodies), per-team kits with back numbers, GK distinct kits,
   Bahramis venue (fence, yellow-seat stand, scoreboard, trees, houses), animated fans (+ children,
-  Palestinian flags), corner flags, easter-egg fox, rain, day/sunset/night, celebration camera
+  Palestinian flags), corner flags, easter-egg fox, rain, day/sunset/night, celebration camera,
+  goal replays (goal build-up re-shown over the post-goal countdown, goal-side camera, hold X to skip;
+  recording in `Graphics3D/ReplayBuffer.cs`, playback in `MatchRenderer3D.DrawReplay`)
 - 2D mode: sprite players with kit sheets, scrolling camera, minimap (minimap present in both modes)
 - Local co-op: Player 2 can join (distinct indicators)
 - Settings: video/audio/gameplay/camera/language, persisted; debug console for automation

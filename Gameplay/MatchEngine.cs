@@ -67,6 +67,11 @@ namespace NoPasaranFC.Gameplay
         private readonly Dictionary<Player, float> _firstTouchGrace = new Dictionary<Player, float>();
         private const float FirstTouchGraceSeconds = 0.6f;
         
+        // Kickoff encroachment: non-kickoff-team players must not move toward
+        // the ball until the kickoff taker has played it
+        public bool KickoffTaken { get; private set; } = true;
+        public int KickoffTeamId { get; private set; }
+        
         /// <summary>True while the player is in their post-reception grace window.</summary>
         public bool HasFirstTouchGrace(Player player)
         {
@@ -86,6 +91,7 @@ namespace NoPasaranFC.Gameplay
             if (player != _lastPlayerTouchedBall)
                 _previousToucher = _lastPlayerTouchedBall;
             _lastPlayerTouchedBall = player;
+            KickoffTaken = true; // ball has been played
         }
         
         /// <summary>The player who touched the ball before the current toucher.</summary>
@@ -286,6 +292,10 @@ namespace NoPasaranFC.Gameplay
             // Ball at center
             BallPosition = new Vector2(StadiumMargin + FieldWidth / 2, StadiumMargin + FieldHeight / 2);
             
+            // Kickoff encroachment rule: ball not yet played; kickoff belongs to
+            // the controlled player's team (they start at the center spot)
+            KickoffTaken = false;
+            
             // Clear all IsControlled flags first (ensure only one player is controlled)
             foreach (var player in _homeTeam.Players)
                 player.IsControlled = false;
@@ -303,6 +313,7 @@ namespace NoPasaranFC.Gameplay
                     ?? controlledTeamPlayers.FirstOrDefault(p => p.Position != PlayerPosition.Goalkeeper)
                     ?? controlledTeamPlayers[0];
                 _controlledPlayer.IsControlled = true;
+                KickoffTeamId = _controlledPlayer.TeamId;
             }
 
             // If Player 2 has already joined (e.g. resetting after a goal), re-pick a
@@ -562,6 +573,10 @@ namespace NoPasaranFC.Gameplay
             _timeSinceKickoff += deltaTime; // Update kickoff timer
             _timeSinceSetPiece += deltaTime; // Update set piece timer
             UpdateFirstTouchGrace(deltaTime); // Decay first-touch grace windows
+            
+            // Kickoff is "taken" once anyone has played the ball
+            if (!KickoffTaken && _lastPlayerTouchedBall != null)
+                KickoffTaken = true;
             
             // Check if match should end
             if (MatchTime >= 90f)
@@ -1301,25 +1316,30 @@ namespace NoPasaranFC.Gameplay
         
         private void UpdateReferee(float deltaTime)
         {
-            // Referee follows ball but keeps some distance
+            // Referee follows play like a real one: jogs to stay ~400-600px from
+            // the ball, sprints when play breaks away
             Vector2 targetPosition = BallPosition;
             Vector2 toBall = targetPosition - RefereePosition;
             float distance = toBall.Length();
             
-            // Stay about 150-300 units away from the ball
-            if (distance > 300f)
+            if (distance > 600f)
             {
                 toBall.Normalize();
-                _refereeVelocity = toBall * 180f; // Referee speed
+                _refereeVelocity = toBall * 400f; // Sprint to catch up with play
             }
-            else if (distance < 150f)
+            else if (distance > 350f)
             {
                 toBall.Normalize();
-                _refereeVelocity = -toBall * 100f; // Move away
+                _refereeVelocity = toBall * 220f; // Jog into position
+            }
+            else if (distance < 200f)
+            {
+                toBall.Normalize();
+                _refereeVelocity = -toBall * 120f; // Back off from the play
             }
             else
             {
-                _refereeVelocity *= 0.9f; // Slow down when in good position
+                _refereeVelocity *= 0.97f; // Settle smoothly when in position
             }
             
             RefereePosition += _refereeVelocity * deltaTime;

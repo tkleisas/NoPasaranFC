@@ -251,7 +251,9 @@ namespace NoPasaranFC.Gameplay
                 IsDefensiveHalf = ballInDefensiveHalf,
                 IsAttackingHalf = !ballInDefensiveHalf,
                 Teammates = myTeam.Players.Where(p => p.IsStarting && !p.IsKnockedDown && p != player).ToList(),
-                Opponents = opponentTeam.Players.Where(p => p.IsStarting && !p.IsKnockedDown).ToList()
+                Opponents = opponentTeam.Players.Where(p => p.IsStarting && !p.IsKnockedDown).ToList(),
+                KickoffTaken = _engine.KickoffTaken,
+                KickoffTeamId = _engine.KickoffTeamId
             };
         }
 

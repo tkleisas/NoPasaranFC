@@ -61,6 +61,11 @@ namespace NoPasaranFC.Screens
         // Optional 3D match view (null in default 2D mode)
         private Graphics3D.MatchRenderer3D _renderer3D;
         
+        // Goal replay (3D mode): live play is recorded and the goal build-up is
+        // replayed over the post-goal countdown, skippable with the shoot key
+        private MatchEngine.MatchState _previousMatchState = MatchEngine.MatchState.CameraInit;
+        private float _lastDeltaTime = 1f / 60f;
+        
         // Sprite sheet configuration
         private const int SpriteFrameSize = 64; // Each frame is 64x64 in the sprite sheet
         private const int SpritesheetColumns = 4; // 4 animation frames per direction
@@ -321,6 +326,34 @@ namespace NoPasaranFC.Screens
             if (_renderer3D != null)
             {
                 _renderer3D.Update(gameTime, _matchEngine);
+            }
+            
+            // Goal replay: record live play AND the first second after the goal
+            // (the payoff), capture when the celebration hands over to the
+            // countdown; holding the shoot key skips it
+            if (_renderer3D != null)
+            {
+                _lastDeltaTime = (float)gameTime.ElapsedGameTime.TotalSeconds;
+                var matchState = _matchEngine.CurrentState;
+                
+                bool recordingWindow = matchState == MatchEngine.MatchState.Playing ||
+                    (matchState == MatchEngine.MatchState.GoalCelebration &&
+                     _matchEngine.GoalCelebration.Timer <= 1.0f);
+                if (recordingWindow)
+                    _renderer3D.RecordReplayFrame(_matchEngine);
+                
+                if (matchState == MatchEngine.MatchState.Countdown &&
+                    _previousMatchState == MatchEngine.MatchState.GoalCelebration)
+                    _renderer3D.CaptureReplay();
+                
+                if (matchState == MatchEngine.MatchState.Countdown &&
+                    _renderer3D.IsReplayActive && isShootKeyDown)
+                    _renderer3D.SkipReplay();
+                if (_previousMatchState == MatchEngine.MatchState.Countdown &&
+                    matchState != MatchEngine.MatchState.Countdown)
+                    _renderer3D.ClearReplay();
+                
+                _previousMatchState = matchState;
             }
             
             // Update goal nets with ball position and velocity
@@ -636,7 +669,13 @@ namespace NoPasaranFC.Screens
             if (_renderer3D != null)
             {
                 spriteBatch.End();
-                _renderer3D.Draw(_graphicsDevice, _matchEngine, _homeTeam.Id);
+                // Goal replay replaces the live scene during the post-goal countdown,
+                // but never while a celebration is still running (celebrations win)
+                if (_matchEngine.CurrentState == MatchEngine.MatchState.Countdown &&
+                    _renderer3D.IsReplayActive && !_matchEngine.CelebrationManager.IsActive)
+                    _renderer3D.DrawReplay(_graphicsDevice, _matchEngine, _lastDeltaTime);
+                else
+                    _renderer3D.Draw(_graphicsDevice, _matchEngine, _homeTeam.Id);
                 if (_debugOverlayEnabled)
                     _renderer3D.DrawDebug(_graphicsDevice, _matchEngine);
                 spriteBatch.Begin();
@@ -774,6 +813,12 @@ namespace NoPasaranFC.Screens
         /// </summary>
         private void DrawScreenUI(SpriteBatch spriteBatch, SpriteFont font, bool is3DMode)
         {
+            // Goal replay overlays the post-goal countdown: the countdown numbers
+            // and live player indicators are swapped for the replay ribbon
+            bool replayActive = is3DMode && _renderer3D != null && _renderer3D.IsReplayActive &&
+                _matchEngine.CurrentState == MatchEngine.MatchState.Countdown &&
+                !_matchEngine.CelebrationManager.IsActive;
+            
             // Draw minimap
             _minimap.Draw(spriteBatch, _pixel, _matchEngine, _homeTeam, _awayTeam);
             
@@ -781,9 +826,15 @@ namespace NoPasaranFC.Screens
             DrawHUD(spriteBatch, font);
             
             // Draw countdown if in countdown or camera init state
-            if (_matchEngine.CurrentState == MatchEngine.MatchState.Countdown)
+            if (_matchEngine.CurrentState == MatchEngine.MatchState.Countdown && !replayActive)
             {
                 DrawCountdown(spriteBatch, font);
+            }
+            
+            // Draw the replay ribbon while the goal replay is showing
+            if (replayActive)
+            {
+                DrawReplayRibbon(spriteBatch, font);
             }
             
             // Draw goal celebration
@@ -807,7 +858,7 @@ namespace NoPasaranFC.Screens
             }
             
             // Player indicators projected onto the 3D view (names, stamina bars, shot power)
-            if (is3DMode)
+            if (is3DMode && !replayActive)
             {
                 Draw3DPlayerIndicators(spriteBatch, font);
             }
@@ -823,6 +874,33 @@ namespace NoPasaranFC.Screens
 #endif
 
             // Touch controls are now drawn globally by TouchUI in Game1.Draw
+        }
+        
+        /// <summary>
+        /// TV-style "REPLAY" ribbon (top-left corner) with a skip hint, shown
+        /// while the goal replay overlays the post-goal countdown. Hardcoded
+        /// English on purpose (broadcast convention).
+        /// </summary>
+        private void DrawReplayRibbon(SpriteBatch spriteBatch, SpriteFont font)
+        {
+            const string label = "REPLAY";
+            const string hint = "Hold X to skip";
+            
+            Vector2 labelSize = font.MeasureString(label);
+            Vector2 labelPos = new Vector2(24, 24);
+            
+            // Dark translucent band behind the label
+            Rectangle band = new Rectangle(
+                (int)labelPos.X - 12, (int)labelPos.Y - 6,
+                (int)labelSize.X + 24, (int)labelSize.Y + 12);
+            spriteBatch.Draw(_pixel, band, new Color(0, 0, 0, 170));
+            
+            spriteBatch.DrawString(font, label, labelPos + new Vector2(2, 2), Color.Black);
+            spriteBatch.DrawString(font, label, labelPos, Color.White);
+            
+            Vector2 hintPos = new Vector2(labelPos.X, labelPos.Y + labelSize.Y + 8);
+            spriteBatch.DrawString(font, hint, hintPos + new Vector2(1, 1), Color.Black);
+            spriteBatch.DrawString(font, hint, hintPos, Color.LightGray);
         }
 
 #if !ANDROID
