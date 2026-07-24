@@ -111,17 +111,23 @@ namespace NoPasaranFC.Gameplay
                 float distToGoal = Vector2.Distance(teammate.FieldPosition, opponentGoalCenter);
                 float passScore = 0f;
 
-                // Goal progress (normalized by field dimensions to avoid dominating)
+                // Goal progress (DOMINANT factor: play forward, not sideways)
                 float normalizedGoalDist = distToGoal / (MatchEngine.FieldWidth + 1f);
-                passScore += (1f - normalizedGoalDist) * 600f;
+                passScore += (1f - normalizedGoalDist) * 1200f;
+                
+                // Explicit bonus for targets ahead of the ball toward the goal
+                float attackSign = isHomeTeam ? 1f : -1f;
+                float targetProgress = (teammate.FieldPosition.X - _engine.BallPosition.X) * attackSign;
+                if (targetProgress > 0f)
+                    passScore += 300f;
 
                 // Distance scoring: value all useful distances, prefer medium but don't punish long
                 if (dist > AIConstants.MinPassDistance && dist < 800f)
-                    passScore += 350f;     // Short-medium: ideal passing range
+                    passScore += 200f;     // Short-medium: safe option
                 else if (dist >= 800f && dist < 1500f)
                     passScore += 250f;     // Medium-long: through balls
                 else if (dist >= 1500f && dist < AIConstants.MaxPassDistance)
-                    passScore += 150f;     // Long: switching play
+                    passScore += 250f;     // Long: switching play / penetration
                 else
                     passScore -= 200f;     // Too close or too far
 
@@ -161,10 +167,8 @@ namespace NoPasaranFC.Gameplay
                 // keep play circulating instead of progressing (GK exempt)
                 if (teammate.Position != PlayerPosition.Goalkeeper)
                 {
-                    float attackSign = isHomeTeam ? 1f : -1f;
-                    float targetProgress = (teammate.FieldPosition.X - _engine.BallPosition.X) * attackSign;
                     if (targetProgress < 0f)
-                        passScore -= 200f;
+                        passScore -= 400f;
                 }
 
                 // Penalty if pass path is blocked (moderate — don't prevent all contested passes)
