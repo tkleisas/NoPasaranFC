@@ -70,6 +70,21 @@ namespace NoPasaranFC.Gameplay.UtilityAI
             _passBall = passBall;
             _shootBall = shootBall;
             _current = new UtilityAction(UtilityActionType.Idle, Vector2.Zero, 0f);
+            
+            // Per-player threshold jitter: boundaries are up to 5% larger for
+            // some players, so the AI doesn't obey the same invisible lines
+            // everywhere (organic, non-robotic feel)
+            _thresholdJitter = 1f + (float)random.NextDouble() * 0.05f;
+        }
+        
+        private readonly float _thresholdJitter;
+        
+        /// <summary>Ball nobody is controlling: unowned, or its "owner" has
+        /// abandoned it (more than 200px away and not collecting).</summary>
+        private static bool IsBallLooseForReal(AIContext ctx)
+        {
+            return ctx.BallCarrier == null ||
+                Vector2.Distance(ctx.BallCarrier.FieldPosition, ctx.BallPosition) > 200f;
         }
         
         public string CurrentActionName => _current.Type.ToString();
@@ -161,11 +176,12 @@ namespace NoPasaranFC.Gameplay.UtilityAI
                 float ballProgress = Math.Abs(ctx.BallPosition.X - ctx.OwnGoalCenter.X)
                     / Math.Abs(ctx.OpponentGoalCenter.X - ctx.OwnGoalCenter.X);
                 
-                // Pounce: ball in the attacking third, loose or opponent-owned,
-                // and I'm close — attack it regardless of chase rank (rebounds,
+                // Pounce: ball in the attacking third, loose (or abandoned), and
+                // I'm close — attack it regardless of chase rank (rebounds,
                 // defensive mistakes; this is what forwards exist for)
-                bool pounce = ballProgress > 0.6f && ctx.DistanceToBall < 400f &&
-                    (ctx.BallCarrier == null || ctx.BallCarrier.TeamId != player.TeamId);
+                bool pounce = ballProgress > 0.6f / _thresholdJitter &&
+                    ctx.DistanceToBall < 400f * _thresholdJitter &&
+                    (IsBallLooseForReal(ctx) || ctx.BallCarrier.TeamId != player.TeamId);
                 
                 if (ctx.ShouldChaseBall || pounce ||
                     (ballLoose && ctx.BallCarrier != null && ctx.DistanceToBall < 800f))
@@ -218,8 +234,10 @@ namespace NoPasaranFC.Gameplay.UtilityAI
                 _ => 0.85f,
             };
             float shootScore = 0f;
-            if (distToGoal < 900f) shootScore = 100f * roleAttack;
-            else if (distToGoal < 1400f) shootScore = 60f * roleAttack;
+            float shootRangeNear = 900f * _thresholdJitter;
+            float shootRangeFar = 1400f * _thresholdJitter;
+            if (distToGoal < shootRangeNear) shootScore = 100f * roleAttack;
+            else if (distToGoal < shootRangeFar) shootScore = 60f * roleAttack;
             if (pressure < 250f) shootScore -= 10f;
             
             // CLEAR: own third + pressure = boot it
