@@ -186,6 +186,40 @@ namespace NoPasaranFC.Database
                 SetSchemaVersion(connection, 7);
                 currentVersion = 7;
             }
+            
+            if (currentVersion < 8)
+            {
+                // Migration 8: Add BallControl column to Settings table
+                ApplyMigration8_AddBallControl(connection);
+                SetSchemaVersion(connection, 8);
+                currentVersion = 8;
+            }
+        }
+        
+        private void ApplyMigration8_AddBallControl(SqliteConnection connection)
+        {
+            var checkCommand = connection.CreateCommand();
+            checkCommand.CommandText = "PRAGMA table_info(Settings)";
+
+            bool columnExists = false;
+            using (var reader = checkCommand.ExecuteReader())
+            {
+                while (reader.Read())
+                {
+                    if (reader.GetString(1) == "BallControl")
+                    {
+                        columnExists = true;
+                        break;
+                    }
+                }
+            }
+
+            if (!columnExists)
+            {
+                var alterCommand = connection.CreateCommand();
+                alterCommand.CommandText = "ALTER TABLE Settings ADD COLUMN BallControl TEXT DEFAULT 'Easy'";
+                alterCommand.ExecuteNonQuery();
+            }
         }
         
         private void ApplyMigration7_AddVenue(SqliteConnection connection)
@@ -743,14 +777,14 @@ namespace NoPasaranFC.Database
                     Difficulty, MatchDurationMinutes, PlayerSpeedMultiplier,
                     ShowMinimap, ShowPlayerNames, ShowStamina,
                     CameraZoom, CameraSpeed, Language, MatchViewMode,
-                    CameraMode, TimeOfDay, Weather, AIDecisionInterval, Venue
+                    CameraMode, TimeOfDay, Weather, AIDecisionInterval, Venue, BallControl
                 ) VALUES (
                     1, @resWidth, @resHeight, @fullscreen, @vsync,
                     @masterVol, @musicVol, @sfxVol, @muteAll,
                     @difficulty, @matchDuration, @speedMulti,
                     @showMap, @showNames, @showStamina,
                     @camZoom, @camSpeed, @language, @matchViewMode,
-                    @cameraMode, @timeOfDay, @weather, @aiDecisionInterval, @venue
+                    @cameraMode, @timeOfDay, @weather, @aiDecisionInterval, @venue, @ballControl
                 );
             ";
             
@@ -777,6 +811,7 @@ namespace NoPasaranFC.Database
             command.Parameters.AddWithValue("@weather", settings.Weather ?? "Clear");
             command.Parameters.AddWithValue("@aiDecisionInterval", settings.AIDecisionInterval);
             command.Parameters.AddWithValue("@venue", settings.Venue ?? "Bahramis");
+            command.Parameters.AddWithValue("@ballControl", settings.BallControl ?? "Easy");
             
             command.ExecuteNonQuery();
         }
@@ -816,7 +851,8 @@ namespace NoPasaranFC.Database
                     TimeOfDay = reader.FieldCount > 20 && !reader.IsDBNull(20) ? reader.GetString(20) : "Day",
                     Weather = reader.FieldCount > 21 && !reader.IsDBNull(21) ? reader.GetString(21) : "Clear",
                     AIDecisionInterval = reader.FieldCount > 22 && !reader.IsDBNull(22) ? reader.GetFloat(22) : 0.1f,
-                    Venue = reader.FieldCount > 23 && !reader.IsDBNull(23) ? reader.GetString(23) : "Bahramis"
+                    Venue = reader.FieldCount > 23 && !reader.IsDBNull(23) ? reader.GetString(23) : "Bahramis",
+                    BallControl = reader.FieldCount > 24 && !reader.IsDBNull(24) ? reader.GetString(24) : "Easy"
                 };
                 return settings;
             }

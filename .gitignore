@@ -372,3 +372,4 @@ match_debug.txt
 
 # Blender backup files
 *.blend1
+docs/*.mp4

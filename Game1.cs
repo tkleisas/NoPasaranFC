@@ -370,6 +370,8 @@ public class Game1 : Game
             }
             s += " anims[" + string.Join(",", counts.Select(kv => $"{kv.Key}:{kv.Value}")) + "]";
             if (controlled != null) s += $" controlled={controlled}";
+            var cp = e.GetAllPlayers().FirstOrDefault(p => p.IsControlled);
+            if (cp != null) s += $" cpos=({cp.FieldPosition.X:F0},{cp.FieldPosition.Y:F0})";
             s += " " + ms.ReplayDebug;
         }
         return s;

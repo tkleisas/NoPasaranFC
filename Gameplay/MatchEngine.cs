@@ -187,6 +187,16 @@ namespace NoPasaranFC.Gameplay
         private const float BallPossessionDistance = 20f; // Small - actual sprites smaller than boundary
         private const float BallKickDistance = 5f; // Very tight control, accounts for transparent pixels
         private const float BallShootDistance = 70f; // Distance for charged shots (must be > collision distance ~56px)
+        
+        // "Easy" ball control (Settings): the ball rides on a short lead ahead of
+        // the controlled player's feet instead of rolling loose, and slow balls
+        // are trapped when the player stands still
+        private const float DribbleGlueDistance = 75f;
+        private const float DribbleLeadDistance = 34f;
+        private const float DribbleGluePull = 8f;
+        private const float DribbleMaxCorrection = 400f;
+        private const float DribbleTrapDistance = 80f;
+        private const float DribbleTrapMaxBallSpeed = 500f;
         private const float TackleDistance = 70f; // Scaled for larger sprites
         private const float TackleSuccessBase = 40f; // Base tackle success %
         private const float Gravity = 1200f; // Gravity for ball vertical movement
@@ -1033,25 +1043,46 @@ namespace NoPasaranFC.Gameplay
                         // Decrease stamina while running
                         player.Stamina = Math.Max(0, player.Stamina - StaminaDecreasePerSecondRunning * deltaTime);
 
-                        // If this player is near the ball and moving, kick it (with angle check and cooldown)
-                        // Don't kick if ball is in the air (prevents headbutting glitch)
-                        // Don't kick during countdown
-                        // Don't auto-kick if player is charging a shot
-                        if (CurrentState == MatchState.Playing && moveDirection.Length() > 0.1f && BallHeight < 100f && !isShootKeyDown && CanPlayerKickBall(player, moveDirection, BallKickDistance))
+                        // If this player is near the ball and moving, control it.
+                        // Don't control if ball is in the air (prevents headbutting glitch)
+                        // Don't control during countdown
+                        // Don't control if player is charging a shot
+                        if (CurrentState == MatchState.Playing && moveDirection.Length() > 0.1f && BallHeight < 100f && !isShootKeyDown)
                         {
-                            // Check cooldown to prevent continuous juggling
-                            float timeSinceLastKick = (float)MatchTime - player.LastKickTime;
-                            if (timeSinceLastKick >= AutoKickCooldown)
+                            bool closeControl = GameSettings.Instance.BallControl == "Easy";
+                            if (closeControl && Vector2.Distance(player.FieldPosition, BallPosition) < DribbleGlueDistance)
                             {
-                                // Trigger shoot animation
-                                player.CurrentAnimationState = "shoot";
+                                // Dribble glue: the ball rides on a short lead ahead of
+                                // the player's feet, matching their velocity plus a
+                                // proportional pull toward the lead point
+                                Vector2 dir = Vector2.Normalize(moveDirection);
+                                Vector2 lead = player.FieldPosition + dir * DribbleLeadDistance;
+                                Vector2 correction = (lead - BallPosition) * DribbleGluePull;
+                                if (correction.Length() > DribbleMaxCorrection)
+                                {
+                                    correction.Normalize();
+                                    correction *= DribbleMaxCorrection;
+                                }
+                                BallVelocity = player.Velocity + correction;
+                                if (BallVerticalVelocity > 0f)
+                                    BallVerticalVelocity = 0f;
+                                SetLastPlayerTouchedBall(player);
+                            }
+                            else if (!closeControl && CanPlayerKickBall(player, moveDirection, BallKickDistance))
+                            {
+                                // Classic control: kick ball in movement direction with stamina effect
+                                float timeSinceLastKick = (float)MatchTime - player.LastKickTime;
+                                if (timeSinceLastKick >= AutoKickCooldown)
+                                {
+                                    // Trigger shoot animation
+                                    player.CurrentAnimationState = "shoot";
 
-                                // Kick ball in movement direction with stamina effect
-                                float staminaStatMultiplier = GetStaminaStatMultiplier(player);
-                                float kickPower = (player.Shooting / 8f + 6f) * staminaStatMultiplier;
-                                BallVelocity = moveDirection * kickPower * player.Speed * 1.2f;
-                                AudioManager.Instance.PlaySoundEffect("kick_ball", 0.6f, allowRetrigger: false);
-                                player.LastKickTime = (float)MatchTime;
+                                    float staminaStatMultiplier = GetStaminaStatMultiplier(player);
+                                    float kickPower = (player.Shooting / 8f + 6f) * staminaStatMultiplier;
+                                    BallVelocity = moveDirection * kickPower * player.Speed * 1.2f;
+                                    AudioManager.Instance.PlaySoundEffect("kick_ball", 0.6f, allowRetrigger: false);
+                                    player.LastKickTime = (float)MatchTime;
+                                }
                             }
                         }
                     }
@@ -1060,6 +1091,16 @@ namespace NoPasaranFC.Gameplay
                         player.Velocity = Vector2.Zero;
                         // Recover stamina when idle
                         player.Stamina = Math.Min(100, player.Stamina + StaminaRecoveryPerSecond * deltaTime);
+                        
+                        // Easy ball control: trap slow balls at the player's feet
+                        if (GameSettings.Instance.BallControl == "Easy" &&
+                            CurrentState == MatchState.Playing && BallHeight < 100f &&
+                            BallVelocity.Length() < DribbleTrapMaxBallSpeed &&
+                            Vector2.Distance(player.FieldPosition, BallPosition) < DribbleTrapDistance)
+                        {
+                            BallVelocity = (player.FieldPosition - BallPosition) * 5f;
+                            SetLastPlayerTouchedBall(player);
+                        }
                     }
                 }
             }

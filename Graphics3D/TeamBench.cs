@@ -132,11 +132,11 @@ namespace NoPasaranFC.Graphics3D
             }
             
             float cx = center.X, cz = center.Y;
-            // Posts
-            AddBox(new Vector3(cx - 2f, 0f, cz - 0.05f), new Vector3(cx - 1.9f, 2f, cz + 0.05f), frame);
-            AddBox(new Vector3(cx + 1.9f, 0f, cz - 0.05f), new Vector3(cx + 2f, 2f, cz + 0.05f), frame);
+            // Posts (2.7m: seated heads at scale 0.72 reach ~2.4m)
+            AddBox(new Vector3(cx - 2f, 0f, cz - 0.05f), new Vector3(cx - 1.9f, 2.7f, cz + 0.05f), frame);
+            AddBox(new Vector3(cx + 1.9f, 0f, cz - 0.05f), new Vector3(cx + 2f, 2.7f, cz + 0.05f), frame);
             // Roof (team color)
-            AddBox(new Vector3(cx - 2.2f, 2f, cz - 0.6f), new Vector3(cx + 2.2f, 2.1f, cz + 0.4f), teamColor);
+            AddBox(new Vector3(cx - 2.2f, 2.55f, cz - 0.65f), new Vector3(cx + 2.2f, 2.7f, cz + 0.45f), teamColor);
             // Bench box
             AddBox(new Vector3(cx - 1.8f, 0f, cz - 0.2f), new Vector3(cx + 1.8f, 0.45f, cz + 0.15f), new Color(90, 70, 50));
             
