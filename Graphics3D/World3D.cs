@@ -1087,7 +1087,7 @@ namespace NoPasaranFC.Graphics3D
                         // the cloth height so it reads from the stands
                         Vector2 size = font.MeasureString(texts[i]);
                         float scaleX = segW * 0.9f / size.X;
-                        float scaleY = Math.Min(scaleX * 2f, height * 0.92f / size.Y);
+                        float scaleY = Math.Min(scaleX * 2.5f, height * 0.92f / size.Y);
                         var scale = new Vector2(scaleX, scaleY);
                         Vector2 position = new Vector2(
                             i * segW + segW / 2f - size.X * scaleX / 2f,

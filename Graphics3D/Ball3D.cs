@@ -107,24 +107,28 @@ namespace NoPasaranFC.Graphics3D
         }
         
         /// <summary>
-        /// Update ball position (engine pixels), roll rotation from velocity
-        /// (engine px/s) and current height (engine px).
+        /// Update ball position (engine pixels) and current height (engine px).
+        /// Roll rotation comes from ACTUAL displacement, not reported velocity -
+        /// this keeps the spin true to travel for glued dribbling (whose velocity
+        /// includes a correction term), shots and slow-motion replays alike.
         /// </summary>
         public void Update(Vector2 ballPosPx, Vector2 ballVelocityPxPerSec, float ballHeightPx, float dt)
         {
             _heightMeters = WorldUnits.PxToM(ballHeightPx);
-            _position = WorldUnits.ToWorld(ballPosPx, ballHeightPx) + new Vector3(0f, RadiusMeters, 0f);
+            Vector3 newPos = WorldUnits.ToWorld(ballPosPx, ballHeightPx) + new Vector3(0f, RadiusMeters, 0f);
             
-            // Roll the ball around the axis perpendicular to its movement direction
-            Vector2 vel = ballVelocityPxPerSec;
-            if (vel.LengthSquared() > 1f)
+            // Roll around the axis perpendicular to the frame's ground displacement
+            Vector3 delta = newPos - _position;
+            delta.Y = 0f;
+            float dist = delta.Length();
+            if (dist > 0.0001f)
             {
-                Vector3 velMeters = new Vector3(vel.X, 0f, vel.Y) / WorldUnits.PixelsPerMeter;
-                float speed = velMeters.Length();
-                Vector3 axis = Vector3.Normalize(Vector3.Cross(Vector3.Up, velMeters));
-                float angle = (speed / RadiusMeters) * dt;
+                dist = Math.Min(dist, 0.5f); // clamp teleports (kickoff reset, debug)
+                Vector3 axis = Vector3.Normalize(Vector3.Cross(Vector3.Up, delta));
+                float angle = dist / RadiusMeters;
                 _rotation *= Matrix.CreateFromAxisAngle(axis, angle);
             }
+            _position = newPos;
         }
         
         public void Draw(GraphicsDevice device, Matrix view, Matrix projection)
