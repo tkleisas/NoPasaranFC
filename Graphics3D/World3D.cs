@@ -1026,25 +1026,30 @@ namespace NoPasaranFC.Graphics3D
         #region Fan banners (bed-sheet style, all fence venues)
         
         /// <summary>
-        /// Hand-painted fan banners hung on the far fence between the dugouts:
-        /// "FREE PALESTINE", "ΛΕΦΤΕΡΙΑ ΣΤΗΝ ΠΑΛΑΙΣΤΙΝΗ" and
-        /// "ΤΟ ΕΓΚΛΗΜΑ ΤΗΣ ΠΥΛΟΥ ΔΕ ΘΑ ΞΕΧΑΣΤΕΙ" on off-white cloth.
+        /// Hand-painted fan banners hung on the far fence: three of the five
+        /// designs (FREE PALESTINE / ΛΕΥΤΕΡΙΑ ΣΤΗ ΠΑΛΑΙΣΤΙΝΗ /
+        /// ΤΟ ΕΓΚΛΗΜΑ ΤΗΣ ΠΥΛΟΥ ΔΕ ΘΑ ΞΕΧΑΣΤΕΙ / ΤΕΜΠΗ - ΠΥΛΟΣ - ΠΑΛΑΙΣΤΙΝΗ /
+        /// ΔΙΚΑΙΩΣΗ ΓΙΑ ΤΟ ΘΟΔΩΡΗ), chosen at random for each match.
         /// </summary>
         private void BuildFanBanners()
         {
             float zFar = -FenceZ + 0.12f;  // pitch side of the far fence, in front of sponsor banners
             const float y0 = 0.55f, y1 = 1.75f;
             
-            // (x0, x1, atlas segment)
-            var banners = new[]
+            // Shuffle the 5 atlas segments, take the first 3
+            var segs = new List<int> { 0, 1, 2, 3, 4 };
+            var rng = new Random();
+            for (int i = segs.Count - 1; i > 0; i--)
             {
-                (-20f, -11f, 0),  // FREE PALESTINE
-                (-9f, 4f, 1),     // ΛΕΦΤΕΡΙΑ ΣΤΗΝ ΠΑΛΑΙΣΤΙΝΗ
-                (6f, 20f, 2),     // ΤΟ ΕΓΚΛΗΜΑ ΤΗΣ ΠΥΛΟΥ ΔΕ ΘΑ ΞΕΧΑΣΤΕΙ
-            };
-            foreach (var (x0, x1, seg) in banners)
+                int j = rng.Next(i + 1);
+                (segs[i], segs[j]) = (segs[j], segs[i]);
+            }
+            
+            var positions = new[] { (-25f, -11f), (-8f, 6f), (9f, 23f) };
+            for (int i = 0; i < positions.Length; i++)
             {
-                float u0 = seg / 3f, u1 = (seg + 1) / 3f;
+                float u0 = segs[i] / 5f, u1 = (segs[i] + 1) / 5f;
+                float x0 = positions[i].Item1, x1 = positions[i].Item2;
                 AddTexturedQuad(_fanBannerVertList, _fanBannerIndexList,
                     new Vector3(x0, y0, zFar), new Vector2(u0, 1f),
                     new Vector3(x1, y0, zFar), new Vector2(u1, 1f),
@@ -1053,10 +1058,10 @@ namespace NoPasaranFC.Graphics3D
             }
         }
         
-        /// <summary>Bakes the 3 fan banners (1536x256, 512px each): aged cloth, dark red painted text.</summary>
+        /// <summary>Bakes the 5 fan banners (2560x256, 512px each): aged cloth, dark red painted text.</summary>
         private static Texture2D CreateFanBannerTexture(GraphicsDevice device, ContentManager content)
         {
-            const int width = 1536, height = 256, segW = 512;
+            const int width = 2560, height = 256, segW = 512;
             var target = new RenderTarget2D(device, width, height);
             device.SetRenderTarget(target);
             device.Clear(new Color(232, 224, 205));
@@ -1064,8 +1069,10 @@ namespace NoPasaranFC.Graphics3D
             var texts = new[]
             {
                 "FREE PALESTINE",
-                "ΛΕΦΤΕΡΙΑ ΣΤΗΝ ΠΑΛΑΙΣΤΙΝΗ",
+                "ΛΕΥΤΕΡΙΑ ΣΤΗ ΠΑΛΑΙΣΤΙΝΗ",
                 "ΤΟ ΕΓΚΛΗΜΑ ΤΗΣ ΠΥΛΟΥ ΔΕ ΘΑ ΞΕΧΑΣΤΕΙ",
+                "ΤΕΜΠΗ - ΠΥΛΟΣ - ΠΑΛΑΙΣΤΙΝΗ",
+                "ΔΙΚΑΙΩΣΗ ΓΙΑ ΤΟ ΘΟΔΩΡΗ",
             };
             
             var spriteBatch = new SpriteBatch(device);
