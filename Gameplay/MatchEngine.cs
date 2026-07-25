@@ -88,6 +88,7 @@ namespace NoPasaranFC.Gameplay
         public bool KickoffTaken { get; private set; } = true;
         public int KickoffTeamId { get; private set; }
         private float _kickoffHoldTime; // safety: force-release a stuck kickoff
+        private bool _halftimeReached;
         
         /// <summary>True while the player is in their post-reception grace window.</summary>
         public bool HasFirstTouchGrace(Player player)
@@ -612,6 +613,14 @@ namespace NoPasaranFC.Gameplay
                 return;
             }
             
+            // Halftime: play is frozen while the substitution screen is up.
+            // StartSecondHalf() (from MatchScreen) resumes with the 2nd half kickoff
+            if (CurrentState == MatchState.HalfTime)
+            {
+                Camera.Follow(BallPosition, deltaTime);
+                return;
+            }
+            
             // Update match time - map real time to game time (90 minutes)
             float realTimeDuration = GameSettings.Instance.GetMatchDurationSeconds();
             float gameTimeIncrement = (90f / realTimeDuration) * deltaTime;
@@ -636,6 +645,15 @@ namespace NoPasaranFC.Gameplay
             else
             {
                 _kickoffHoldTime = 0f;
+            }
+            
+            // Halftime whistle at 45' (once)
+            if (MatchTime >= 45f && !_halftimeReached && CurrentState == MatchState.Playing)
+            {
+                _halftimeReached = true;
+                CurrentState = MatchState.HalfTime;
+                AudioManager.Instance.PlaySoundEffect("whistle_end");
+                return;
             }
             
             // Check if match should end
@@ -2611,6 +2629,40 @@ namespace NoPasaranFC.Gameplay
             BallHeight = 0f;
             BallVerticalVelocity = 0f;
             InitializePositions();
+        }
+        
+        /// <summary>
+        /// Starts the second half after the halftime substitution screen:
+        /// any newly starting players (substitutes) get AI controllers, starters
+        /// recover some stamina, positions reset for the kickoff, countdown runs.
+        /// Called by MatchScreen once the halftime screen closes.
+        /// </summary>
+        public void StartSecondHalf()
+        {
+            // Substitutes entering play need an AI controller + registration
+            foreach (var player in _homeTeam.Players.Concat(_awayTeam.Players))
+            {
+                if (player.IsStarting && player.AIController == null)
+                {
+                    player.AIController = new AIController(player, this);
+                    if (player.AIController is AIController aiController)
+                    {
+                        var capturedPlayer = player;
+                        aiController.RegisterPassCallback((targetPosition, power) => _aiBehaviorManager.AIPassBall(capturedPlayer, targetPosition, power));
+                        aiController.RegisterShootCallback((targetPosition, power) => _aiBehaviorManager.AIShootBall(capturedPlayer, targetPosition, power));
+                    }
+                }
+            }
+            
+            // Halftime recovery for everyone on the pitch (subs come in fresh anyway)
+            foreach (var player in GetAllPlayers())
+                player.Stamina = Math.Min(100f, player.Stamina + 25f);
+            
+            ResetAfterGoal(); // positions + ball for the kickoff
+            CurrentState = MatchState.Countdown;
+            CountdownTimer = 3.5f;
+            CountdownNumber = 3;
+            AudioManager.Instance.PlaySoundEffect("whistle_start");
         }
         
         /// <summary>

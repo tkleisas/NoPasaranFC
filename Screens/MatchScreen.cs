@@ -78,6 +78,7 @@ namespace NoPasaranFC.Screens
         private MatchEngine.MatchState _previousMatchState = MatchEngine.MatchState.CameraInit;
         private float _lastDeltaTime = 1f / 60f;
         private bool _replaySkipArmed = true; // skip key must be released once after capture
+        private bool _halftimeScreenPushed;
         
         // Sprite sheet configuration
         private const int SpriteFrameSize = 64; // Each frame is 64x64 in the sprite sheet
@@ -200,12 +201,61 @@ namespace NoPasaranFC.Screens
             return texture;
         }
         
+        /// <summary>Resumed from the halftime substitution screen: AI subs, then 2nd half.</summary>
+        public override void OnActivated()
+        {
+            if (_matchEngine.CurrentState == MatchEngine.MatchState.HalfTime)
+            {
+                ApplyAISubstitutions();
+                _matchEngine.StartSecondHalf();
+            }
+        }
+        
+        /// <summary>AI halftime subs: swap the most tired starters for the best bench options.</summary>
+        private void ApplyAISubstitutions()
+        {
+            var aiTeam = _homeTeam.IsPlayerControlled ? _awayTeam : _homeTeam;
+            int subsLeft = HalftimeScreen.MaxSubs;
+            
+            var tiredStarters = aiTeam.Players
+                .Where(p => p.IsStarting && p.Position != Models.PlayerPosition.Goalkeeper)
+                .OrderBy(p => p.Stamina)
+                .ToList();
+            
+            foreach (var tired in tiredStarters)
+            {
+                if (subsLeft <= 0 || tired.Stamina > 55f) break;
+                
+                var bench = aiTeam.Players
+                    .Where(p => !p.IsStarting && !p.IsKnockedDown)
+                    .OrderByDescending(p => p.Position == tired.Position ? 1 : 0)
+                    .ThenByDescending(p => p.Speed + p.Shooting + p.Passing + p.Defending)
+                    .FirstOrDefault();
+                if (bench == null) break;
+                
+                tired.IsStarting = false;
+                bench.IsStarting = true;
+                bench.Stamina = 100f;
+                subsLeft--;
+            }
+        }
+        
         public override void Update(GameTime gameTime)
         {
             if (_matchEngine.CurrentState == MatchEngine.MatchState.Ended)
             {
                 EndMatch();
                 return;
+            }
+            
+            // Halftime: push the substitution screen once (engine is frozen meanwhile)
+            if (_matchEngine.CurrentState == MatchEngine.MatchState.HalfTime && !_halftimeScreenPushed)
+            {
+                _halftimeScreenPushed = true;
+                var playerTeam = _homeTeam.IsPlayerControlled ? _homeTeam : _awayTeam;
+                var halftime = new HalftimeScreen(playerTeam, _match, _championship,
+                    _database, _screenManager, _content, _graphicsDevice);
+                _screenManager.PushScreen(halftime);
             }
             
             _input.Update();

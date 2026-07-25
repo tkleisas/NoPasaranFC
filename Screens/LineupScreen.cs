@@ -17,21 +17,22 @@ namespace NoPasaranFC.Screens
 {
     public class LineupScreen : Screen
     {
-        private readonly Team _team;
-        private readonly Match _match;
-        private readonly Championship _championship;
-        private readonly DatabaseManager _database;
-        private readonly ScreenManager _screenManager;
+        protected readonly Team _team;
+        protected readonly Match _match;
+        protected readonly Championship _championship;
+        protected readonly DatabaseManager _database;
+        protected readonly ScreenManager _screenManager;
         private readonly ContentManager _contentManager;
 
-        private List<Player> _allPlayers;
-        private int _selectedIndex = 0;
-        private int _scrollOffset = 0;
+        protected List<Player> _allPlayers;
+        protected int _selectedIndex = 0;
+        protected int _scrollOffset = 0;
         // Player rows are 52px tall plus 26px section headers; 8 rows + worst-case
         // headers always fit the left panel at 720p. Navigation/scroll windows by this.
         private const int MaxVisiblePlayers = 8;
 
         private Gameplay.InputHelper _input;
+        protected Gameplay.InputHelper Input => _input;
         private Texture2D _pixel;
 
         // 3D portraits: shared models + per-player render cache.
@@ -340,8 +341,8 @@ namespace NoPasaranFC.Screens
                 }
                 else
                 {
-                    // Can add to starting lineup only if less than 11
-                    if (currentStartingCount < 11)
+                    // Can add to starting lineup only if less than 11 (and the screen allows it)
+                    if (currentStartingCount < 11 && CanAddToStarting(player))
                     {
                         player.IsStarting = true;
                         Gameplay.AudioManager.Instance.PlaySoundEffect("menu_select");
@@ -363,15 +364,7 @@ namespace NoPasaranFC.Screens
                     }
 
                     Gameplay.AudioManager.Instance.PlaySoundEffect("menu_select");
-
-                    // Start the match
-                    var homeTeam = _championship.Teams.Find(t => t.Id == _match.HomeTeamId);
-                    var awayTeam = _championship.Teams.Find(t => t.Id == _match.AwayTeamId);
-
-                    var matchScreen = new MatchScreen(homeTeam, awayTeam, _match, _championship,
-                        _database, _screenManager, _contentManager);
-                    matchScreen.SetGraphicsDevice(GraphicsDevice);
-                    _screenManager.PushScreen(matchScreen);
+                    OnConfirm();
                 }
             }
 
@@ -379,8 +372,30 @@ namespace NoPasaranFC.Screens
             if (_input.IsBackPressed() || touchUI.IsBackJustPressed)
             {
                 Gameplay.AudioManager.Instance.PlaySoundEffect("menu_back");
-                IsFinished = true;
+                OnCancel();
             }
+        }
+        
+        /// <summary>Extra gate for adding a bench player to the starting 11 (halftime sub cap).</summary>
+        protected virtual bool CanAddToStarting(Player player) => true;
+        
+        /// <summary>Pre-match default: save and start a new match.</summary>
+        protected virtual void OnConfirm()
+        {
+            // Start the match
+            var homeTeam = _championship.Teams.Find(t => t.Id == _match.HomeTeamId);
+            var awayTeam = _championship.Teams.Find(t => t.Id == _match.AwayTeamId);
+
+            var matchScreen = new MatchScreen(homeTeam, awayTeam, _match, _championship,
+                _database, _screenManager, _contentManager);
+            matchScreen.SetGraphicsDevice(GraphicsDevice);
+            _screenManager.PushScreen(matchScreen);
+        }
+        
+        /// <summary>Default cancel: just close the screen.</summary>
+        protected virtual void OnCancel()
+        {
+            IsFinished = true;
         }
 
         public override void Draw(SpriteBatch spriteBatch, SpriteFont font)
@@ -392,7 +407,7 @@ namespace NoPasaranFC.Screens
             spriteBatch.Draw(_pixel, new Rectangle(0, 0, screenWidth, screenHeight), new Color(20, 40, 20));
 
             // Title
-            string title = $"{Localization.Instance.Get("lineup.title")} - {_team.Name}";
+            string title = $"{GetTitle()} - {_team.Name}";
             Vector2 titleSize = font.MeasureString(title);
             spriteBatch.DrawString(font, title, new Vector2((screenWidth - titleSize.X) / 2, 20), Color.Yellow);
 
@@ -458,6 +473,9 @@ namespace NoPasaranFC.Screens
             }
         }
 
+        /// <summary>Title localization key (halftime overrides).</summary>
+        protected virtual string GetTitle() => Localization.Instance.Get("lineup.title");
+        
         private void DrawSectionHeader(SpriteBatch spriteBatch, SpriteFont font, PlayerPosition position,
             int x, int y, int width, Color accent)
         {

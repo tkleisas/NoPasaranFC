@@ -199,6 +199,7 @@ namespace NoPasaranFC.Models
                 ["settings.ballControl"] = "Ball Control",
                 ["settings.ballControl.easy"] = "Easy",
                 ["settings.ballControl.classic"] = "Classic",
+                ["match.halftime"] = "HALF TIME",
                 
                 ["settings.on"] = "ON",
                 ["settings.off"] = "OFF",
@@ -345,6 +346,7 @@ namespace NoPasaranFC.Models
                 ["settings.ballControl"] = "Έλεγχος Μπάλας",
                 ["settings.ballControl.easy"] = "Εύκολος",
                 ["settings.ballControl.classic"] = "Κλασικός",
+                ["match.halftime"] = "ΗΜΙΧΡΟΝΟ",
                 
                 ["settings.on"] = "ΝΑΙ",
                 ["settings.off"] = "ΟΧΙ",
