@@ -30,6 +30,7 @@ namespace NoPasaranFC.Graphics3D
         private readonly SkinnedModelInstance _instance;
         private bool _wasKnockedDown;
         private bool _isLyingDown;
+        private bool _celebrateMoving; // celebration locomotion hysteresis (run there, then dance)
         private float _yaw;
         // Latch for one-shot clips: the engine can hold a state (e.g. "shoot")
         // longer than the clip, and without this the one-shot would retrigger
@@ -106,7 +107,15 @@ namespace NoPasaranFC.Graphics3D
                         break;
                     case "celebrate":
                         _lastOneShotState = null;
-                        PlayClip("Cheer", loop: true);
+                        // Moving to the celebration spot: run/walk there (no gliding
+                        // on a static Cheer pose); dance only once standing still
+                        float celebrateSpeed = velocity.Length();
+                        if (celebrateSpeed > 60f) _celebrateMoving = true;
+                        else if (celebrateSpeed < 25f) _celebrateMoving = false;
+                        if (_celebrateMoving)
+                            UpdateLocomotion(celebrateSpeed, deltaTime);
+                        else
+                            PlayClip("Cheer", loop: true);
                         break;
                     case "throw_in_static":
                         _lastOneShotState = null;

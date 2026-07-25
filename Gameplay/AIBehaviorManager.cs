@@ -344,7 +344,7 @@ namespace NoPasaranFC.Gameplay
                 _engine.BallVerticalVelocity = 30f;
             }
 
-            _engine.LastPlayerTouchedBall = passer;
+            _engine.RegisterKick(passer);
             passer.LastKickTime = (float)_engine.MatchTime;
             AudioManager.Instance.PlaySoundEffect("kick_ball", needsLoftedPass ? 0.6f : 0.4f, allowRetrigger: false);
         }
@@ -376,7 +376,7 @@ namespace NoPasaranFC.Gameplay
             float shootPower = (shooter.Shooting / 6f + power * 24f) * _engine.GetStaminaStatMultiplier(shooter);
             _engine.BallVelocity = adjustedDirection * shootPower * shooter.Speed;
             _engine.BallVerticalVelocity = 100f + (float)_engine.SharedRandom.NextDouble() * 200f;
-            _engine.LastPlayerTouchedBall = shooter;
+            _engine.RegisterKick(shooter);
             shooter.LastKickTime = (float)_engine.MatchTime;
             AudioManager.Instance.PlaySoundEffect("kick_ball", 0.7f, allowRetrigger: false);
         }

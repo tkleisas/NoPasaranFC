@@ -33,7 +33,7 @@ namespace NoPasaranFC.Models
         // Gameplay settings
         public int Difficulty { get; set; } = 1; // 0=Easy, 1=Normal, 2=Hard
         public float MatchDurationMinutes { get; set; } = 3.0f;
-        public float PlayerSpeedMultiplier { get; set; } = 1.0f;
+        public float PlayerSpeedMultiplier { get; set; } = 2.0f;
         public bool ShowMinimap { get; set; } = true;
         public bool ShowPlayerNames { get; set; } = true;
         public bool ShowStamina { get; set; } = true;

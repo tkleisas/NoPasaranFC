@@ -313,16 +313,16 @@ namespace NoPasaranFC.Gameplay.UtilityAI
             
             // Ball close to own goal: come out and get it
             float distBallToGoal = Vector2.Distance(ctx.BallPosition, ctx.OwnGoalCenter);
-            if (distBallToGoal < 600f && ctx.DistanceToBall < 500f)
+            if (distBallToGoal < UtilityTuning.GKChaseGoalDistance && ctx.DistanceToBall < UtilityTuning.GKChaseBallDistance)
             {
-                float chaseScore = 60f + (600f - distBallToGoal) / 30f;
+                float chaseScore = 60f + (UtilityTuning.GKChaseGoalDistance - distBallToGoal) / 30f;
                 return new UtilityAction(UtilityActionType.ChaseBall, GetBallInterceptPoint(ctx), chaseScore);
             }
             
             // Otherwise hold on the line, tracking ball Y slightly
             Vector2 linePoint = new Vector2(
-                ctx.OwnGoalCenter.X + (ctx.IsHomeTeam ? 60f : -60f),
-                MathHelper.Lerp(ctx.OwnGoalCenter.Y, ctx.BallPosition.Y, 0.25f));
+                ctx.OwnGoalCenter.X + (ctx.IsHomeTeam ? UtilityTuning.GKLineOffset : -UtilityTuning.GKLineOffset),
+                MathHelper.Lerp(ctx.OwnGoalCenter.Y, ctx.BallPosition.Y, UtilityTuning.GKTrackLerp));
             return new UtilityAction(UtilityActionType.HoldPosition, linePoint, 50f);
         }
         
@@ -576,9 +576,9 @@ namespace NoPasaranFC.Gameplay.UtilityAI
                 float attackSign = ctx.IsHomeTeam ? 1f : -1f;
                 float roleDepth = player.Position switch
                 {
-                    PlayerPosition.Defender => 0.25f,
-                    PlayerPosition.Midfielder => 0.45f,
-                    PlayerPosition.Forward => 0.60f,
+                    PlayerPosition.Defender => UtilityTuning.DefendDepthDefender,
+                    PlayerPosition.Midfielder => UtilityTuning.DefendDepthMidfielder,
+                    PlayerPosition.Forward => UtilityTuning.DefendDepthForward,
                     _ => 0.35f,
                 };
                 
@@ -590,7 +590,7 @@ namespace NoPasaranFC.Gameplay.UtilityAI
                 
                 x = player.HomePosition.X
                     + attackSign * (ballProgress - 0.5f) * fieldSpan * roleDepth * 0.5f;
-                y = MathHelper.Lerp(player.HomePosition.Y, ctx.BallPosition.Y, 0.15f);
+                y = MathHelper.Lerp(player.HomePosition.Y, ctx.BallPosition.Y, UtilityTuning.DefendBallPull);
             }
             
             x = MathHelper.Clamp(x, MatchEngine.StadiumMargin + 100f,

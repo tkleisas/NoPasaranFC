@@ -195,8 +195,8 @@ namespace NoPasaranFC.Models
                 ["settings.venue.bahramis"] = "Bahramis",
                 ["settings.venue.sperchogeia"] = "Sperchogeia",
                 ["settings.ballControl"] = "Ball Control",
-                ["settings.ballcontrol.easy"] = "Easy",
-                ["settings.ballcontrol.classic"] = "Classic",
+                ["settings.ballControl.easy"] = "Easy",
+                ["settings.ballControl.classic"] = "Classic",
                 
                 ["settings.on"] = "ON",
                 ["settings.off"] = "OFF",
@@ -339,8 +339,8 @@ namespace NoPasaranFC.Models
                 ["settings.venue.bahramis"] = "Μπαχράμης",
                 ["settings.venue.sperchogeia"] = "Σπερχογεία",
                 ["settings.ballControl"] = "Έλεγχος Μπάλας",
-                ["settings.ballcontrol.easy"] = "Εύκολος",
-                ["settings.ballcontrol.classic"] = "Κλασικός",
+                ["settings.ballControl.easy"] = "Εύκολος",
+                ["settings.ballControl.classic"] = "Κλασικός",
                 
                 ["settings.on"] = "ΝΑΙ",
                 ["settings.off"] = "ΟΧΙ",

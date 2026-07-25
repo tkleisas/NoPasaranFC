@@ -13,43 +13,55 @@ namespace NoPasaranFC.Gameplay.UtilityAI
     public static class UtilityTuning
     {
         // Shooting (carrier actions): two range bands with flat scores
-        public static float ShootRangeNear = 1400f;     // inside this: strong shoot score (~19m)
-        public static float ShootRangeFar = 1640f;      // inside this: weaker shoot score (~22m)
-        public static float ShootScoreNear = 91f;
-        public static float ShootScoreFar = 58.6f;
-        public static float ShootPressurePenalty = 9.4f; // subtracted when pressured (<250px)
-        public static float RoleAttackForward = 1.8f;
-        public static float RoleAttackMidfielder = 0.64f;
-        public static float RoleAttackDefender = 1.0f;
+        public static float ShootRangeNear = 1600f;     // inside this: strong shoot score (~22m)
+        public static float ShootRangeFar = 1835f;      // inside this: weaker shoot score (~25m)
+        public static float ShootScoreNear = 136f;
+        public static float ShootScoreFar = 52.5f;
+        public static float ShootPressurePenalty = 5.7f; // subtracted when pressured (<250px)
+        public static float RoleAttackForward = 1.38f;
+        public static float RoleAttackMidfielder = 0.6f;
+        public static float RoleAttackDefender = 0.97f;
         
         // Passing
-        public static float PassBaseScore = 39f;        // + BestPassScore * PassScoreScale
-        public static float PassScoreScale = 0.022f;    // maps BestPassScore (~0-2500) onto the action scale
-        public static float PassPressureBonus = 25f;    // under pressure: release it
-        public static float PassFarBonus = 12.5f;       // too far to shoot: move it on
+        public static float PassBaseScore = 29f;        // + BestPassScore * PassScoreScale
+        public static float PassScoreScale = 0.021f;    // maps BestPassScore (~0-2500) onto the action scale
+        public static float PassPressureBonus = 15.6f;  // under pressure: release it
+        public static float PassFarBonus = 17.8f;       // too far to shoot: move it on
         public static float CrossBonus = 26f;           // wide in attacking third: feed the box
         
         // Dribbling
-        public static float DribbleBaseScore = 31f;
-        public static float DribbleLaneBonus = 17.3f;   // per missing lane blocker (0-3)
-        public static float DribbleFreeSpaceBonus = 11.7f; // no pressure within 400px
+        public static float DribbleBaseScore = 33.5f;
+        public static float DribbleLaneBonus = 27f;     // per missing lane blocker (0-3)
+        public static float DribbleFreeSpaceBonus = 10.6f; // no pressure within 400px
         
         // Clearing
-        public static float ClearScore = 72.5f;         // own third + pressure
+        public static float ClearScore = 47f;           // own third + pressure
         
         // Chase vs hold
-        public static float ChaseBaseScore = 80f;       // - distance/40
+        public static float ChaseBaseScore = 69f;       // - distance/40
         public static float ChaseCloseBonus = 20f;      // ball within 200px
         public static float PounceBonus = 25f;          // loose ball in the attacking third
-        public static float HoldBaseScore = 47.4f;
-        public static float CommitmentBonus = 21.8f;    // anti-flapping stickiness
+        public static float HoldBaseScore = 47.3f;
+        public static float CommitmentBonus = 30f;      // anti-flapping stickiness
         
         // Attacking shape (GetTacticalPoint)
-        public static float AttackDepthDefender = 0.45f;   // fraction of the way to the opponent goal
+        public static float AttackDepthDefender = 0.46f;   // fraction of the way to the opponent goal
         public static float AttackDepthMidfielder = 0.90f;
-        public static float AttackDepthForward = 0.78f;
-        public static float HomePositionLerp = 0.52f;      // formation shape pull when attacking
-        public static float DeepRunDepth = 0.96f;          // forward timed-run depth
+        public static float AttackDepthForward = 0.83f;
+        public static float HomePositionLerp = 0.58f;      // formation shape pull when attacking
+        public static float DeepRunDepth = 0.98f;          // forward timed-run depth
+        
+        // Defensive shape (GetTacticalPoint, not-attacking branch)
+        public static float DefendDepthDefender = 0.23f;   // shift toward the ball by role
+        public static float DefendDepthMidfielder = 0.34f;
+        public static float DefendDepthForward = 0.80f;
+        public static float DefendBallPull = 0.08f;        // y drift toward the ball when defending
+        
+        // Goalkeeper
+        public static float GKChaseGoalDistance = 510f;    // ball this close to goal: come out
+        public static float GKChaseBallDistance = 720f;    // ...and this close to the GK
+        public static float GKLineOffset = 62f;            // hold position this far off the line
+        public static float GKTrackLerp = 0.48f;           // how much the GK tracks ball Y
         
         // ---- Runtime overrides (offline parameter search) ----
         

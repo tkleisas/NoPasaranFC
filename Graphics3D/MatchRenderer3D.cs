@@ -302,9 +302,9 @@ namespace NoPasaranFC.Graphics3D
             // (centroid of the scoring team), not the ball lying in the net
             Vector2 cameraFocus = engine.BallPosition;
             if (engine.CurrentState == MatchEngine.MatchState.GoalCelebration &&
-                engine.LastPlayerTouchedBall != null)
+                engine.LastKicker != null)
             {
-                int scorerTeamId = engine.LastPlayerTouchedBall.TeamId;
+                int scorerTeamId = engine.LastKicker.TeamId;
                 Vector2 sum = Vector2.Zero;
                 int count = 0;
                 foreach (var p in engine.GetAllPlayers())

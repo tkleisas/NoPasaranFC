@@ -52,6 +52,7 @@ namespace NoPasaranFC.Harness
                     case "--out": outPrefix = args[++i]; break;
                     case "--params": paramsPath = args[++i]; break;
                     case "--nolog": noLog = true; break;
+                    case "--ballcontrol": GameSettings.Instance.BallControl = args[++i]; break;
                     default:
                         Console.Error.WriteLine($"unknown argument: {args[i]}");
                         return 1;
@@ -260,6 +261,8 @@ namespace NoPasaranFC.Harness
             Console.WriteLine($"Attacking third: home {m.BallInHomeAttackingThirdSeconds:F1}s / away {m.BallInAwayAttackingThirdSeconds:F1}s   " +
                               $"Shots: {m.HomeShots}-{m.AwayShots}   Box entries: {m.HomeBoxEntries}-{m.AwayBoxEntries}   " +
                               $"Max stationary: {m.MaxBallStationarySeconds:F1}s");
+            Console.WriteLine($"Ball control: glued {m.GluedTimeFraction:P0} of play   carrier-ball dist {m.MeanCarrierBallDistance:F0}px   " +
+                              $"carrier changes {m.CarrierChanges}   miscontrols {m.MiscontrolEvents}   knockdowns {m.KnockdownEvents}");
             Console.WriteLine();
             Console.WriteLine($"{"#",-3}{"Player",-28}{"Team",-6}{"Transitions",-12}{"Trans/s",-9}{"Reversals",-10}{"MeanDistToTarget",-16}");
             foreach (var p in m.Players)
@@ -307,6 +310,11 @@ namespace NoPasaranFC.Harness
             public int AwayShots { get; set; }
             public int HomeBoxEntries { get; set; }
             public int AwayBoxEntries { get; set; }
+            public int MiscontrolEvents { get; set; }
+            public int KnockdownEvents { get; set; }
+            public int CarrierChanges { get; set; }
+            public double MeanCarrierBallDistance { get; set; }
+            public double GluedTimeFraction { get; set; }
             public int TotalStateTransitions { get; set; }
             public double TotalTransitionsPerSecond { get; set; }
             public int TotalDirectionReversals { get; set; }
@@ -339,6 +347,12 @@ namespace NoPasaranFC.Harness
             private int _homeShots, _awayShots;
             private int _homeBoxEntries, _awayBoxEntries;
             private bool _ballInHomeBox, _ballInAwayBox;
+            private Player _lastCarrier;
+            private int _carrierChanges;
+            private double _carrierDistSum;
+            private int _carrierSamples;
+            private double _gluedTime;
+            private double _totalTime;
             private Vector2 _lastBallPosition;
             private bool _hasLastBallPosition;
 
@@ -388,6 +402,24 @@ namespace NoPasaranFC.Harness
                 if (inAwayBox && !_ballInAwayBox) _awayBoxEntries++;
                 _ballInHomeBox = inHomeBox;
                 _ballInAwayBox = inAwayBox;
+                _totalTime += dt;
+                
+                // Ball-control behavior metrics: who carries the ball (last toucher
+                // within control radius), how tight the glue is, and how often the
+                // carrier changes (steals/contest outcomes)
+                Player carrier = engine.LastPlayerTouchedBall;
+                if (carrier != null &&
+                    Vector2.Distance(carrier.FieldPosition, engine.BallPosition) < 250f)
+                {
+                    if (carrier != _lastCarrier && _lastCarrier != null)
+                        _carrierChanges++;
+                    _lastCarrier = carrier;
+                    _carrierDistSum += Vector2.Distance(carrier.FieldPosition, engine.BallPosition);
+                    _carrierSamples++;
+                    // "Glued": ball within the glue radius of its carrier
+                    if (Vector2.Distance(carrier.FieldPosition, engine.BallPosition) < 75f)
+                        _gluedTime += dt;
+                }
 
                 // Possession: team of the nearest player to the ball
                 Player nearest = null;
@@ -479,6 +511,11 @@ namespace NoPasaranFC.Harness
                     AwayShots = _awayShots,
                     HomeBoxEntries = _homeBoxEntries,
                     AwayBoxEntries = _awayBoxEntries,
+                    MiscontrolEvents = engine.MiscontrolEvents,
+                    KnockdownEvents = engine.KnockdownEvents,
+                    CarrierChanges = _carrierChanges,
+                    MeanCarrierBallDistance = _carrierSamples > 0 ? _carrierDistSum / _carrierSamples : 0,
+                    GluedTimeFraction = _totalTime > 0 ? _gluedTime / _totalTime : 0,
                     TotalStateTransitions = rows.Sum(r => r.StateTransitions),
                     TotalTransitionsPerSecond = rows.Sum(r => r.StateTransitions) / (double)seconds,
                     TotalDirectionReversals = rows.Sum(r => r.DirectionReversals),

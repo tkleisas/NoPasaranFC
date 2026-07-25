@@ -451,8 +451,13 @@ namespace NoPasaranFC.Screens
                         player.CurrentAnimationState == "throw_in_static" ||
                         player.CurrentAnimationState == "throw_in_throw")
                     {
+                        // Players running to the celebration spot walk/run instead of
+                        // gliding on the celebrate pose (dance starts when still)
+                        string animToPlay = player.CurrentAnimationState;
+                        if (animToPlay == "celebrate" && player.Velocity.LengthSquared() > 30f * 30f)
+                            animToPlay = "walk";
                         // Play the animation
-                        player.AnimationSystem.PlayAnimation(player.CurrentAnimationState);
+                        player.AnimationSystem.PlayAnimation(animToPlay);
 
                         // Set rotation based on throw direction for throw-ins
                         if (player.CurrentAnimationState == "throw_in_static" || 

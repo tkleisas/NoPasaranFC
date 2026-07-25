@@ -36,6 +36,7 @@ namespace NoPasaranFC.Gameplay
         /// <summary>The player currently controlled by P2 (null if P2 isn't active).</summary>
         public Player ControlledPlayer2 => _controlledPlayer2;
         private Player _lastPlayerTouchedBall;
+        private Player _lastKicker; // last player to actually KICK (not just contact) - goal attribution
         private Random _random;
         private AIBehaviorManager _aiBehaviorManager;
         private float _lastAIKickFrameTime = -1f; // Prevents multiple AI kicks in same frame
@@ -59,6 +60,21 @@ namespace NoPasaranFC.Gameplay
         {
             get => _lastPlayerTouchedBall;
             set => _lastPlayerTouchedBall = value;
+        }
+        
+        /// <summary>
+        /// Last player to deliberately kick the ball (shot, pass, clearance, set
+        /// piece, dribble tap). Used for goal attribution and celebrations -
+        /// unlike "last touch", a defender blocking a shot doesn't steal the credit.
+        /// </summary>
+        public Player LastKicker => _lastKicker ?? _lastPlayerTouchedBall;
+        
+        /// <summary>Registers a deliberate kick for goal attribution (also a touch).</summary>
+        internal void RegisterKick(Player player)
+        {
+            if (player == null) return;
+            _lastKicker = player;
+            SetLastPlayerTouchedBall(player);
         }
         
         // First-touch grace: a teammate who just received the ball can't be
@@ -189,14 +205,19 @@ namespace NoPasaranFC.Gameplay
         private const float BallShootDistance = 70f; // Distance for charged shots (must be > collision distance ~56px)
         
         // "Easy" ball control (Settings): the ball rides on a short lead ahead of
-        // the controlled player's feet instead of rolling loose, and slow balls
-        // are trapped when the player stands still
+        // the carrier's feet instead of rolling loose, and slow balls are trapped
+        // when standing still. Counters: dribbling is slower than running, the
+        // glue drops when an opponent is close (contestable), and low-skill
+        // carriers occasionally bobble the ball away.
         private const float DribbleGlueDistance = 75f;
         private const float DribbleLeadDistance = 34f;
         private const float DribbleGluePull = 8f;
         private const float DribbleMaxCorrection = 400f;
         private const float DribbleTrapDistance = 80f;
         private const float DribbleTrapMaxBallSpeed = 500f;
+        private const float DribbleContestDistance = 110f; // opponent this close = ball contestable
+        private const float DribbleSpeedFactor = 0.85f;    // carriers run slower with the ball
+        private const float DribbleMiscontrolRate = 0.35f; // bobbles per second at zero skill
         private const float TackleDistance = 70f; // Scaled for larger sprites
         private const float TackleSuccessBase = 40f; // Base tackle success %
         private const float Gravity = 1200f; // Gravity for ball vertical movement
@@ -919,6 +940,81 @@ namespace NoPasaranFC.Gameplay
         /// through the `ref` parameters so the two players don't stomp on each other's
         /// shoot-charge.
         /// </summary>
+        /// <summary>Distance from the ball to the nearest active opponent of this player.</summary>
+        private float NearestOpponentToBall(Player player)
+        {
+            var opponents = player.Team == _homeTeam ? _awayTeam.Players : _homeTeam.Players;
+            float min = float.MaxValue;
+            foreach (var opp in opponents)
+            {
+                if (!opp.IsStarting || opp.IsKnockedDown) continue;
+                float d = Vector2.Distance(opp.FieldPosition, BallPosition);
+                if (d < min) min = d;
+            }
+            return min;
+        }
+        
+        /// <summary>
+        /// Dribble glue: keeps the ball on a short lead ahead of the carrier.
+        /// Active in Easy mode always, in Classic mode only while charging a shot
+        /// (so the charge doesn't lose the ball). Returns true when the ball is
+        /// glued this frame. The glue refuses to hold when the player just
+        /// kicked (passes/shots fly free), when an opponent is close enough to
+        /// contest, and low-skill carriers bobble the ball loose at random.
+        /// </summary>
+        private bool ApplyDribbleGlue(Player player, Vector2 moveDirection, bool charging, float deltaTime)
+        {
+            if (CurrentState != MatchState.Playing || BallHeight > 100f) return false;
+            bool easyMode = GameSettings.Instance.BallControl == "Easy";
+            if (!easyMode && !charging) return false;
+            
+            // Just kicked: let the pass/shot fly (also covers a fresh bobble)
+            if ((float)MatchTime - player.LastKickTime < AutoKickCooldown) return false;
+            if (Vector2.Distance(player.FieldPosition, BallPosition) >= DribbleGlueDistance) return false;
+            // Contested: an opponent is close enough to poke the ball loose
+            if (NearestOpponentToBall(player) < DribbleContestDistance) return false;
+            
+            Vector2 dir = moveDirection.LengthSquared() > 0.01f
+                ? Vector2.Normalize(moveDirection) : Vector2.UnitX;
+            Vector2 lead = player.FieldPosition + dir * DribbleLeadDistance;
+            Vector2 correction = (lead - BallPosition) * DribbleGluePull;
+            if (correction.Length() > DribbleMaxCorrection)
+            {
+                correction.Normalize();
+                correction *= DribbleMaxCorrection;
+            }
+            BallVelocity = player.Velocity + correction;
+            if (BallVerticalVelocity > 0f)
+                BallVerticalVelocity = 0f;
+            SetLastPlayerTouchedBall(player);
+            
+            // Skill-based miscontrol: weak Technique/Agility bobbles the ball loose
+            if (!charging)
+            {
+                float skillRatio = Math.Clamp((player.Technique + player.Agility) / 200f, 0f, 1f);
+                float bobbleChance = DribbleMiscontrolRate * (1f - skillRatio) * deltaTime;
+                if (_random.NextDouble() < bobbleChance)
+                {
+                    // Ball squirts away (forward-biased random); the kick cooldown
+                    // suppresses the glue so the fumble actually escapes
+                    float angle = (float)(_random.NextDouble() * Math.PI * 2.0);
+                    Vector2 squirt = new Vector2((float)Math.Cos(angle), (float)Math.Sin(angle)) + dir * 0.4f;
+                    squirt.Normalize();
+                    BallVelocity = squirt * (220f + (float)_random.NextDouble() * 160f);
+                    player.LastKickTime = (float)MatchTime;
+                    MiscontrolEvents++; // harness metric
+                    return false;
+                }
+            }
+            return true;
+        }
+        
+        /// <summary>Skill-based ball bobbles since engine creation (harness/debug metric).</summary>
+        public int MiscontrolEvents { get; private set; }
+        
+        /// <summary>Player knockdowns since engine creation (harness/debug metric).</summary>
+        public int KnockdownEvents { get; private set; }
+        
         private void UpdateControlledPlayerInput(
             Player player,
             Vector2 moveDirection,
@@ -1032,9 +1128,15 @@ namespace NoPasaranFC.Gameplay
                     // Normal movement (only if not knocked down and not frozen for set piece)
                     if (moveDirection.Length() > 0 && !frozenForSetPiece)
                     {
-                        // Apply stamina speed multiplier
+                        // Dribble glue first (this frame's speed factor depends on it);
+                        // holds the ball during shot charging in both control modes
+                        bool glued = moveDirection.Length() > 0.1f &&
+                            ApplyDribbleGlue(player, moveDirection, isShootKeyDown, deltaTime);
+                        
+                        // Apply stamina speed multiplier; glued carriers run slower
                         float staminaMultiplier = GetStaminaSpeedMultiplier(player);
-                        float moveSpeed = player.Speed * 3f * GameSettings.Instance.PlayerSpeedMultiplier * staminaMultiplier;
+                        float moveSpeed = player.Speed * 3f * GameSettings.Instance.PlayerSpeedMultiplier * staminaMultiplier
+                            * (glued && !isShootKeyDown ? DribbleSpeedFactor : 1f);
                         var newPosition = player.FieldPosition + moveDirection * moveSpeed * deltaTime;
                         player.Velocity = moveDirection * moveSpeed;
                         ClampToField(ref newPosition);
@@ -1043,46 +1145,26 @@ namespace NoPasaranFC.Gameplay
                         // Decrease stamina while running
                         player.Stamina = Math.Max(0, player.Stamina - StaminaDecreasePerSecondRunning * deltaTime);
 
-                        // If this player is near the ball and moving, control it.
-                        // Don't control if ball is in the air (prevents headbutting glitch)
-                        // Don't control during countdown
-                        // Don't control if player is charging a shot
-                        if (CurrentState == MatchState.Playing && moveDirection.Length() > 0.1f && BallHeight < 100f && !isShootKeyDown)
+                        // Classic mode: loose-ball auto-kick (Easy mode is glued above)
+                        if (!glued && GameSettings.Instance.BallControl != "Easy" &&
+                            CurrentState == MatchState.Playing && moveDirection.Length() > 0.1f &&
+                            BallHeight < 100f && !isShootKeyDown &&
+                            CanPlayerKickBall(player, moveDirection, BallKickDistance))
                         {
-                            bool closeControl = GameSettings.Instance.BallControl == "Easy";
-                            if (closeControl && Vector2.Distance(player.FieldPosition, BallPosition) < DribbleGlueDistance)
+                            // Check cooldown to prevent continuous juggling
+                            float timeSinceLastKick = (float)MatchTime - player.LastKickTime;
+                            if (timeSinceLastKick >= AutoKickCooldown)
                             {
-                                // Dribble glue: the ball rides on a short lead ahead of
-                                // the player's feet, matching their velocity plus a
-                                // proportional pull toward the lead point
-                                Vector2 dir = Vector2.Normalize(moveDirection);
-                                Vector2 lead = player.FieldPosition + dir * DribbleLeadDistance;
-                                Vector2 correction = (lead - BallPosition) * DribbleGluePull;
-                                if (correction.Length() > DribbleMaxCorrection)
-                                {
-                                    correction.Normalize();
-                                    correction *= DribbleMaxCorrection;
-                                }
-                                BallVelocity = player.Velocity + correction;
-                                if (BallVerticalVelocity > 0f)
-                                    BallVerticalVelocity = 0f;
-                                SetLastPlayerTouchedBall(player);
-                            }
-                            else if (!closeControl && CanPlayerKickBall(player, moveDirection, BallKickDistance))
-                            {
-                                // Classic control: kick ball in movement direction with stamina effect
-                                float timeSinceLastKick = (float)MatchTime - player.LastKickTime;
-                                if (timeSinceLastKick >= AutoKickCooldown)
-                                {
-                                    // Trigger shoot animation
-                                    player.CurrentAnimationState = "shoot";
+                                // Trigger shoot animation
+                                player.CurrentAnimationState = "shoot";
 
-                                    float staminaStatMultiplier = GetStaminaStatMultiplier(player);
-                                    float kickPower = (player.Shooting / 8f + 6f) * staminaStatMultiplier;
-                                    BallVelocity = moveDirection * kickPower * player.Speed * 1.2f;
-                                    AudioManager.Instance.PlaySoundEffect("kick_ball", 0.6f, allowRetrigger: false);
-                                    player.LastKickTime = (float)MatchTime;
-                                }
+                                // Kick ball in movement direction with stamina effect
+                                float staminaStatMultiplier = GetStaminaStatMultiplier(player);
+                                float kickPower = (player.Shooting / 8f + 6f) * staminaStatMultiplier;
+                                BallVelocity = moveDirection * kickPower * player.Speed * 1.2f;
+                                AudioManager.Instance.PlaySoundEffect("kick_ball", 0.6f, allowRetrigger: false);
+                                RegisterKick(player);
+                                player.LastKickTime = (float)MatchTime;
                             }
                         }
                     }
@@ -1093,8 +1175,11 @@ namespace NoPasaranFC.Gameplay
                         player.Stamina = Math.Min(100, player.Stamina + StaminaRecoveryPerSecond * deltaTime);
                         
                         // Easy ball control: trap slow balls at the player's feet
+                        // (not right after a kick, not while an opponent contests)
                         if (GameSettings.Instance.BallControl == "Easy" &&
                             CurrentState == MatchState.Playing && BallHeight < 100f &&
+                            (float)MatchTime - player.LastKickTime >= AutoKickCooldown &&
+                            NearestOpponentToBall(player) >= DribbleContestDistance &&
                             BallVelocity.Length() < DribbleTrapMaxBallSpeed &&
                             Vector2.Distance(player.FieldPosition, BallPosition) < DribbleTrapDistance)
                         {
@@ -1233,13 +1318,19 @@ namespace NoPasaranFC.Gameplay
                 // Store base velocity for next frame (states need this for direction smoothing)
                 Vector2 baseVelocity = player.Velocity;
                 
+                // Dribble glue (Easy mode): the ball rides with the AI carrier too.
+                // Computed before movement so the slower dribble speed applies now.
+                bool aiGlued = baseVelocity.LengthSquared() > 0.01f &&
+                    ApplyDribbleGlue(player, baseVelocity, false, deltaTime);
+                
                 // Apply game settings and difficulty multipliers to AI velocity
                 float staminaMultiplier = GetStaminaSpeedMultiplier(player);
                 float difficultyMultiplier = _aiBehaviorManager.GetAIDifficultyModifier();
                 float settingsMultiplier = GameSettings.Instance.PlayerSpeedMultiplier;
                 
                 // Apply all multipliers to velocity and update position
-                Vector2 adjustedVelocity = baseVelocity * staminaMultiplier * difficultyMultiplier * settingsMultiplier;
+                Vector2 adjustedVelocity = baseVelocity * staminaMultiplier * difficultyMultiplier * settingsMultiplier
+                    * (aiGlued ? DribbleSpeedFactor : 1f);
                 player.FieldPosition += adjustedVelocity * deltaTime;
                 
                 // Keep BASE velocity in player.Velocity for states to use (NOT adjusted)
@@ -1253,11 +1344,12 @@ namespace NoPasaranFC.Gameplay
                 ClampToField(ref pos, nearBall ? 250f : 100f);
                 player.FieldPosition = pos;
                 
-                // AI dribbling: Kick ball automatically when close and moving
+                // AI dribbling: Kick ball automatically when close and moving (loose-ball
+                // style — only when the glue isn't holding the ball this frame).
                 // Don't kick during countdown or when in Passing/Shooting state (those handle their own kicks)
                 string currentAIState = aiController.GetCurrentStateName();
                 bool isExecutingKick = currentAIState == "Passing" || currentAIState == "Shooting";
-                if (!isExecutingKick && CurrentState == MatchState.Playing && baseVelocity.LengthSquared() > 0.01f && BallHeight < 100f)
+                if (!aiGlued && !isExecutingKick && CurrentState == MatchState.Playing && baseVelocity.LengthSquared() > 0.01f && BallHeight < 100f)
                 {
                     float distToBall = Vector2.Distance(player.FieldPosition, BallPosition);
                     if (distToBall < BallShootDistance * 0.75f)
@@ -1291,7 +1383,7 @@ namespace NoPasaranFC.Gameplay
                             float kickPower = (player.Shooting / 8f + 6f) * staminaStatMultiplier * _aiBehaviorManager.GetAIDifficultyModifier();
                             BallVelocity = kickDir * kickPower * player.Speed * 1.0f;
                             BallVerticalVelocity = 15f;
-                            _lastPlayerTouchedBall = player;
+                            RegisterKick(player);
                             player.LastKickTime = (float)MatchTime;
                             _lastAIKickFrameTime = (float)MatchTime;
                         }
@@ -1420,9 +1512,13 @@ namespace NoPasaranFC.Gameplay
             RefereePosition = refPos;
         }
         
+        private readonly Dictionary<Player, float> _knockdownCooldownUntil = new Dictionary<Player, float>();
+        private const float KnockdownRollCooldown = 0.6f; // seconds between knockdown rolls involving the same player
+        
         private void CheckPlayerCollisions(float deltaTime)
         {
             var allPlayers = GetAllPlayers();
+            float now = (float)MatchTime;
             
             for (int i = 0; i < allPlayers.Count; i++)
             {
@@ -1450,8 +1546,16 @@ namespace NoPasaranFC.Gameplay
                         float speed1 = p1.Velocity.Length();
                         float speed2 = p2.Velocity.Length();
                         
+                        // Knockdown rolls are per-CHALLENGE, not per frame: require real
+                        // closing speed, and each player can only be rolled on once per
+                        // cooldown window (a duel is one dice roll, not thirty)
+                        float relativeSpeed = (p1.Velocity - p2.Velocity).Length();
+                        bool p1Cooling = _knockdownCooldownUntil.TryGetValue(p1, out float p1Until) && p1Until > now;
+                        bool p2Cooling = _knockdownCooldownUntil.TryGetValue(p2, out float p2Until) && p2Until > now;
+                        bool canRoll = !p1Cooling && !p2Cooling && relativeSpeed > 250f;
+                        
                         // Only check knockdown if at least one player is moving fast enough
-                        if (speed1 > 50f || speed2 > 50f)
+                        if (canRoll && (speed1 > 50f || speed2 > 50f))
                         {
                             // Teammates rarely knock each other down (only 1-2% chance)
                             if (sameTeam && _random.NextDouble() > 0.02f)
@@ -1461,6 +1565,10 @@ namespace NoPasaranFC.Gameplay
                             }
                             else
                             {
+                                // This challenge consumes the roll for both players
+                                _knockdownCooldownUntil[p1] = now + KnockdownRollCooldown;
+                                _knockdownCooldownUntil[p2] = now + KnockdownRollCooldown;
+                                
                                 // Calculate knockdown probability based on:
                                 // - Speed difference
                                 // - Strength (defending stat)
@@ -1485,12 +1593,15 @@ namespace NoPasaranFC.Gameplay
                                 }
                                 
                                 // Carrier shielding: the ball carrier braces and is
-                                // harder to knock down (attacks shouldn't die on
-                                // every collision with the defensive wall)
-                                if (p2 == _lastPlayerTouchedBall && nearBall)
-                                    p1Force *= 0.5f;
-                                if (p1 == _lastPlayerTouchedBall && nearBall)
-                                    p2Force *= 0.5f;
+                                // much harder to knock down - steals should come from
+                                // poking the ball loose (contest), not from decking him.
+                                // Only while he actually has the ball at his feet
+                                bool carrierHasBall = _lastPlayerTouchedBall != null &&
+                                    Vector2.Distance(_lastPlayerTouchedBall.FieldPosition, BallPosition) < 100f;
+                                if (carrierHasBall && p2 == _lastPlayerTouchedBall && nearBall)
+                                    p1Force *= 0.3f;
+                                if (carrierHasBall && p1 == _lastPlayerTouchedBall && nearBall)
+                                    p2Force *= 0.3f;
                                 
                                 // Random factor
                                 float randomFactor = (float)_random.NextDouble();
@@ -1498,17 +1609,17 @@ namespace NoPasaranFC.Gameplay
                                 // Determine if anyone gets knocked down
                                 float knockdownThreshold = 40f; // Base threshold
                                 
-                                if (p1Force > knockdownThreshold && randomFactor > 0.6f)
+                                if (p1Force > knockdownThreshold && randomFactor > 0.75f)
                                 {
                                     // P2 gets knocked down by P1
                                     KnockDownPlayer(p2, p1.Velocity);
                                 }
-                                else if (p2Force > knockdownThreshold && randomFactor < 0.4f)
+                                else if (p2Force > knockdownThreshold && randomFactor < 0.25f)
                                 {
                                     // P1 gets knocked down by P2
                                     KnockDownPlayer(p1, p2.Velocity);
                                 }
-                                else if (nearBall && !sameTeam && (p1Force + p2Force) > 60f && randomFactor > 0.7f)
+                                else if (nearBall && !sameTeam && (p1Force + p2Force) > 60f && randomFactor > 0.9f)
                                 {
                                     // Both get knocked down in intense collision near ball (only opposing teams)
                                     KnockDownPlayer(p1, p2.Velocity * 0.5f);
@@ -1539,6 +1650,13 @@ namespace NoPasaranFC.Gameplay
         {
             // Don't affect ball immediately after set piece execution
             if (_timeSinceSetPiece < 0.3f) return;
+            
+            // The ball is not in play during set pieces: nobody can touch it
+            // until the kick (prevents the corner taker "dribbling" the placed
+            // ball during his run-up)
+            if (CurrentState == MatchState.ThrowIn ||
+                CurrentState == MatchState.CornerKick ||
+                CurrentState == MatchState.GoalKick) return;
             
             // Check if any player is colliding with the ball
             var allPlayers = GetAllPlayers();
@@ -1602,6 +1720,7 @@ namespace NoPasaranFC.Gameplay
             if (HasFirstTouchGrace(player)) return;
             
             player.IsKnockedDown = true;
+            KnockdownEvents++; // harness metric
             player.KnockdownTimer = 0.5f + (float)_random.NextDouble() * 1.0f; // 0.5 to 1.5 seconds
             
             // Apply impact velocity (player slides in direction of impact)
@@ -1682,7 +1801,8 @@ namespace NoPasaranFC.Gameplay
             float staminaMultiplier = GetStaminaStatMultiplier(player);
             float kickPower = (player.Shooting / 6f + power * 24f) * staminaMultiplier;
             BallVelocity = shootDirection * kickPower * player.Speed;
-            _lastPlayerTouchedBall = player;
+            RegisterKick(player);
+            player.LastKickTime = (float)MatchTime;
 
             // Calculate vertical velocity (height)
             // More hold time = higher shot
@@ -1790,7 +1910,7 @@ namespace NoPasaranFC.Gameplay
             player.CurrentAnimationState = "shoot";
             BallVelocity = finalDir * finalPower;
             BallVerticalVelocity = distance > 600f ? 80f : 30f; // Lofted for long passes
-            _lastPlayerTouchedBall = player;
+            RegisterKick(player);
             player.LastKickTime = (float)MatchTime;
             player.Stamina = Math.Max(0, player.Stamina - 2f);
 
@@ -1934,8 +2054,10 @@ namespace NoPasaranFC.Gameplay
                 _goalScored = true;
                 _goalCelebrationDelay = 0f;
 
-                // Check if it's an own goal (home team scored on themselves)
-                _isOwnGoal = _lastPlayerTouchedBall != null && _lastPlayerTouchedBall.Team == _homeTeam;
+                // Check if it's an own goal (home team scored on themselves).
+                // Attribution uses the last KICKER: a defender blocking or the GK
+                // parrying a shot doesn't turn it into an own goal
+                _isOwnGoal = LastKicker != null && LastKicker.Team == _homeTeam;
 
                 AudioManager.Instance.PlaySoundEffect("goal");
                 // Don't trigger celebration yet - let ball continue for visual effect
@@ -1951,7 +2073,7 @@ namespace NoPasaranFC.Gameplay
                 _goalCelebrationDelay = 0f;
 
                 // Check if it's an own goal (away team scored on themselves)
-                _isOwnGoal = _lastPlayerTouchedBall != null && _lastPlayerTouchedBall.Team == _awayTeam;
+                _isOwnGoal = LastKicker != null && LastKicker.Team == _awayTeam;
 
                 AudioManager.Instance.PlaySoundEffect("goal");
                 // Don't trigger celebration yet - let ball continue for visual effect
@@ -2235,7 +2357,7 @@ namespace NoPasaranFC.Gameplay
                 BallVelocity = RestartDirection * power * RestartPlayer.Speed * 0.05f;
             }
             BallVerticalVelocity = height;
-            _lastPlayerTouchedBall = RestartPlayer;
+            RegisterKick(RestartPlayer);
             RestartPlayer.LastKickTime = (float)MatchTime;
             
             // Reset throw-in power
@@ -2353,8 +2475,10 @@ namespace NoPasaranFC.Gameplay
             BallVelocity = Vector2.Zero;
             BallVerticalVelocity = 0f;
 
-            // Start player celebration using the new CelebrationManager
-            if (_lastPlayerTouchedBall != null)
+            // Start player celebration using the new CelebrationManager.
+            // The scorer is the last KICKER (not whoever last contacted the ball)
+            var scorer = LastKicker;
+            if (scorer != null)
             {
                 List<Player> teammates;
                 List<Player> opponents;
@@ -2364,8 +2488,8 @@ namespace NoPasaranFC.Gameplay
                     // Own goal - BOTH teams celebrate together!
                     // The "scorer" is the player who made the own goal
                     teammates = _homeTeam.Players
-                        .Where(p => p.IsStarting && p != _lastPlayerTouchedBall && !p.IsKnockedDown)
-                        .Concat(_awayTeam.Players.Where(p => p.IsStarting && p != _lastPlayerTouchedBall && !p.IsKnockedDown))
+                        .Where(p => p.IsStarting && p != scorer && !p.IsKnockedDown)
+                        .Concat(_awayTeam.Players.Where(p => p.IsStarting && p != scorer && !p.IsKnockedDown))
                         .ToList();
 
                     // No opponents - everyone celebrates
@@ -2374,18 +2498,18 @@ namespace NoPasaranFC.Gameplay
                 else
                 {
                     // Normal goal - only scoring team celebrates
-                    teammates = _lastPlayerTouchedBall.Team.Players
-                        .Where(p => p.IsStarting && p != _lastPlayerTouchedBall && !p.IsKnockedDown)
+                    teammates = scorer.Team.Players
+                        .Where(p => p.IsStarting && p != scorer && !p.IsKnockedDown)
                         .ToList();
 
-                    var opponentTeam = _lastPlayerTouchedBall.Team == _homeTeam ? _awayTeam : _homeTeam;
+                    var opponentTeam = scorer.Team == _homeTeam ? _awayTeam : _homeTeam;
                     opponents = opponentTeam.Players
                         .Where(p => p.IsStarting && !p.IsKnockedDown)
                         .ToList();
                 }
 
                 // Start celebration (own goals always use "run_around_pitch")
-                CelebrationManager.StartCelebration(_lastPlayerTouchedBall, teammates, opponents, _isOwnGoal);
+                CelebrationManager.StartCelebration(scorer, teammates, opponents, _isOwnGoal);
             }
 
             // Start visual celebration (ball animation and text) - must be after CelebrationManager.StartCelebration

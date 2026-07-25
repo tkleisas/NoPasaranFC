@@ -327,6 +327,13 @@ public class Game1 : Game
             }
             case "match":
                 return StartNextMatch();
+            case "corner":
+            {
+                if (_screenManager.CurrentScreen is not MatchScreen cms || cms.Engine == null)
+                    return "ERR no active match";
+                cms.Engine.DebugTriggerCornerKick();
+                return "OK corner";
+            }
             case "ball":
             {
                 if (parts.Length < 3 || !float.TryParse(parts[1], out float bx) || !float.TryParse(parts[2], out float by))
