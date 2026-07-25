@@ -216,7 +216,7 @@ namespace NoPasaranFC.Gameplay
         private const float DribbleTrapDistance = 80f;
         private const float DribbleTrapMaxBallSpeed = 500f;
         private const float DribbleContestDistance = 110f; // opponent this close = ball contestable
-        private const float DribbleSpeedFactor = 0.85f;    // carriers run slower with the ball
+        private const float DribbleSpeedFactor = 0.75f;    // carriers run at this fraction of top speed
         private const float DribbleMiscontrolRate = 0.35f; // bobbles per second at zero skill
         private const float TackleDistance = 70f; // Scaled for larger sprites
         private const float TackleSuccessBase = 40f; // Base tackle success %
@@ -1133,10 +1133,17 @@ namespace NoPasaranFC.Gameplay
                         bool glued = moveDirection.Length() > 0.1f &&
                             ApplyDribbleGlue(player, moveDirection, isShootKeyDown, deltaTime);
                         
-                        // Apply stamina speed multiplier; glued carriers run slower
+                        // Carrying the ball costs speed: glued, or simply having the
+                        // ball at the feet (also while contested, when the glue drops)
+                        bool carrying = glued ||
+                            (CurrentState == MatchState.Playing &&
+                             _lastPlayerTouchedBall == player &&
+                             Vector2.Distance(player.FieldPosition, BallPosition) < DribbleGlueDistance);
+                        
+                        // Apply stamina speed multiplier; carriers run slower
                         float staminaMultiplier = GetStaminaSpeedMultiplier(player);
                         float moveSpeed = player.Speed * 3f * GameSettings.Instance.PlayerSpeedMultiplier * staminaMultiplier
-                            * (glued && !isShootKeyDown ? DribbleSpeedFactor : 1f);
+                            * (carrying ? DribbleSpeedFactor : 1f);
                         var newPosition = player.FieldPosition + moveDirection * moveSpeed * deltaTime;
                         player.Velocity = moveDirection * moveSpeed;
                         ClampToField(ref newPosition);
