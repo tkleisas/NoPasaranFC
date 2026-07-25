@@ -303,12 +303,58 @@ namespace NoPasaranFC.Gameplay.UtilityAI
             return new UtilityAction(type, point, bestScore, target);
         }
         
+        // GK dive state (shot reaction): short burst to the predicted intercept
+        private float _gkDiveUntil = -1f;
+        
         private UtilityAction DecideGoalkeeper(Player player, AIContext ctx)
         {
-            // GK with ball: clear it long
+            float centerY = MatchEngine.StadiumMargin + MatchEngine.FieldHeight / 2f;
+            float goalLineX = ctx.OwnGoalCenter.X;
+            float goalTop = centerY - MatchEngine.GoalWidth / 2f;
+            float goalBottom = centerY + MatchEngine.GoalWidth / 2f;
+            bool isHome = ctx.IsHomeTeam;
+            float defendingRatio = player.Defending / 100f;
+            
+            // GK with ball: distribute to an open teammate when there is one,
+            // otherwise boot it long
             if (ctx.HasBallPossession || ctx.BallCarrier == player)
             {
+                if (ctx.BestPassTarget != null && ctx.BestPassScore > UtilityTuning.GKDistributionMinScore)
+                    return new UtilityAction(UtilityActionType.Pass, Vector2.Zero, 85f, ctx.BestPassTarget);
                 return new UtilityAction(UtilityActionType.Clear, ctx.OpponentGoalCenter, 80f);
+            }
+            
+            // Shot detection: ball flying toward our goal -> dive to the predicted
+            // crossing point on the line (the save mechanic)
+            float ballSpeed = ctx.BallVelocity.Length();
+            if (ballSpeed > UtilityTuning.GKShotDetectSpeed)
+            {
+                float vx = ctx.BallVelocity.X;
+                bool towardGoal = isHome ? vx < -100f : vx > 100f;
+                if (towardGoal && Math.Abs(vx) > 1f)
+                {
+                    float t = (goalLineX - ctx.BallPosition.X) / vx;
+                    if (t > 0f && t < 2f)
+                    {
+                        float crossY = ctx.BallPosition.Y + ctx.BallVelocity.Y * t;
+                        if (crossY > goalTop - 50f && crossY < goalBottom + 50f)
+                        {
+                            _gkDiveUntil = ctx.MatchTime + 0.5f;
+                            var diveTarget = new Vector2(goalLineX,
+                                Math.Clamp(crossY, goalTop + 30f, goalBottom - 30f));
+                            return new UtilityAction(UtilityActionType.ChaseBall, diveTarget, 200f);
+                        }
+                    }
+                }
+            }
+            
+            // Continue an active dive (re-detected shots refresh it above)
+            if (ctx.MatchTime < _gkDiveUntil)
+            {
+                float crossY2 = ctx.BallPosition.Y;
+                var target = new Vector2(goalLineX,
+                    Math.Clamp(crossY2, goalTop + 30f, goalBottom - 30f));
+                return new UtilityAction(UtilityActionType.ChaseBall, target, 190f);
             }
             
             // Ball close to own goal: come out and get it
@@ -319,11 +365,30 @@ namespace NoPasaranFC.Gameplay.UtilityAI
                 return new UtilityAction(UtilityActionType.ChaseBall, GetBallInterceptPoint(ctx), chaseScore);
             }
             
-            // Otherwise hold on the line, tracking ball Y slightly
-            Vector2 linePoint = new Vector2(
-                ctx.OwnGoalCenter.X + (ctx.IsHomeTeam ? UtilityTuning.GKLineOffset : -UtilityTuning.GKLineOffset),
-                MathHelper.Lerp(ctx.OwnGoalCenter.Y, ctx.BallPosition.Y, UtilityTuning.GKTrackLerp));
-            return new UtilityAction(UtilityActionType.HoldPosition, linePoint, 50f);
+            // Close down: an opponent carrying inside the box - step out to cut
+            // the shooting angle (without leaving the line completely)
+            bool oppInBox = ctx.NearestOpponent != null &&
+                Math.Abs(ctx.NearestOpponent.FieldPosition.X - goalLineX) < 1205f &&
+                ctx.BallCarrier == ctx.NearestOpponent;
+            if (oppInBox)
+            {
+                Vector2 closeDown = Vector2.Lerp(ctx.OwnGoalCenter,
+                    ctx.NearestOpponent.FieldPosition,
+                    UtilityTuning.GKCloseDownLerp * (0.6f + 0.4f * defendingRatio));
+                return new UtilityAction(UtilityActionType.HoldPosition, closeDown, 60f);
+            }
+            
+            // Default positioning: track ball Y (clamped inside the posts) and
+            // advance off the line as the ball gets closer - narrows the angle
+            float targetY = MathHelper.Lerp(centerY, ctx.BallPosition.Y, UtilityTuning.GKTrackLerp);
+            targetY = Math.Clamp(targetY, goalTop + 60f, goalBottom - 60f);
+            
+            float ballDistToGoal = Math.Abs(ctx.BallPosition.X - goalLineX);
+            float advanceAmount = Math.Clamp(1f - ballDistToGoal / (MatchEngine.FieldWidth * 0.5f), 0f, 1f);
+            float advance = advanceAmount * UtilityTuning.GKAdvanceMax * (0.5f + 0.5f * defendingRatio);
+            float holdX = goalLineX + (isHome ? UtilityTuning.GKLineOffset + advance
+                                              : -UtilityTuning.GKLineOffset - advance);
+            return new UtilityAction(UtilityActionType.HoldPosition, new Vector2(holdX, targetY), 50f);
         }
         
         private bool IsActionViable(Player player, AIContext ctx, UtilityAction action)
@@ -369,11 +434,15 @@ namespace NoPasaranFC.Gameplay.UtilityAI
                     Vector2 chasePoint = ctx.DistanceToBall < 400f ? ctx.BallPosition : action.Point;
                     player.AITargetPosition = chasePoint;
                     player.AITargetPositionSet = true;
+                    // GK dive burst: shot reaction gets a big speed multiplier
+                    float chaseMax = MaxSpeedFor(player);
+                    if (player.Position == PlayerPosition.Goalkeeper && ctx.MatchTime < _gkDiveUntil)
+                        chaseMax *= UtilityTuning.GKDiveBurst;
                     Vector2 chaseVelocity;
                     if (!ownBall && ctx.DistanceToBall < 200f)
-                        chaseVelocity = Steering.Seek(player.FieldPosition, chasePoint, MaxSpeedFor(player));
+                        chaseVelocity = Steering.Seek(player.FieldPosition, chasePoint, chaseMax);
                     else
-                        chaseVelocity = Steering.Arrive(player.FieldPosition, chasePoint, MaxSpeedFor(player));
+                        chaseVelocity = Steering.Arrive(player.FieldPosition, chasePoint, chaseMax);
                     chaseVelocity = Steering.ApplySeparation(player, chaseVelocity);
                     chaseVelocity = Steering.ApplyBoundaryAvoidance(player.FieldPosition, chaseVelocity);
                     player.Velocity = chaseVelocity;

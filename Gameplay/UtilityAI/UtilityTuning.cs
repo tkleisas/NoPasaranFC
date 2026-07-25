@@ -62,6 +62,11 @@ namespace NoPasaranFC.Gameplay.UtilityAI
         public static float GKChaseBallDistance = 720f;    // ...and this close to the GK
         public static float GKLineOffset = 62f;            // hold position this far off the line
         public static float GKTrackLerp = 0.48f;           // how much the GK tracks ball Y
+        public static float GKShotDetectSpeed = 400f;      // ball faster than this toward goal = shot
+        public static float GKDiveBurst = 2.5f;            // dive speed multiplier (save reaction)
+        public static float GKAdvanceMax = 200f;           // max advance off the line to narrow the angle
+        public static float GKCloseDownLerp = 0.4f;        // step toward an opponent carrying in the box
+        public static float GKDistributionMinScore = 800f; // pass (not boot) when the best option beats this
         
         // ---- Runtime overrides (offline parameter search) ----
         
