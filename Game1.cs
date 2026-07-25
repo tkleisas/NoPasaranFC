@@ -348,6 +348,27 @@ public class Game1 : Game
                 bms.Engine.BallVelocity = vel;
                 return "OK";
             }
+            case "ballopp":
+            {
+                // Stage a tackle: give the ball to the opponent nearest the controlled player
+                if (_screenManager.CurrentScreen is not MatchScreen oms || oms.Engine == null)
+                    return "ERR no active match";
+                var cp = oms.Engine.GetAllPlayers().FirstOrDefault(p => p.IsControlled);
+                if (cp == null) return "ERR no controlled player";
+                NoPasaranFC.Models.Player nearest = null;
+                float best = float.MaxValue;
+                foreach (var p in oms.Engine.GetAllPlayers())
+                {
+                    if (p.TeamId == cp.TeamId || !p.IsStarting) continue;
+                    float d = Vector2.Distance(p.FieldPosition, cp.FieldPosition);
+                    if (d < best) { best = d; nearest = p; }
+                }
+                if (nearest == null) return "ERR no opponent";
+                oms.Engine.BallPosition = nearest.FieldPosition;
+                oms.Engine.BallVelocity = Vector2.Zero;
+                oms.Engine.LastPlayerTouchedBall = nearest;
+                return $"OK ball at {nearest.Name} ({best:F0}px)";
+            }
             case "quit":
                 ExitGame();
                 return "OK";

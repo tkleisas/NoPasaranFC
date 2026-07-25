@@ -87,6 +87,7 @@ namespace NoPasaranFC.Gameplay
         // the ball until the kickoff taker has played it
         public bool KickoffTaken { get; private set; } = true;
         public int KickoffTeamId { get; private set; }
+        private float _kickoffHoldTime; // safety: force-release a stuck kickoff
         
         /// <summary>True while the player is in their post-reception grace window.</summary>
         public bool HasFirstTouchGrace(Player player)
@@ -200,7 +201,7 @@ namespace NoPasaranFC.Gameplay
         
         // Ball physics
         private const float BallFriction = 0.95f;
-        private const float BallPossessionDistance = 20f; // Small - actual sprites smaller than boundary
+        private const float BallPossessionDistance = 80f; // carrier-to-ball distance that counts as "has the ball" (covers the glue lead)
         private const float BallKickDistance = 5f; // Very tight control, accounts for transparent pixels
         private const float BallShootDistance = 70f; // Distance for charged shots (must be > collision distance ~56px)
         
@@ -339,6 +340,7 @@ namespace NoPasaranFC.Gameplay
             // Kickoff encroachment rule: ball not yet played; kickoff belongs to
             // the controlled player's team (they start at the center spot)
             KickoffTaken = false;
+            _kickoffHoldTime = 0f;
             
             // Clear all IsControlled flags first (ensure only one player is controlled)
             foreach (var player in _homeTeam.Players)
@@ -621,6 +623,20 @@ namespace NoPasaranFC.Gameplay
             // Kickoff is "taken" once anyone has played the ball
             if (!KickoffTaken && _lastPlayerTouchedBall != null)
                 KickoffTaken = true;
+            
+            // Frozen-kickoff safety net: if the kickoff stays unplayed for 4s
+            // (whatever the cause), release the encroachment hold so play
+            // resumes - a match must never freeze at the center spot
+            if (!KickoffTaken)
+            {
+                _kickoffHoldTime += deltaTime;
+                if (_kickoffHoldTime > 4f)
+                    KickoffTaken = true;
+            }
+            else
+            {
+                _kickoffHoldTime = 0f;
+            }
             
             // Check if match should end
             if (MatchTime >= 90f)
@@ -1044,7 +1060,18 @@ namespace NoPasaranFC.Gameplay
             else if (wasShootButtonDown && !isShootKeyDown)
             {
                 // Button released
-                if (distToBall < BallShootDistance && BallHeight < 100f)
+                bool opponentHasBall = _lastPlayerTouchedBall != null &&
+                                       _lastPlayerTouchedBall != player &&
+                                       _lastPlayerTouchedBall.TeamId != player.TeamId &&
+                                       Vector2.Distance(_lastPlayerTouchedBall.FieldPosition, BallPosition) < BallPossessionDistance;
+                if (shootButtonHoldTime < 0.1f && opponentHasBall)
+                {
+                    // Quick tap while an opponent carries: tackle (works also when
+                    // the carrier's ball is within shot range - it's a challenge,
+                    // not a shot at his ball)
+                    Tackle(player);
+                }
+                else if (distToBall < BallShootDistance && BallHeight < 100f)
                 {
                     // Near ball - shoot! (no angle check for charged shots)
                     PerformShoot(player, moveDirection, shootButtonHoldTime);

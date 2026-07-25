@@ -154,6 +154,13 @@ namespace NoPasaranFC.Gameplay.UtilityAI
             else
             {
                 // --- I don't: chase or hold tactical position ---
+                // Frozen-kickoff guard: our kick and I'm a designated chaser - go
+                // play the ball regardless of the hold/chase score balance
+                if (!ctx.KickoffTaken && player.TeamId == ctx.KickoffTeamId && ctx.ShouldChaseBall)
+                {
+                    return new UtilityAction(UtilityActionType.ChaseBall, GetBallInterceptPoint(ctx), 120f);
+                }
+                
                 // Kickoff encroachment rule: the non-kickoff team must not move
                 // toward the ball until the kickoff has been played
                 if (!ctx.KickoffTaken && player.TeamId != ctx.KickoffTeamId)

@@ -26,7 +26,8 @@ dotnet build NoPasaranFC.Android/NoPasaranFC.Android.csproj  # Android (needs an
 - **Debug TCP console**: launch with `NOPASARAN_DEBUG=1` (port via `NOPASARAN_DEBUG_PORT`, default 7777).
   Commands: `shot <path> [delayFrames]` (screenshot), `key|down|up <Keys name>` (inject input),
   `state` (screen, fps, match + animation census + replay diagnostics), `match` (jump to next match),
-  `players`, `setstat <name> <stat> <value>`, `ball <x> <y> [vx vy]` (teleport ball), `quit`.
+  `players`, `setstat <name> <stat> <value>`, `ball <x> <y> [vx vy]` (teleport ball),
+  `ballopp` (give ball to nearest opponent, stages a tackle), `corner` (force a corner), `quit`.
   Client: `python3 Scripts/dbg.py "state" "shot /tmp/x.png 3"`.
 - **Blender pipeline**: `python3 Scripts/blender_exec.py <script.py>` runs a Python script inside a
   running Blender instance (blender-mcp addon on 127.0.0.1:9876). Asset sources: `Content/Models3D/*.blend`.
