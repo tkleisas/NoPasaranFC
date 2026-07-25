@@ -1083,9 +1083,15 @@ namespace NoPasaranFC.Graphics3D
                     Color paint = new Color(140, 20, 25);
                     for (int i = 0; i < texts.Length; i++)
                     {
+                        // Vertically stretched (2x) hand-painted lettering: fills
+                        // the cloth height so it reads from the stands
                         Vector2 size = font.MeasureString(texts[i]);
-                        float scale = Math.Min(segW * 0.9f / size.X, height * 0.5f / size.Y);
-                        Vector2 position = new Vector2(i * segW + segW / 2f, height / 2f) - size * scale / 2f;
+                        float scaleX = segW * 0.9f / size.X;
+                        float scaleY = Math.Min(scaleX * 2f, height * 0.92f / size.Y);
+                        var scale = new Vector2(scaleX, scaleY);
+                        Vector2 position = new Vector2(
+                            i * segW + segW / 2f - size.X * scaleX / 2f,
+                            height / 2f - size.Y * scaleY / 2f);
                         spriteBatch.DrawString(font, texts[i], position, paint,
                             0f, Vector2.Zero, scale, SpriteEffects.None, 0f);
                     }
