@@ -118,7 +118,13 @@ namespace NoPasaranFC.Graphics3D
         public MatchRenderer3D(GraphicsDevice device, ContentManager content)
         {
             _camera = new Camera3D(Game1.ScreenWidth, Game1.ScreenHeight);
-            _venue = GameSettings.Instance.Venue == "Sperchogeia" ? Venue.Sperchogeia : Venue.Bahramis;
+            _venue = GameSettings.Instance.Venue switch
+            {
+                "Sperchogeia" => Venue.Sperchogeia,
+                "Sfageia" => Venue.Sfageia,
+                "Random" => (Venue)(1 + new Random().Next(3)), // Bahramis/Sperchogeia/Sfageia
+                _ => Venue.Bahramis,
+            };
             _world = new World3D(device, content, _venue);
             _ball = new Ball3D(device);
             
@@ -180,9 +186,9 @@ namespace NoPasaranFC.Graphics3D
             }
             
             // Supporters on the stand (reuses the player models/atlases);
-            // Sperchogeia has no stand - fans stand along the fence
+            // grounds without a stand have the fans along the fence
             if (_playerModel != null)
-                _fans = new FanSection(device, _playerModel, _playerModelF, _venue == Venue.Sperchogeia);
+                _fans = new FanSection(device, _playerModel, _playerModelF, _venue != Venue.Bahramis);
         }
         
         /// <summary>Creates the team dugouts once the match engine exists.</summary>

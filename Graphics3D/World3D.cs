@@ -7,8 +7,8 @@ using NoPasaranFC.Gameplay;
 
 namespace NoPasaranFC.Graphics3D
 {
-    /// <summary>Match venue: the generic bowl stadium, the Bahramis municipal ground, or the Sperchogeia ground.</summary>
-    public enum Venue { Bowl, Bahramis, Sperchogeia }
+    /// <summary>Match venue: the generic bowl stadium, the Bahramis municipal ground, the Sperchogeia ground, or the seaside Sfageia ground.</summary>
+    public enum Venue { Bowl, Bahramis, Sperchogeia, Sfageia }
     
     /// <summary>
     /// Static 3D world geometry for the match view: pitch, field markings,
@@ -63,6 +63,14 @@ namespace NoPasaranFC.Graphics3D
         private VertexPositionTexture[] _bannerVertices;
         private int[] _bannerIndices;
         
+        // Fan-made bed-sheet banners on the fence (FREE PALESTINE etc.), all fence venues
+        private BasicEffect _fanBannerEffect;
+        private Texture2D _fanBannerTexture;
+        private readonly List<VertexPositionTexture> _fanBannerVertList = new List<VertexPositionTexture>();
+        private readonly List<int> _fanBannerIndexList = new List<int>();
+        private VertexPositionTexture[] _fanBannerVertices;
+        private int[] _fanBannerIndices;
+        
         // Field dimensions in meters (same constants as MatchScreen.DrawFieldMarkings)
         private readonly float _halfLength = WorldUnits.PitchLengthMeters / 2f;   // 52.5
         private readonly float _halfWidth = WorldUnits.PitchWidthMeters / 2f;     // 34
@@ -111,9 +119,12 @@ namespace NoPasaranFC.Graphics3D
                     LightingEnabled = false
                 };
                 
-                string signText = _venue == Venue.Sperchogeia
-                    ? "ΓΗΠΕΔΟ ΣΠΕΡΧΟΓΕΙΑΣ"
-                    : "ΠΑΝΑΓΙΩΤΗΣ ΜΠΑΧΡΑΜΗΣ";
+                string signText = _venue switch
+                {
+                    Venue.Sperchogeia => "ΓΗΠΕΔΟ ΣΠΕΡΧΟΓΕΙΑΣ",
+                    Venue.Sfageia => "ΓΗΠΕΔΟ ΣΦΑΓΕΙΩΝ",
+                    _ => "ΠΑΝΑΓΙΩΤΗΣ ΜΠΑΧΡΑΜΗΣ",
+                };
                 _scoreboardTexture = CreateScoreboardTexture(device, content, signText);
                 _scoreboardEffect = new BasicEffect(device)
                 {
@@ -123,7 +134,7 @@ namespace NoPasaranFC.Graphics3D
                     LightingEnabled = false
                 };
                 
-                if (_venue == Venue.Sperchogeia)
+                if (_venue == Venue.Sperchogeia || _venue == Venue.Sfageia)
                 {
                     _bannerTexture = CreateBannerTexture(device, content);
                     _bannerEffect = new BasicEffect(device)
@@ -134,6 +145,16 @@ namespace NoPasaranFC.Graphics3D
                         LightingEnabled = false
                     };
                 }
+                
+                // Fan-made banners (all grounds with a fence)
+                _fanBannerTexture = CreateFanBannerTexture(device, content);
+                _fanBannerEffect = new BasicEffect(device)
+                {
+                    VertexColorEnabled = false,
+                    TextureEnabled = true,
+                    Texture = _fanBannerTexture,
+                    LightingEnabled = false
+                };
             }
             
             BuildPitch();
@@ -153,6 +174,11 @@ namespace NoPasaranFC.Graphics3D
                     _bannerVertices = _bannerVertList.ToArray();
                     _bannerIndices = _bannerIndexList.ToArray();
                 }
+                if (_fanBannerVertList.Count > 0)
+                {
+                    _fanBannerVertices = _fanBannerVertList.ToArray();
+                    _fanBannerIndices = _fanBannerIndexList.ToArray();
+                }
             }
         }
         
@@ -165,6 +191,7 @@ namespace NoPasaranFC.Graphics3D
             if (_fenceEffect != null) environment.ApplyTo(_fenceEffect, false);
             if (_scoreboardEffect != null) environment.ApplyTo(_scoreboardEffect, false);
             if (_bannerEffect != null) environment.ApplyTo(_bannerEffect, false);
+            if (_fanBannerEffect != null) environment.ApplyTo(_fanBannerEffect, false);
         }
         
         /// <summary>Cycles the crowd textures for a shimmering crowd effect (Bowl only).</summary>
@@ -257,6 +284,21 @@ namespace NoPasaranFC.Graphics3D
                     }
                 }
                 
+                // Fan-made banners on the fence (all fence venues)
+                if (_fanBannerVertices != null)
+                {
+                    _fanBannerEffect.View = view;
+                    _fanBannerEffect.Projection = projection;
+                    _fanBannerEffect.World = Matrix.Identity;
+                    foreach (var pass in _fanBannerEffect.CurrentTechnique.Passes)
+                    {
+                        pass.Apply();
+                        device.DrawUserIndexedPrimitives(PrimitiveType.TriangleList,
+                            _fanBannerVertices, 0, _fanBannerVertices.Length,
+                            _fanBannerIndices, 0, _fanBannerIndices.Length / 3);
+                    }
+                }
+                
                 // See-through chain-link fence (alpha-blended wires, no depth
                 // write: transparent texels must not hide players drawn later)
                 _fenceEffect.View = view;
@@ -344,6 +386,25 @@ namespace NoPasaranFC.Graphics3D
                 AddGroundQuad(verts, indices, -100f, -85f, 100f, 85f, -0.015f, new Color(122, 118, 70));
                 AddGroundQuad(verts, indices, -78f, -90f, -70f, 90f, -0.012f, new Color(110, 95, 75)); // West dirt road
             }
+            else if (_venue == Venue.Sfageia)
+            {
+                // Inland side: dry grass/dirt like the other grounds
+                AddGroundQuad(verts, indices, -100f, -85f, 100f, 85f, -0.015f, new Color(150, 140, 80));
+                // Road ring against the fence on the inland sides
+                Color asphalt = new Color(50, 50, 55);
+                AddGroundQuad(verts, indices, -65f, 39f, 65f, 44f, -0.01f, asphalt);    // South (+Z)
+                AddGroundQuad(verts, indices, -64f, -46f, -57.5f, 44f, -0.01f, asphalt); // West (-X)
+                AddGroundQuad(verts, indices, 57.5f, -46f, 62f, 44f, -0.01f, asphalt);   // East (+X)
+                // Seaside promenade behind the far (-Z) fence, then the pebble beach
+                AddGroundQuad(verts, indices, -120f, -46f, 120f, -41f, -0.008f, new Color(120, 115, 110));
+                // Beach shelves down to the water (pebble gray-tan)
+                AddGroundQuad(verts, indices, -300f, -70f, 300f, -46f, -0.35f, new Color(168, 158, 140));
+                AddGroundQuad(verts, indices, -300f, -84f, 300f, -70f, -0.9f, new Color(160, 150, 132));
+                // The sea (deep blue-green) with two foam lines near the shore
+                AddGroundQuad(verts, indices, -400f, -400f, 400f, -84f, -1.4f, new Color(18, 78, 105));
+                AddGroundQuad(verts, indices, -300f, -88f, 300f, -84.6f, -1.1f, new Color(120, 175, 185));
+                AddGroundQuad(verts, indices, -300f, -95f, 300f, -91f, -1.3f, new Color(90, 150, 165));
+            }
             
             // Green apron around the pitch
             float apron = 6f;
@@ -365,9 +426,13 @@ namespace NoPasaranFC.Graphics3D
             {
                 BuildBahramisVenue(verts, indices);
             }
-            else
+            else if (_venue == Venue.Sperchogeia)
             {
                 BuildSperchogeiaVenue(verts, indices);
+            }
+            else
+            {
+                BuildSfageiaVenue(verts, indices);
             }
             
             _opaqueVertices = verts.ToArray();
@@ -647,6 +712,7 @@ namespace NoPasaranFC.Graphics3D
             BuildScoreboard(verts, indices);
             BuildTrees(verts, indices, random);
             BuildHouses(verts, indices, random);
+            BuildFanBanners();
         }
         
         #region Sperchogeia venue (olive grove, Taygetos backdrop)
@@ -667,6 +733,7 @@ namespace NoPasaranFC.Graphics3D
             BuildOliveGrove(verts, indices, random);
             BuildFloodlights(verts, indices);
             BuildMountains(verts, indices, random);
+            BuildFanBanners();
             
             // Red-roofed houses on the NE side
             for (int i = 0; i < 5; i++)
@@ -952,6 +1019,252 @@ namespace NoPasaranFC.Graphics3D
                     new Vector3(px, h, -144.5f), snow);
                 x += w * 0.75f;
             }
+        }
+        
+        #endregion
+        
+        #region Fan banners (bed-sheet style, all fence venues)
+        
+        /// <summary>
+        /// Hand-painted fan banners hung on the far fence between the dugouts:
+        /// "FREE PALESTINE", "ΛΕΦΤΕΡΙΑ ΣΤΗΝ ΠΑΛΑΙΣΤΙΝΗ" and
+        /// "ΤΟ ΕΓΚΛΗΜΑ ΤΗΣ ΠΥΛΟΥ ΔΕ ΘΑ ΞΕΧΑΣΤΕΙ" on off-white cloth.
+        /// </summary>
+        private void BuildFanBanners()
+        {
+            float zFar = -FenceZ + 0.12f;  // pitch side of the far fence, in front of sponsor banners
+            const float y0 = 0.55f, y1 = 1.75f;
+            
+            // (x0, x1, atlas segment)
+            var banners = new[]
+            {
+                (-20f, -11f, 0),  // FREE PALESTINE
+                (-9f, 4f, 1),     // ΛΕΦΤΕΡΙΑ ΣΤΗΝ ΠΑΛΑΙΣΤΙΝΗ
+                (6f, 20f, 2),     // ΤΟ ΕΓΚΛΗΜΑ ΤΗΣ ΠΥΛΟΥ ΔΕ ΘΑ ΞΕΧΑΣΤΕΙ
+            };
+            foreach (var (x0, x1, seg) in banners)
+            {
+                float u0 = seg / 3f, u1 = (seg + 1) / 3f;
+                AddTexturedQuad(_fanBannerVertList, _fanBannerIndexList,
+                    new Vector3(x0, y0, zFar), new Vector2(u0, 1f),
+                    new Vector3(x1, y0, zFar), new Vector2(u1, 1f),
+                    new Vector3(x1, y1, zFar), new Vector2(u1, 0f),
+                    new Vector3(x0, y1, zFar), new Vector2(u0, 0f));
+            }
+        }
+        
+        /// <summary>Bakes the 3 fan banners (1536x256, 512px each): aged cloth, dark red painted text.</summary>
+        private static Texture2D CreateFanBannerTexture(GraphicsDevice device, ContentManager content)
+        {
+            const int width = 1536, height = 256, segW = 512;
+            var target = new RenderTarget2D(device, width, height);
+            device.SetRenderTarget(target);
+            device.Clear(new Color(232, 224, 205));
+            
+            var texts = new[]
+            {
+                "FREE PALESTINE",
+                "ΛΕΦΤΕΡΙΑ ΣΤΗΝ ΠΑΛΑΙΣΤΙΝΗ",
+                "ΤΟ ΕΓΚΛΗΜΑ ΤΗΣ ΠΥΛΟΥ ΔΕ ΘΑ ΞΕΧΑΣΤΕΙ",
+            };
+            
+            var spriteBatch = new SpriteBatch(device);
+            spriteBatch.Begin();
+            try
+            {
+                SpriteFont font = null;
+                if (content != null)
+                {
+                    try { font = content.Load<SpriteFont>("Font"); }
+                    catch (Exception) { font = null; }
+                }
+                if (font != null)
+                {
+                    Color paint = new Color(140, 20, 25);
+                    for (int i = 0; i < texts.Length; i++)
+                    {
+                        Vector2 size = font.MeasureString(texts[i]);
+                        float scale = Math.Min(segW * 0.9f / size.X, height * 0.5f / size.Y);
+                        Vector2 position = new Vector2(i * segW + segW / 2f, height / 2f) - size * scale / 2f;
+                        spriteBatch.DrawString(font, texts[i], position, paint,
+                            0f, Vector2.Zero, scale, SpriteEffects.None, 0f);
+                    }
+                }
+            }
+            finally
+            {
+                spriteBatch.End();
+                device.SetRenderTarget(null);
+            }
+            return target;
+        }
+        
+        #endregion
+        
+        #region Sfageia venue (seaside ground, Kalamata)
+        
+        /// <summary>
+        /// ΓΗΠΕΔΟ ΣΦΑΓΕΙΩΝ: the seaside municipal ground of Kalamata. The far
+        /// (-Z) side is the pebble beach and the Messenian Gulf with rock
+        /// breakwaters; palms line the promenade; tennis courts on the east,
+        /// the red-roofed clubhouse on the west, floodlights, houses uphill.
+        /// </summary>
+        private void BuildSfageiaVenue(List<VertexPositionColor> verts, List<int> indices)
+        {
+            var random = new Random(1821);
+            
+            BuildFence(verts, indices);
+            BuildScoreboard(verts, indices);
+            BuildSponsorBanners();
+            BuildFloodlights(verts, indices);
+            BuildFanBanners();
+            BuildRockBreakwaters(verts, indices, random);
+            BuildPalms(verts, indices, random);
+            BuildTennisCourts(verts, indices);
+            BuildClubhouse(verts, indices, random);
+            
+            // A few houses uphill on the inland side
+            for (int i = 0; i < 6; i++)
+                AddHouse(verts, indices, random,
+                    -60f + 130f * (float)random.NextDouble(),
+                    52f + 25f * (float)random.NextDouble());
+        }
+        
+        /// <summary>Gray rock blobs along the waterline plus two short breakwaters reaching into the sea.</summary>
+        private void BuildRockBreakwaters(List<VertexPositionColor> verts, List<int> indices, Random random)
+        {
+            Color rock = new Color(105, 102, 98);
+            // Shore rocks scattered along the beach edge
+            for (int i = 0; i < 60; i++)
+            {
+                float x = -110f + 220f * (float)random.NextDouble();
+                float z = -80f - 6f * (float)random.NextDouble();
+                float r = 0.7f + 0.9f * (float)random.NextDouble();
+                int jitter = random.Next(-10, 11);
+                Color c = new Color(
+                    Math.Clamp(rock.R + jitter, 0, 255),
+                    Math.Clamp(rock.G + jitter, 0, 255),
+                    Math.Clamp(rock.B + jitter, 0, 255));
+                AddSphere(verts, indices, new Vector3(x, -1.0f, z), r, c, 5, 3);
+            }
+            // Two breakwater arms reaching into the water
+            foreach (float armX in new[] { -55f, 45f })
+            {
+                for (int i = 0; i < 14; i++)
+                {
+                    float z = -86f - i * 3.2f;
+                    float x = armX + (float)(random.NextDouble() * 2.0 - 1.0) * 1.5f;
+                    float r = 1.0f + 0.8f * (float)random.NextDouble();
+                    AddSphere(verts, indices, new Vector3(x, -1.2f, z), r, rock, 5, 3);
+                }
+            }
+        }
+        
+        /// <summary>Palm trees along the seaside promenade behind the far fence.</summary>
+        private void BuildPalms(List<VertexPositionColor> verts, List<int> indices, Random random)
+        {
+            for (float x = -90f; x <= 90f; x += 12f)
+            {
+                float jx = x + (float)(random.NextDouble() * 2.0 - 1.0) * 3f;
+                float jz = -48.5f + (float)(random.NextDouble() * 2.0 - 1.0) * 1.5f;
+                AddPalmTree(verts, indices, random, jx, jz);
+            }
+            // A couple more near the clubhouse
+            AddPalmTree(verts, indices, random, -62f, -30f);
+            AddPalmTree(verts, indices, random, -66f, -18f);
+        }
+        
+        /// <summary>Low-poly palm: stacked trunk with a slight curve + drooping fronds.</summary>
+        private static void AddPalmTree(List<VertexPositionColor> verts, List<int> indices, Random random, float x, float z)
+        {
+            float h = 4.5f + 1.5f * (float)random.NextDouble();
+            Color trunk = new Color(125, 100, 70);
+            Color frond = new Color(48, 115, 50);
+            
+            // Trunk in 3 stacked sections with a slight wander
+            float ox = 0f, oz = 0f;
+            for (int i = 0; i < 3; i++)
+            {
+                AddBox(verts, indices,
+                    new Vector3(x + ox - 0.13f, i * h / 3f, z + oz - 0.13f),
+                    new Vector3(x + ox + 0.13f, (i + 1) * h / 3f + 0.05f, z + oz + 0.13f), trunk);
+                ox += (float)(random.NextDouble() * 2.0 - 1.0) * 0.18f;
+                oz += (float)(random.NextDouble() * 2.0 - 1.0) * 0.18f;
+            }
+            
+            // Fronds: 7 beams radiating from the crown, rising then drooping
+            var top = new Vector3(x + ox, h, z + oz);
+            for (int i = 0; i < 7; i++)
+            {
+                float angle = MathHelper.TwoPi * i / 7f + (float)random.NextDouble() * 0.4f;
+                var dir = new Vector3((float)Math.Cos(angle), 0f, (float)Math.Sin(angle));
+                int jitter = random.Next(-8, 9);
+                Color c = new Color(
+                    Math.Clamp(frond.R + jitter, 0, 255),
+                    Math.Clamp(frond.G + jitter, 0, 255),
+                    Math.Clamp(frond.B + jitter, 0, 255));
+                Vector3 mid = top + dir * 1.3f + new Vector3(0f, 0.45f, 0f);
+                Vector3 tip = top + dir * 2.6f + new Vector3(0f, -0.5f, 0f);
+                AddBeam(verts, indices, top, mid, 0.22f, c);
+                AddBeam(verts, indices, mid, tip, 0.16f, c);
+            }
+        }
+        
+        /// <summary>The east-side tennis courts: two red-framed green courts with nets.</summary>
+        private void BuildTennisCourts(List<VertexPositionColor> verts, List<int> indices)
+        {
+            Color surround = new Color(165, 60, 55);
+            Color surface = new Color(60, 110, 70);
+            Color lineColor = new Color(230, 230, 225);
+            Color net = new Color(40, 40, 45);
+            
+            for (int court = 0; court < 2; court++)
+            {
+                float cz = -18f + court * 26f; // court centers along z
+                float cx = 78f;
+                // Surround + playing surface
+                AddGroundQuad(verts, indices, cx - 8f, cz - 13f, cx + 8f, cz + 13f, -0.005f, surround);
+                AddGroundQuad(verts, indices, cx - 5.5f, cz - 11f, cx + 5.5f, cz + 11f, 0f, surface);
+                // Baselines + center service lines (simplified markings)
+                AddLineQuad(verts, indices, new Vector2(cx - 5.5f, cz - 11f), new Vector2(cx + 5.5f, cz - 11f), 0.1f, lineColor);
+                AddLineQuad(verts, indices, new Vector2(cx - 5.5f, cz + 11f), new Vector2(cx + 5.5f, cz + 11f), 0.1f, lineColor);
+                AddLineQuad(verts, indices, new Vector2(cx, cz - 6.4f), new Vector2(cx, cz + 6.4f), 0.1f, lineColor);
+                // Net across the middle
+                AddBox(verts, indices,
+                    new Vector3(cx - 5.5f, 0f, cz - 0.03f), new Vector3(cx + 5.5f, 0.9f, cz + 0.03f), net);
+            }
+        }
+        
+        /// <summary>The red-roofed clubhouse on the west corner with a small canopy.</summary>
+        private void BuildClubhouse(List<VertexPositionColor> verts, List<int> indices, Random random)
+        {
+            AddHouse(verts, indices, random, -68f, -34f);
+            // Canopy porch facing the pitch
+            Color canopy = new Color(200, 60, 50);
+            Color post = new Color(70, 70, 75);
+            AddBox(verts, indices,
+                new Vector3(-64.5f, 2.2f, -37.5f), new Vector3(-59f, 2.35f, -31.5f), canopy);
+            AddBox(verts, indices,
+                new Vector3(-59.4f, 0f, -37f), new Vector3(-59.2f, 2.2f, -36.8f), post);
+            AddBox(verts, indices,
+                new Vector3(-59.4f, 0f, -32.2f), new Vector3(-59.2f, 2.2f, -32f), post);
+        }
+        
+        /// <summary>A box beam between two points (palm fronds).</summary>
+        private static void AddBeam(List<VertexPositionColor> verts, List<int> indices,
+            Vector3 a, Vector3 b, float thickness, Color color)
+        {
+            Vector3 dir = b - a;
+            if (dir.LengthSquared() < 0.0001f) return;
+            dir.Normalize();
+            Vector3 upRef = Math.Abs(dir.Y) > 0.9f ? Vector3.UnitX : Vector3.UnitY;
+            Vector3 side = Vector3.Normalize(Vector3.Cross(dir, upRef)) * (thickness / 2f);
+            Vector3 up = Vector3.Normalize(Vector3.Cross(side, dir)) * (thickness / 2f);
+            
+            AddQuad(verts, indices, a - side - up, b - side - up, b + side - up, a + side - up, color);
+            AddQuad(verts, indices, a - side + up, b - side + up, b + side + up, a + side + up, color);
+            AddQuad(verts, indices, a - side - up, a - side + up, b - side + up, b - side - up, color);
+            AddQuad(verts, indices, a + side - up, a + side + up, b + side + up, b + side - up, color);
         }
         
         #endregion

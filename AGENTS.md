@@ -79,9 +79,11 @@ dotnet build NoPasaranFC.Android/NoPasaranFC.Android.csproj  # Android (needs an
   goal kicks with charge aiming), goal detection with crossbar/post ricochets, cloth nets
 - AI: role-based states (GK/DEF/MID/FWD), passing/shooting/dribbling decisions, sideline avoidance
 - 3D mode: skinned players (male + female bodies), per-team kits with back numbers, GK distinct kits,
-  two venues selectable in Settings: Bahramis (fence, yellow-seat stand, scoreboard, trees, houses)
-  and Sperchogeia (olive grove ring, Taygetos backdrop, fence sponsor banners, floodlight pylons),
-  animated fans (+ children, Palestinian flags), corner flags, easter-egg fox, rain, day/sunset/night,
+  three venues selectable in Settings (+Random): Bahramis (fence, yellow-seat stand, scoreboard,
+  trees, houses), Sperchogeia (olive grove ring, Taygetos backdrop, fence sponsor banners,
+  floodlight pylons) and seaside Sfageia (beach + sea with foam lines, rock breakwaters, palms,
+  tennis courts, clubhouse), fan banners on the fence (FREE PALESTINE etc.), animated fans
+  (+ children, Palestinian flags), corner flags, easter-egg fox, rain, day/sunset/night,
   celebration camera, goal replays (build-up at 1.4x from a high sideline camera, then the last 2s of
   footage in 0.5x slow motion from a goal-side camera with live cloth-net deformation, over the
   extended post-goal countdown, hold X to skip;

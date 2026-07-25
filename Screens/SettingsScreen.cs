@@ -157,7 +157,7 @@ namespace NoPasaranFC.Screens
         private static readonly string[] _cameraModes = new[] { "Broadcast", "High", "TopDown" };
         private static readonly string[] _timeOfDayOptions = new[] { "Day", "Sunset", "Night", "Random" };
         private static readonly string[] _weatherOptions = new[] { "Clear", "Rain", "Random" };
-        private static readonly string[] _venueOptions = new[] { "Bahramis", "Sperchogeia" };
+        private static readonly string[] _venueOptions = new[] { "Bahramis", "Sperchogeia", "Sfageia", "Random" };
         private static readonly string[] _ballControlOptions = new[] { "Easy", "Classic" };
         
         private static string CycleOption(string current, string[] options, int direction)
