@@ -115,7 +115,8 @@ namespace NoPasaranFC.Graphics3D
         /// <summary>
         /// Returns a copy of the (already team-colored) shirt texture with the
         /// player's shirt number stamped on the back. Cached per texture/number/color.
-        /// Only meaningful for the SoccerPlayer atlas layout.
+        /// Only meaningful for the SoccerPlayer atlas layout. Scale-aware: works
+        /// with 512x512 and higher-resolution composed atlases.
         /// </summary>
         public static Texture2D GetNumberedShirtTexture(GraphicsDevice device, Texture2D shirtTexture,
             int shirtNumber, Color digitColor)
@@ -124,15 +125,21 @@ namespace NoPasaranFC.Graphics3D
             if (_cache.TryGetValue(key, out var cached))
                 return cached;
             
+            int scale = Math.Max(1, shirtTexture.Width / 512);
+            int centerX = ShirtBackCenter.X * scale;
+            int centerY = ShirtBackCenter.Y * scale;
+            int block = DigitBlock * scale;
+            int gap = DigitGap * scale;
+            
             var pixels = new Color[shirtTexture.Width * shirtTexture.Height];
             shirtTexture.GetData(pixels);
             
             string digits = Math.Clamp(shirtNumber, 1, 99).ToString();
-            int digitWidth = 3 * DigitBlock;
-            int digitHeight = 5 * DigitBlock;
-            int totalWidth = digits.Length * digitWidth + (digits.Length - 1) * DigitGap;
-            int startX = ShirtBackCenter.X - totalWidth / 2;
-            int startY = ShirtBackCenter.Y - digitHeight / 2;
+            int digitWidth = 3 * block;
+            int digitHeight = 5 * block;
+            int totalWidth = digits.Length * digitWidth + (digits.Length - 1) * gap;
+            int startX = centerX - totalWidth / 2;
+            int startY = centerY - digitHeight / 2;
             
             for (int d = 0; d < digits.Length; d++)
             {

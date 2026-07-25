@@ -270,7 +270,7 @@ namespace NoPasaranFC.Graphics3D
         /// <summary>Deterministic per-player model choice (~1 in 4 female when available).</summary>
         private SkinnedModel GetModelForPlayer(Player player)
         {
-            if (_playerModelF != null && player.Name != null && (player.Name.GetHashCode() & 3) == 0)
+            if (_playerModelF != null && FaceComposer.IsFemalePlayer(player))
                 return _playerModelF;
             return _playerModel;
         }
@@ -624,13 +624,20 @@ namespace NoPasaranFC.Graphics3D
             
             if (soccerStyle)
             {
-                // player_atlas.png layout (512x512): quadrants shirt / shorts / socks / skin+extras
-                Texture2D shirtTexture = KitTextureFactory.GetKitTexture(device, baseTexture, shirt,
-                    new Rectangle(0, 0, 256, 256));
-                Texture2D shortsTexture = KitTextureFactory.GetKitTexture(device, baseTexture, shorts,
-                    new Rectangle(256, 0, 256, 256));
-                Texture2D socksTexture = KitTextureFactory.GetKitTexture(device, baseTexture, socks,
-                    new Rectangle(0, 256, 256, 256));
+                // Per-player composed atlas: bold face (expression + feature),
+                // skin tone, hair color. Also the base for the kit bakes.
+                Texture2D composed = FaceComposer.Compose(device, baseTexture,
+                    FaceComposer.AppearanceFor(player));
+                
+                // player_atlas.png layout (quadrants shirt / shorts / socks / skin+extras),
+                // scaled to the composed atlas resolution
+                int q = 256 * FaceComposer.AtlasScale;
+                Texture2D shirtTexture = KitTextureFactory.GetKitTexture(device, composed, shirt,
+                    new Rectangle(0, 0, q, q));
+                Texture2D shortsTexture = KitTextureFactory.GetKitTexture(device, composed, shorts,
+                    new Rectangle(q, 0, q, q));
+                Texture2D socksTexture = KitTextureFactory.GetKitTexture(device, composed, socks,
+                    new Rectangle(0, q, q, q));
                 
                 // Per-player: shirt number stamped on the back
                 Texture2D numberedShirt = KitTextureFactory.GetNumberedShirtTexture(device, shirtTexture,
@@ -645,6 +652,8 @@ namespace NoPasaranFC.Graphics3D
                         animator.Instance.SetPartTexture(part.Name, shortsTexture);
                     else if (name.StartsWith("Soccer_Sock"))
                         animator.Instance.SetPartTexture(part.Name, socksTexture);
+                    else if (name == "Soccer_Skin" || name == "Soccer_Hair")
+                        animator.Instance.SetPartTexture(part.Name, composed);
                 }
             }
             else

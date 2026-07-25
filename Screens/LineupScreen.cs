@@ -130,7 +130,7 @@ namespace NoPasaranFC.Screens
         /// (~1 in 4 female when available) so portraits match the on-pitch look.</summary>
         private SkinnedModel GetModelForPlayer(Player player)
         {
-            if (_playerModelF != null && player.Name != null && (player.Name.GetHashCode() & 3) == 0)
+            if (_playerModelF != null && FaceComposer.IsFemalePlayer(player))
                 return _playerModelF;
             return _playerModel;
         }
@@ -166,20 +166,27 @@ namespace NoPasaranFC.Screens
             }
         }
 
-        /// <summary>Kit-colored per-part textures (numbered shirt / shorts / socks),
-        /// mirroring MatchRenderer3D.ApplyKit for the soccer player atlas layout.</summary>
+        /// <summary>Kit-colored per-part textures (numbered shirt / shorts / socks /
+        /// composed face+hair), mirroring MatchRenderer3D.ApplyKit for the soccer
+        /// player atlas layout.</summary>
         private Dictionary<string, Texture2D> BuildKitOverrides(Player player, SkinnedModel model)
         {
             MatchRenderer3D.GetKitColors(player, _match.HomeTeamId, out Color shirt, out Color shorts, out Color socks);
             Texture2D baseTexture = model.Parts[0].Texture;
+            
+            // Composed per-player face/skin/hair, then kit bakes on top
+            Texture2D composed = FaceComposer.Compose(GraphicsDevice, baseTexture,
+                FaceComposer.AppearanceFor(player));
 
-            // player_atlas layout (512x512): quadrants shirt / shorts / socks / skin+extras
-            Texture2D shirtTexture = KitTextureFactory.GetKitTexture(GraphicsDevice, baseTexture, shirt,
-                new Rectangle(0, 0, 256, 256));
-            Texture2D shortsTexture = KitTextureFactory.GetKitTexture(GraphicsDevice, baseTexture, shorts,
-                new Rectangle(256, 0, 256, 256));
-            Texture2D socksTexture = KitTextureFactory.GetKitTexture(GraphicsDevice, baseTexture, socks,
-                new Rectangle(0, 256, 256, 256));
+            // player_atlas layout (quadrants shirt / shorts / socks / skin+extras),
+            // scaled to the composed atlas resolution
+            int q = 256 * FaceComposer.AtlasScale;
+            Texture2D shirtTexture = KitTextureFactory.GetKitTexture(GraphicsDevice, composed, shirt,
+                new Rectangle(0, 0, q, q));
+            Texture2D shortsTexture = KitTextureFactory.GetKitTexture(GraphicsDevice, composed, shorts,
+                new Rectangle(q, 0, q, q));
+            Texture2D socksTexture = KitTextureFactory.GetKitTexture(GraphicsDevice, composed, socks,
+                new Rectangle(0, q, q, q));
             Texture2D numberedShirt = KitTextureFactory.GetNumberedShirtTexture(GraphicsDevice, shirtTexture,
                 player.ShirtNumber, KitTextureFactory.ContrastFor(shirt));
 
@@ -193,6 +200,8 @@ namespace NoPasaranFC.Screens
                     overrides[part.Name] = shortsTexture;
                 else if (name.StartsWith("Soccer_Sock"))
                     overrides[part.Name] = socksTexture;
+                else if (name == "Soccer_Skin" || name == "Soccer_Hair")
+                    overrides[part.Name] = composed;
             }
             return overrides;
         }

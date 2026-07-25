@@ -327,6 +327,15 @@ public class Game1 : Game
             }
             case "match":
                 return StartNextMatch();
+            case "construct":
+            {
+                // The Construct: matrix-style player inspection chamber
+                var team = _championship?.Teams?.Find(t => t.IsPlayerControlled);
+                if (team == null) return "ERR no player team";
+                _screenManager.PushScreen(new NoPasaranFC.Screens.ConstructScreen(
+                    team, _contentManager, GraphicsDevice));
+                return "OK construct";
+            }
             case "corner":
             {
                 if (_screenManager.CurrentScreen is not MatchScreen cms || cms.Engine == null)

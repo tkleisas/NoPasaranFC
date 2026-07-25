@@ -47,7 +47,7 @@ namespace NoPasaranFC.Graphics3D
             {
                 var model = PickModel(subs[i], playerModel, femaleModel, i);
                 var instance = new SkinnedModelInstance(model);
-                ApplyKitToInstance(device, instance, baseAtlas, shirt, shorts, socks, subs[i].ShirtNumber);
+                ApplyKitToInstance(device, instance, baseAtlas, shirt, shorts, socks, subs[i]);
                 instance.Play("Sit_Chair_Idle");
                 instance.Update((float)_random.NextDouble() * 3f); // desync
                 _members.Add(new BenchMember
@@ -75,23 +75,29 @@ namespace NoPasaranFC.Graphics3D
         
         private static SkinnedModel PickModel(Player player, SkinnedModel male, SkinnedModel female, int index)
         {
-            if (female != null && player.Name != null && (player.Name.GetHashCode() & 3) == 0)
+            if (female != null && FaceComposer.IsFemalePlayer(player))
                 return female;
             return male;
         }
         
         private static void ApplyKitToInstance(GraphicsDevice device, SkinnedModelInstance instance,
-            Texture2D baseAtlas, Color shirt, Color shorts, Color socks, int shirtNumber)
+            Texture2D baseAtlas, Color shirt, Color shorts, Color socks, Player player)
         {
-            var shirtTex = KitTextureFactory.GetKitTexture(device, baseAtlas, shirt, new Rectangle(0, 0, 256, 256));
-            var numbered = KitTextureFactory.GetNumberedShirtTexture(device, shirtTex, shirtNumber,
+            // Composed face/skin/hair for this player, then kit bakes on top
+            Texture2D composed = FaceComposer.Compose(device, baseAtlas, FaceComposer.AppearanceFor(player));
+            
+            int q = 256 * FaceComposer.AtlasScale;
+            var shirtTex = KitTextureFactory.GetKitTexture(device, composed, shirt, new Rectangle(0, 0, q, q));
+            var numbered = KitTextureFactory.GetNumberedShirtTexture(device, shirtTex, player.ShirtNumber,
                 KitTextureFactory.ContrastFor(shirt));
-            var shortsTex = KitTextureFactory.GetKitTexture(device, baseAtlas, shorts, new Rectangle(256, 0, 256, 256));
-            var socksTex = KitTextureFactory.GetKitTexture(device, baseAtlas, socks, new Rectangle(0, 256, 256, 256));
+            var shortsTex = KitTextureFactory.GetKitTexture(device, composed, shorts, new Rectangle(q, 0, q, q));
+            var socksTex = KitTextureFactory.GetKitTexture(device, composed, socks, new Rectangle(0, q, q, q));
             instance.SetPartTexture("Soccer_Shirt", numbered);
             instance.SetPartTexture("Soccer_Shorts", shortsTex);
             instance.SetPartTexture("Soccer_SockLeft", socksTex);
             instance.SetPartTexture("Soccer_SockRight", socksTex);
+            instance.SetPartTexture("Soccer_Skin", composed);
+            instance.SetPartTexture("Soccer_Hair", composed);
         }
         
         /// <summary>Coach wears a dark suit (all kit regions dark).</summary>
