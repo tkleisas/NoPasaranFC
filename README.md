@@ -190,8 +190,10 @@ Key architectural rule: `MatchEngine` is pure 2D simulation (73 px = 1 m). The 3
 
 - **AGENTS.md**: project conventions, architecture rules, feature summary
 - **GOAL_CELEBRATION_SYSTEM.md**, **BALL_OUT_SYSTEM.md**, **DIFFICULTY_STAMINA_SYSTEM.md**, **LOCALIZATION.md**, **GAMEPAD_SUPPORT.md**
-- **AI_\*.md**: AI design and fix history
-- Detailed design/fix documents live in the repo root
+- **AUDIO_SYSTEM.md**, **LINEUP_SCREEN.md**, **ROSTER_SYSTEM.md**, **SPRITE_GUIDE.md**, **SETTINGS_USAGE.md**, **FONT_CHARACTER_SUPPORT.md**
+- **docs/param-search-v3/**, **docs/param-search-v4/**: AI evolution-strategy methodology, search logs and findings
+- **docs/screenshots/**: README captures; **docs/harness-*/**: AI harness trajectory studies
+- Older design/fix notes live in git history
 
 ## 🚀 Current Status (v2.6.0)
 
