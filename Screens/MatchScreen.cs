@@ -395,6 +395,7 @@ namespace NoPasaranFC.Screens
             // Update 3D renderer (camera follow, ball roll, billboard animations)
             if (_renderer3D != null)
             {
+                _renderer3D.SetCutsceneSkipKey(isShootKeyDown);
                 _renderer3D.Update(gameTime, _matchEngine);
             }
             

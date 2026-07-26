@@ -670,7 +670,9 @@ namespace NoPasaranFC.Gameplay
                 CurrentState == MatchState.GoalKick || CurrentState == MatchState.FreeKick ||
                 CurrentState == MatchState.PenaltyKick)
             {
-                RestartTimer -= deltaTime;
+                // The restart waits while the card cutscene plays
+                if (CardPhase == RefCardPhase.None)
+                    RestartTimer -= deltaTime;
                 
                 // Engine-timed throw release: the ball leaves the hands ~0.65s
                 // after the throw animation starts, regardless of render mode
@@ -1106,6 +1108,22 @@ namespace NoPasaranFC.Gameplay
         }
         public CardEvent? LastCardShown { get; set; }
         
+        // ---- Card cutscene: the ref walks to the offender and shows the card ----
+        
+        public enum RefCardPhase { None, Going, Showing }
+        
+        /// <summary>Current phase of the card cutscene (None = no cutscene).</summary>
+        public RefCardPhase CardPhase { get; private set; } = RefCardPhase.None;
+        
+        /// <summary>The player being booked (for the cutscene camera and expression swap).</summary>
+        public Player CardPlayer { get; private set; }
+        
+        /// <summary>Whether the pending card is red (for the Sad/Wow face choice).</summary>
+        public bool CardIsRed { get; private set; }
+        
+        private CardEvent _pendingCard;
+        private const float RefCardWalkSpeed = 550f;
+        
         private const float TackleFailFoulChance = 0.35f;
         private const float CarrierKnockdownFoulChance = 0.60f;
         private const float KnockdownFoulChance = 0.25f;
@@ -1262,13 +1280,28 @@ namespace NoPasaranFC.Gameplay
                 }
             }
             
-            LastCardShown = new CardEvent
+            // Card cutscene: the ref walks over and shows the card; the banner
+            // appears when he arrives (RestartTimer pauses while it plays)
+            _pendingCard = new CardEvent
             {
                 Player = offender,
                 IsRed = isRed,
                 IsSecondYellow = secondYellow,
                 Timer = 2.5f,
             };
+            CardPlayer = offender;
+            CardIsRed = isRed;
+            CardPhase = RefCardPhase.Going;
+        }
+        
+        /// <summary>Skip the card cutscene (player pressed the shoot key).</summary>
+        public void SkipCardCutscene()
+        {
+            if (CardPhase == RefCardPhase.None) return;
+            if (CardPhase == RefCardPhase.Going)
+                RefereePosition = CardPlayer?.FieldPosition ?? RefereePosition;
+            CardPhase = RefCardPhase.Showing;
+            LastCardShown = _pendingCard;
         }
         
         /// <summary>Sets up the free kick: ball at the spot, victim team's nearest player
@@ -1778,6 +1811,34 @@ namespace NoPasaranFC.Gameplay
                 RefereePosition = new Vector2(StadiumMargin + FieldWidth / 2,
                     StadiumMargin + FieldHeight / 2);
                 _refereeVelocity = Vector2.Zero;
+                return;
+            }
+            
+            // Card cutscene: walk to the offender, show the card on arrival
+            if (CardPhase == RefCardPhase.Going && CardPlayer != null)
+            {
+                Vector2 toPlayer = CardPlayer.FieldPosition - RefereePosition;
+                float dist = toPlayer.Length();
+                if (dist < 40f)
+                {
+                    CardPhase = RefCardPhase.Showing;
+                    LastCardShown = _pendingCard;
+                    _refereeVelocity = Vector2.Zero;
+                }
+                else
+                {
+                    toPlayer.Normalize();
+                    _refereeVelocity = toPlayer * RefCardWalkSpeed;
+                    RefereePosition += _refereeVelocity * deltaTime;
+                }
+                return;
+            }
+            if (CardPhase == RefCardPhase.Showing)
+            {
+                // Hold position next to the offender while the banner shows
+                _refereeVelocity = Vector2.Zero;
+                if (LastCardShown == null)
+                    CardPhase = RefCardPhase.None; // banner expired -> back to normal
                 return;
             }
             

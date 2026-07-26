@@ -117,6 +117,7 @@ namespace NoPasaranFC.Graphics3D
         
         public MatchRenderer3D(GraphicsDevice device, ContentManager content)
         {
+            _device = device;
             _camera = new Camera3D(Game1.ScreenWidth, Game1.ScreenHeight);
             _venue = GameSettings.Instance.Venue switch
             {
@@ -301,6 +302,11 @@ namespace NoPasaranFC.Graphics3D
             // drives the camera, ball and player poses from the recording instead
             bool replayActive = IsReplayActive && engine.CurrentState == MatchEngine.MatchState.Countdown;
             
+            // Card cutscene: close-up on the booked player (sad/surprised face)
+            // while the ref walks over and shows the card
+            bool cardCutscene = engine.CardPhase != MatchEngine.RefCardPhase.None && engine.CardPlayer != null;
+            UpdateCardCutscene(engine, cardCutscene, dt);
+            
             _camera.UpdateViewport(Game1.ScreenWidth, Game1.ScreenHeight);
             _camera.SetCelebrating(engine.CurrentState == MatchEngine.MatchState.GoalCelebration);
             
@@ -324,10 +330,16 @@ namespace NoPasaranFC.Graphics3D
                 if (count > 0)
                     cameraFocus = sum / count;
             }
-            if (!replayActive)
+            if (!replayActive && !cardCutscene)
             {
                 _camera.Follow(cameraFocus, dt);
                 _ball.Update(engine.BallPosition, engine.BallVelocity, engine.BallHeight, dt);
+            }
+            else if (cardCutscene)
+            {
+                // Cutscene camera: low, close, framing the booked player
+                Vector3 playerPos = WorldUnits.ToWorld(engine.CardPlayer.FieldPosition);
+                _camera.SetView(playerPos + new Vector3(0f, 1.6f, 3.2f), playerPos + new Vector3(0f, 1.1f, 0f));
             }
             
             _world.Update(dt);
@@ -604,6 +616,19 @@ namespace NoPasaranFC.Graphics3D
                 
                 animator.Instance.Draw(device, world, _camera.View, _camera.Projection);
             }
+            
+            // The booked player stays visible during the card cutscene even though
+            // the send-off removed them from the active players
+            if (engine.CardPhase != MatchEngine.RefCardPhase.None && engine.CardPlayer != null &&
+                _playerAnimators.TryGetValue(engine.CardPlayer, out var cardAnimator) &&
+                !engine.GetAllPlayers().Contains(engine.CardPlayer))
+            {
+                cardAnimator.Instance.Environment = _environment;
+                Matrix world = Matrix.CreateScale(PlayerModelScale)
+                    * Matrix.CreateRotationY(cardAnimator.Yaw)
+                    * Matrix.CreateTranslation(WorldUnits.ToWorld(engine.CardPlayer.FieldPosition));
+                cardAnimator.Instance.Draw(device, world, _camera.View, _camera.Projection);
+            }
         }
         
         /// <summary>
@@ -671,6 +696,73 @@ namespace NoPasaranFC.Graphics3D
                 }
             }
         }
+        
+        // ---- Card cutscene (expression swap) ----
+        
+        private Player _cutsceneFacePlayer; // the player currently wearing the sad/wow face
+        private bool _cutsceneSkipped;
+        private readonly GraphicsDevice _device;
+        
+        /// <summary>
+        /// Swaps the booked player's face to Sad (red card) or Wow (yellow) for
+        /// the cutscene and restores it afterwards. Also handles the skip key.
+        /// </summary>
+        private void UpdateCardCutscene(MatchEngine engine, bool active, float dt)
+        {
+            if (active)
+            {
+                if (!_cutsceneSkipped && _wasShootKeyDownForCutscene)
+                {
+                    engine.SkipCardCutscene();
+                    _cutsceneSkipped = true;
+                }
+                
+                if (_cutsceneFacePlayer != engine.CardPlayer)
+                {
+                    // Restore the previous player's face first (paranoia)
+                    RestoreCutsceneFace(engine);
+                    
+                    var player = engine.CardPlayer;
+                    if (_playerAnimators.TryGetValue(player, out var animator))
+                    {
+                        var baseAppearance = FaceComposer.AppearanceFor(player);
+                        var cutsceneAppearance = new FaceComposer.Appearance(
+                            baseAppearance.SkinTone, baseAppearance.HairColor,
+                            engine.CardIsRed ? FaceComposer.Expression.Sad : FaceComposer.Expression.Wow,
+                            baseAppearance.Feat);
+                        var model = _playerModelChoice.TryGetValue(player, out var m) ? m : _playerModel;
+                        Texture2D composed = FaceComposer.Compose(_device,
+                            model.Parts[0].Texture, cutsceneAppearance);
+                        animator.Instance.SetPartTexture("Soccer_Skin", composed);
+                        animator.Instance.SetPartTexture("Soccer_Hair", composed);
+                        _cutsceneFacePlayer = player;
+                    }
+                }
+            }
+            else
+            {
+                RestoreCutsceneFace(engine);
+                _cutsceneSkipped = false;
+            }
+        }
+        
+        private void RestoreCutsceneFace(MatchEngine engine)
+        {
+            if (_cutsceneFacePlayer == null) return;
+            var player = _cutsceneFacePlayer;
+            _cutsceneFacePlayer = null;
+            if (_playerAnimators.TryGetValue(player, out var animator))
+            {
+                var model = _playerModelChoice.TryGetValue(player, out var m) ? m : _playerModel;
+                Texture2D normal = FaceComposer.Compose(_device,
+                    model.Parts[0].Texture, FaceComposer.AppearanceFor(player));
+                animator.Instance.SetPartTexture("Soccer_Skin", normal);
+                animator.Instance.SetPartTexture("Soccer_Hair", normal);
+            }
+        }
+        
+        private bool _wasShootKeyDownForCutscene;
+        public void SetCutsceneSkipKey(bool down) => _wasShootKeyDownForCutscene = down;
         
         /// <summary>Shirt/shorts/socks colors per team, sampled from the 2D kit sprite sheets.
         /// Also used by the lineup screen for portraits and team-color accents.</summary>
