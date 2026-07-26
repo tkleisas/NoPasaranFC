@@ -382,6 +382,13 @@ namespace NoPasaranFC.Screens
             // Update player animations
             UpdatePlayerAnimations(gameTime);
             
+            // Card banner countdown (fouls & cards)
+            if (_matchEngine.LastCardShown is { } card)
+            {
+                card.Timer -= (float)gameTime.ElapsedGameTime.TotalSeconds;
+                _matchEngine.LastCardShown = card.Timer > 0f ? card : null;
+            }
+            
             // Update ball animation
             UpdateBallAnimation(gameTime);
             
@@ -932,12 +939,20 @@ namespace NoPasaranFC.Screens
                 DrawFinalScoreOverlay(spriteBatch, font);
             }
             
-            // Draw set piece indicators (timer and arrow) - for corners, goal kicks, and throw-ins
+            // Draw set piece indicators (timer and arrow) - corners, goal kicks, throw-ins, free/penalty kicks
             if (_matchEngine.CurrentState == MatchEngine.MatchState.CornerKick ||
                 _matchEngine.CurrentState == MatchEngine.MatchState.GoalKick ||
+                _matchEngine.CurrentState == MatchEngine.MatchState.FreeKick ||
+                _matchEngine.CurrentState == MatchEngine.MatchState.PenaltyKick ||
                 _matchEngine.CurrentState == MatchEngine.MatchState.ThrowIn)
             {
                 DrawSetPieceIndicators(spriteBatch, font, is3DMode);
+            }
+            
+            // Card banner (fouls & cards)
+            if (_matchEngine.LastCardShown is { } card && card.Player != null)
+            {
+                DrawCardBanner(spriteBatch, font, card);
             }
             
             // Player indicators projected onto the 3D view (names, stamina bars, shot power)
@@ -1187,6 +1202,32 @@ namespace NoPasaranFC.Screens
                 );
                 spriteBatch.Draw(_pixel, rect, color);
             }
+        }
+        
+        /// <summary>Yellow/red card banner with the booked player's name (fouls & cards).</summary>
+        private void DrawCardBanner(SpriteBatch spriteBatch, SpriteFont font, MatchEngine.CardEvent card)
+        {
+            var loc = Localization.Instance;
+            string label = loc.Get(card.IsRed ? "match.redCard" : "match.yellowCard");
+            if (card.IsSecondYellow)
+                label += $" ({loc.Get("match.secondYellow")})";
+            string text = $"{label}  #{card.Player.ShirtNumber} {card.Player.Name}";
+            
+            Vector2 textSize = font.MeasureString(text);
+            float cx = Game1.ScreenWidth / 2f;
+            float y = 110f;
+            
+            // Dark banner
+            var band = new Rectangle((int)(cx - textSize.X / 2 - 50), (int)y - 8,
+                (int)textSize.X + 100, (int)textSize.Y + 16);
+            spriteBatch.Draw(_pixel, band, new Color(0, 0, 0, 180));
+            
+            // The card itself
+            Color cardColor = card.IsRed ? new Color(220, 30, 30) : new Color(240, 210, 30);
+            spriteBatch.Draw(_pixel, new Rectangle(band.X + 16, band.Y + 8, 22, 30), cardColor);
+            
+            spriteBatch.DrawString(font, text, new Vector2(band.X + 50, band.Y + 8) + new Vector2(2, 2), Color.Black);
+            spriteBatch.DrawString(font, text, new Vector2(band.X + 50, band.Y + 8), Color.White);
         }
         
         private void DrawSetPieceIndicators(SpriteBatch spriteBatch, SpriteFont font, bool useScreenCenter = false)

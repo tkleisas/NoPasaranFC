@@ -200,6 +200,9 @@ namespace NoPasaranFC.Models
                 ["settings.ballControl.easy"] = "Easy",
                 ["settings.ballControl.classic"] = "Classic",
                 ["match.halftime"] = "HALF TIME",
+                ["match.yellowCard"] = "YELLOW CARD",
+                ["match.redCard"] = "RED CARD",
+                ["match.secondYellow"] = "second yellow",
                 
                 ["settings.on"] = "ON",
                 ["settings.off"] = "OFF",
@@ -347,6 +350,9 @@ namespace NoPasaranFC.Models
                 ["settings.ballControl.easy"] = "Εύκολος",
                 ["settings.ballControl.classic"] = "Κλασικός",
                 ["match.halftime"] = "ΗΜΙΧΡΟΝΟ",
+                ["match.yellowCard"] = "ΚΙΤΡΙΝΗ ΚΑΡΤΑ",
+                ["match.redCard"] = "ΚΟΚΚΙΝΗ ΚΑΡΤΑ",
+                ["match.secondYellow"] = "δεύτερη κίτρινη",
                 
                 ["settings.on"] = "ΝΑΙ",
                 ["settings.off"] = "ΟΧΙ",

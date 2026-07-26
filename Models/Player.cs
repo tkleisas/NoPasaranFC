@@ -67,6 +67,12 @@ namespace NoPasaranFC.Models
         
         // Collision and knockdown state
         public bool IsKnockedDown { get; set; }
+        
+        /// <summary>Yellow cards this match (2 = automatic red).</summary>
+        public int YellowCards { get; set; }
+        
+        /// <summary>Sent off (straight red or second yellow) - out for the rest of the match.</summary>
+        public bool IsSentOff { get; set; }
         public float KnockdownTimer { get; set; }
         
         // Ball control cooldown

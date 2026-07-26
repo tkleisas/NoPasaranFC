@@ -356,6 +356,23 @@ public class Game1 : Game
                 fms.Engine.DebugTriggerFreeKick(victim);
                 return "OK freekick";
             }
+            case "penalty":
+            {
+                if (_screenManager.CurrentScreen is not MatchScreen pms || pms.Engine == null)
+                    return "ERR no active match";
+                pms.Engine.DebugTriggerPenalty();
+                return "OK penalty";
+            }
+            case "card":
+            {
+                // Force a red card on the controlled player (banner + send-off flow)
+                if (_screenManager.CurrentScreen is not MatchScreen cms2 || cms2.Engine == null)
+                    return "ERR no active match";
+                var cp2 = cms2.Engine.ControlledPlayer;
+                if (cp2 == null) return "ERR no controlled player";
+                cms2.Engine.DebugForceCard(cp2, red: true);
+                return "OK card";
+            }
             case "ball":
             {
                 if (parts.Length < 3 || !float.TryParse(parts[1], out float bx) || !float.TryParse(parts[2], out float by))

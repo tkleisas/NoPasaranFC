@@ -131,7 +131,7 @@ namespace NoPasaranFC.Gameplay
         private Vector2 _refereeVelocity;
 
         // Match state
-        public enum MatchState { CameraInit, Countdown, Playing, HalfTime, Ended, GoalCelebration, FinalScore, ThrowIn, CornerKick, GoalKick, FreeKick }
+        public enum MatchState { CameraInit, Countdown, Playing, HalfTime, Ended, GoalCelebration, FinalScore, ThrowIn, CornerKick, GoalKick, FreeKick, PenaltyKick }
         public MatchState CurrentState { get; private set; }
         public float CountdownTimer { get; private set; }
         public int CountdownNumber { get; private set; }
@@ -665,9 +665,10 @@ namespace NoPasaranFC.Gameplay
                 return;
             }
             
-            // Handle set pieces (ThrowIn, CornerKick, GoalKick, FreeKick)
+            // Handle set pieces (ThrowIn, CornerKick, GoalKick, FreeKick, PenaltyKick)
             if (CurrentState == MatchState.ThrowIn || CurrentState == MatchState.CornerKick ||
-                CurrentState == MatchState.GoalKick || CurrentState == MatchState.FreeKick)
+                CurrentState == MatchState.GoalKick || CurrentState == MatchState.FreeKick ||
+                CurrentState == MatchState.PenaltyKick)
             {
                 RestartTimer -= deltaTime;
                 
@@ -746,7 +747,7 @@ namespace NoPasaranFC.Gameplay
                                 _wasShootButtonDown = true;
                             }
                         }
-                        else if (CurrentState == MatchState.CornerKick || CurrentState == MatchState.FreeKick)
+                        else if (CurrentState == MatchState.CornerKick || CurrentState == MatchState.FreeKick || CurrentState == MatchState.PenaltyKick)
                         {
                             if (_cornerKickRunUp)
                             {
@@ -839,11 +840,16 @@ namespace NoPasaranFC.Gameplay
                                 target = new Vector2(forwardX, targetY);
                                 ThrowInPowerCharge = 0.55f + (float)_random.NextDouble() * 0.35f;
                             }
-                            else if (CurrentState == MatchState.CornerKick || CurrentState == MatchState.FreeKick)
+                            else if (CurrentState == MatchState.CornerKick || CurrentState == MatchState.FreeKick || CurrentState == MatchState.PenaltyKick)
                             {
-                                // Aim at goal area (free kicks also shoot when in range)
+                                // Aim at goal area (free kicks also shoot when in range;
+                                // penalties aim at a post)
                                 float goalX = RestartPlayer.Team == _homeTeam ? StadiumMargin + FieldWidth : StadiumMargin;
-                                target = new Vector2(goalX, StadiumMargin + FieldHeight / 2);
+                                float centerY = StadiumMargin + FieldHeight / 2f;
+                                float aimY = CurrentState == MatchState.PenaltyKick
+                                    ? centerY + (_random.Next(2) == 0 ? -1f : 1f) * (MatchEngine.GoalWidth / 2f - 60f)
+                                    : centerY;
+                                target = new Vector2(goalX, aimY);
                                 // AI uses high power (80-100%) for effective corners
                                 ThrowInPowerCharge = 0.80f + (float)_random.NextDouble() * 0.20f;
                             }
@@ -863,9 +869,9 @@ namespace NoPasaranFC.Gameplay
                                 _throwInAnimationStarted = true;
                                 _throwInAnimTimer = 0.65f; // Engine-side release timing
                             }
-                            else if (CurrentState == MatchState.CornerKick || CurrentState == MatchState.FreeKick)
+                            else if (CurrentState == MatchState.CornerKick || CurrentState == MatchState.FreeKick || CurrentState == MatchState.PenaltyKick)
                             {
-                                // Start run-up for AI corner kick
+                                // Start run-up for AI corner/free/penalty kick
                                 _cornerKickRunUp = true;
                             }
                             else
@@ -908,6 +914,24 @@ namespace NoPasaranFC.Gameplay
             
             // Update ball physics
             UpdateBall(deltaTime);
+            
+            // GK penalty dive (guessed side at burst speed)
+            if (_penaltyDiveTimer > 0f && _penaltyDiveGk != null)
+            {
+                _penaltyDiveTimer -= deltaTime;
+                Vector2 toTarget = _penaltyDiveTarget - _penaltyDiveGk.FieldPosition;
+                if (toTarget.LengthSquared() > 1f && _penaltyDiveTimer > 0f)
+                {
+                    toTarget.Normalize();
+                    _penaltyDiveGk.Velocity = toTarget * 600f;
+                    _penaltyDiveGk.FieldPosition += _penaltyDiveGk.Velocity * deltaTime;
+                }
+                else
+                {
+                    _penaltyDiveGk.Velocity = Vector2.Zero;
+                    _penaltyDiveTimer = 0f;
+                }
+            }
             
             // Update referee position (follows ball at a distance)
             UpdateReferee(deltaTime);
@@ -1072,6 +1096,16 @@ namespace NoPasaranFC.Gameplay
         /// <summary>All fouls called this match (drives cards later).</summary>
         public List<FoulRecord> Fouls { get; } = new List<FoulRecord>();
         
+        /// <summary>Card shown to the UI (set on yellow/red, cleared by MatchScreen after display).</summary>
+        public struct CardEvent
+        {
+            public Player Player;
+            public bool IsRed;
+            public bool IsSecondYellow;
+            public float Timer;
+        }
+        public CardEvent? LastCardShown { get; set; }
+        
         private const float TackleFailFoulChance = 0.35f;
         private const float CarrierKnockdownFoulChance = 0.60f;
         private const float KnockdownFoulChance = 0.25f;
@@ -1090,10 +1124,151 @@ namespace NoPasaranFC.Gameplay
             Fouls.Add(new FoulRecord(offender, victim, BallPosition, severity));
             AudioManager.Instance.PlaySoundEffect("whistle_end", 0.7f);
             
+            // Carding: harsh fouls book the offender; second yellow = red
+            MaybeCard(offender, severity);
+            
+            // Penalty when the foul lands inside the offender's box
+            if (IsInPenaltyArea(BallPosition, offender.Team))
+            {
+                PlacePenaltyKick(victim);
+                return;
+            }
+            
             // Free kick for the victim's team at the foul spot (kept inside the field)
             float x = Math.Clamp(BallPosition.X, StadiumMargin + 60f, StadiumMargin + FieldWidth - 60f);
             float y = Math.Clamp(BallPosition.Y, StadiumMargin + 60f, StadiumMargin + FieldHeight - 60f);
             PlaceBallForFreeKick(new Vector2(x, y), victim);
+        }
+        
+        /// <summary>True when the spot is inside `team`'s penalty area (their own goal's box).</summary>
+        private bool IsInPenaltyArea(Vector2 spot, Team team)
+        {
+            float centerY = StadiumMargin + FieldHeight / 2f;
+            bool inY = spot.Y >= centerY - AIConstants.GKPenaltyAreaWidth / 2f &&
+                       spot.Y <= centerY + AIConstants.GKPenaltyAreaWidth / 2f;
+            if (!inY) return false;
+            if (team == _homeTeam)
+                return spot.X >= StadiumMargin && spot.X <= StadiumMargin + AIConstants.GKPenaltyAreaDepth;
+            return spot.X <= StadiumMargin + FieldWidth && spot.X >= StadiumMargin + FieldWidth - AIConstants.GKPenaltyAreaDepth;
+        }
+        
+        /// <summary>Sets up a penalty kick for the victim's team.</summary>
+        private void PlacePenaltyKick(Player victim)
+        {
+            bool forHome = victim.Team == _homeTeam;
+            float goalX = forHome ? StadiumMargin + FieldWidth : StadiumMargin;
+            float attackSign = forHome ? 1f : -1f;
+            
+            // Ball on the penalty spot (11m), taker behind it, GK on the line
+            var spot = new Vector2(goalX - attackSign * 803f, StadiumMargin + FieldHeight / 2f);
+            BallPosition = spot;
+            BallVelocity = Vector2.Zero;
+            BallHeight = 0f;
+            BallVerticalVelocity = 0f;
+            
+            var gk = (forHome ? _awayTeam : _homeTeam).Players
+                .First(p => p.IsStarting && p.Position == PlayerPosition.Goalkeeper);
+            gk.FieldPosition = new Vector2(goalX + attackSign * 60f, spot.Y);
+            gk.Velocity = Vector2.Zero;
+            
+            var taker = (forHome ? _homeTeam : _awayTeam).Players
+                .Where(p => p.IsStarting && !p.IsKnockedDown)
+                .OrderBy(p => Vector2.Distance(p.FieldPosition, spot))
+                .First();
+            taker.FieldPosition = spot - new Vector2(attackSign * 80f, 0f);
+            taker.Velocity = Vector2.Zero;
+            
+            RestartPlayer = taker;
+            RestartTimer = 5.0f;
+            _cornerKickRunUp = false;
+            RestartDirection = new Vector2(attackSign, 0f);
+            CurrentState = MatchState.PenaltyKick;
+        }
+        
+        // Penalty dive state (GK guesses a side as the kick is taken)
+        private float _penaltyDiveTimer;
+        private Vector2 _penaltyDiveTarget;
+        private Player _penaltyDiveGk;
+        
+        /// <summary>Debug: force a card on a player (bypasses the severity roll).</summary>
+        public void DebugForceCard(Player player, bool red)
+        {
+            if (red)
+            {
+                player.YellowCards = 1;
+                MaybeCard(player, 1.0f); // harsh severity -> may straight-red; second yellow guarantees it
+            }
+            else
+            {
+                MaybeCard(player, 1.0f); // high severity -> guaranteed yellow (second yellow would red)
+            }
+        }
+        
+        /// <summary>Sets up a penalty for the player's team (debug command).</summary>
+        public void DebugTriggerPenalty()
+        {
+            if (CurrentState != MatchState.Playing) return;
+            var victim = (_homeTeam.IsPlayerControlled ? _homeTeam : _awayTeam).Players
+                .Where(p => p.IsStarting)
+                .OrderBy(p => Vector2.Distance(p.FieldPosition, BallPosition))
+                .First();
+            PlacePenaltyKick(victim);
+        }
+        
+        /// <summary>
+        /// Rolls a card for the fouler based on severity: soft fouls walk,
+        /// medium fouls may book, harsh fouls often book and sometimes see red.
+        /// A second yellow is an automatic red.
+        /// </summary>
+        private void MaybeCard(Player offender, float severity)
+        {
+            if (offender.IsSentOff) return;
+            
+            float roll = (float)_random.NextDouble();
+            bool straightRed = severity >= 0.55f && roll < 0.15f;
+            bool yellow = straightRed || roll < 0.10f + severity * 0.5f;
+            if (!yellow) return;
+            
+            bool isRed = straightRed;
+            bool secondYellow = false;
+            if (!straightRed)
+            {
+                offender.YellowCards++;
+                if (offender.YellowCards >= 2)
+                {
+                    isRed = true;
+                    secondYellow = true;
+                }
+            }
+            
+            if (isRed)
+            {
+                offender.IsSentOff = true;
+                offender.IsStarting = false; // out for the rest of the match (GetAllPlayers filters starters)
+                
+                // If the sent-off player was being controlled, hand control to the nearest teammate
+                if (offender.IsControlled)
+                {
+                    offender.IsControlled = false;
+                    var replacement = offender.Team.Players
+                        .Where(p => p.IsStarting && !p.IsKnockedDown && p != offender && p.Position != PlayerPosition.Goalkeeper)
+                        .OrderBy(p => Vector2.Distance(p.FieldPosition, offender.FieldPosition))
+                        .FirstOrDefault();
+                    if (replacement != null)
+                    {
+                        _controlledPlayer = replacement;
+                        replacement.IsControlled = true;
+                    }
+                }
+            }
+            
+            LastCardShown = new CardEvent
+            {
+                Player = offender,
+                IsRed = isRed,
+                IsSecondYellow = secondYellow,
+                Timer = 2.5f,
+            };
         }
         
         /// <summary>Sets up the free kick: ball at the spot, victim team's nearest player
@@ -1223,8 +1398,9 @@ namespace NoPasaranFC.Gameplay
             }
             else
             {
-                // Check if player is in corner/free kick run-up mode
-                bool inCornerRunUp = (CurrentState == MatchState.CornerKick || CurrentState == MatchState.FreeKick) &&
+                // Check if player is in corner/free/penalty kick run-up mode
+                bool inCornerRunUp = (CurrentState == MatchState.CornerKick || CurrentState == MatchState.FreeKick ||
+                                      CurrentState == MatchState.PenaltyKick) &&
                                      player == RestartPlayer &&
                                      _cornerKickRunUp;
 
@@ -1245,7 +1421,8 @@ namespace NoPasaranFC.Gameplay
                     bool frozenForSetPiece = (CurrentState == MatchState.ThrowIn ||
                                               CurrentState == MatchState.CornerKick ||
                                               CurrentState == MatchState.GoalKick ||
-                                              CurrentState == MatchState.FreeKick) &&
+                                              CurrentState == MatchState.FreeKick ||
+                                              CurrentState == MatchState.PenaltyKick) &&
                                              player == RestartPlayer;
 
                     // Normal movement (only if not knocked down and not frozen for set piece)
@@ -1343,9 +1520,10 @@ namespace NoPasaranFC.Gameplay
                 }
             }
             
-            // Handle set piece behavior (ThrowIn, CornerKick, GoalKick, FreeKick)
+            // Handle set piece behavior (ThrowIn, CornerKick, GoalKick, FreeKick, PenaltyKick)
             if (CurrentState == MatchState.ThrowIn || CurrentState == MatchState.CornerKick ||
-                CurrentState == MatchState.GoalKick || CurrentState == MatchState.FreeKick)
+                CurrentState == MatchState.GoalKick || CurrentState == MatchState.FreeKick ||
+                CurrentState == MatchState.PenaltyKick)
             {
                 // If this is the restart player, handle special movement
                 if (player == RestartPlayer)
@@ -1797,7 +1975,8 @@ namespace NoPasaranFC.Gameplay
             if (CurrentState == MatchState.ThrowIn ||
                 CurrentState == MatchState.CornerKick ||
                 CurrentState == MatchState.GoalKick ||
-                CurrentState == MatchState.FreeKick) return;
+                CurrentState == MatchState.FreeKick ||
+                CurrentState == MatchState.PenaltyKick) return;
             
             // Check if any player is colliding with the ball
             var allPlayers = GetAllPlayers();
@@ -2130,7 +2309,8 @@ namespace NoPasaranFC.Gameplay
             if (CurrentState == MatchState.ThrowIn || 
                 CurrentState == MatchState.CornerKick || 
                 CurrentState == MatchState.GoalKick ||
-                CurrentState == MatchState.FreeKick)
+                CurrentState == MatchState.FreeKick ||
+                CurrentState == MatchState.PenaltyKick)
             {
                 return;
             }
@@ -2390,9 +2570,10 @@ namespace NoPasaranFC.Gameplay
                     float yOffset = isTopSideline ? -50f : 50f;
                     nearestPlayer.FieldPosition = new Vector2(position.X, position.Y + yOffset);
                 }
-                else if (restartState == MatchState.CornerKick || restartState == MatchState.FreeKick)
+                else if (restartState == MatchState.CornerKick || restartState == MatchState.FreeKick ||
+                         restartState == MatchState.PenaltyKick)
                 {
-                    // Corner/free kick - place player further behind ball for run-up (80px back)
+                    // Corner/free/penalty kick - place player further behind ball for run-up (80px back)
                     Vector2 directionToCenter = new Vector2(StadiumMargin + FieldWidth/2, StadiumMargin + FieldHeight/2) - position;
                     if (directionToCenter != Vector2.Zero) directionToCenter.Normalize();
                     nearestPlayer.FieldPosition = position - directionToCenter * 80f;
@@ -2470,6 +2651,27 @@ namespace NoPasaranFC.Gameplay
                 float volume = 0.5f + 0.5f * chargeAmount;
                 AudioManager.Instance.PlaySoundEffect("kick_ball", volume);
             }
+            else if (CurrentState == MatchState.PenaltyKick)
+            {
+                // Penalty: flat, hard, charge-scaled; the GK guesses a side and dives
+                float chargeAmount = Math.Max(0.2f, ThrowInPowerCharge);
+                power = 800f + 900f * chargeAmount;
+                height = 30f + 120f * chargeAmount;
+                
+                AudioManager.Instance.PlaySoundEffect("kick_ball", 0.9f);
+                
+                // GK dive: random side at burst speed for ~0.6s
+                var gk = (RestartPlayer.Team == _homeTeam ? _awayTeam : _homeTeam).Players
+                    .FirstOrDefault(p => p.IsStarting && p.Position == PlayerPosition.Goalkeeper);
+                if (gk != null)
+                {
+                    float side = _random.Next(2) == 0 ? -1f : 1f;
+                    _penaltyDiveGk = gk;
+                    _penaltyDiveTarget = gk.FieldPosition + new Vector2(0f, side * 350f);
+                    _penaltyDiveTimer = 0.6f;
+                    gk.CurrentAnimationState = "fall";
+                }
+            }
             else if (CurrentState == MatchState.GoalKick)
             {
                 // Real goal kick power: 600-2000 px/s scaled by charge
@@ -2488,7 +2690,8 @@ namespace NoPasaranFC.Gameplay
             
             // Apply velocity based on set piece type
             if (CurrentState == MatchState.ThrowIn || CurrentState == MatchState.CornerKick ||
-                CurrentState == MatchState.GoalKick || CurrentState == MatchState.FreeKick)
+                CurrentState == MatchState.GoalKick || CurrentState == MatchState.FreeKick ||
+                CurrentState == MatchState.PenaltyKick)
             {
                 // Direct power application
                 BallVelocity = RestartDirection * power;
