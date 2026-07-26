@@ -131,7 +131,7 @@ namespace NoPasaranFC.Gameplay
         private Vector2 _refereeVelocity;
 
         // Match state
-        public enum MatchState { CameraInit, Countdown, Playing, HalfTime, Ended, GoalCelebration, FinalScore, ThrowIn, CornerKick, GoalKick }
+        public enum MatchState { CameraInit, Countdown, Playing, HalfTime, Ended, GoalCelebration, FinalScore, ThrowIn, CornerKick, GoalKick, FreeKick }
         public MatchState CurrentState { get; private set; }
         public float CountdownTimer { get; private set; }
         public int CountdownNumber { get; private set; }
@@ -665,8 +665,9 @@ namespace NoPasaranFC.Gameplay
                 return;
             }
             
-            // Handle set pieces (ThrowIn, CornerKick, GoalKick)
-            if (CurrentState == MatchState.ThrowIn || CurrentState == MatchState.CornerKick || CurrentState == MatchState.GoalKick)
+            // Handle set pieces (ThrowIn, CornerKick, GoalKick, FreeKick)
+            if (CurrentState == MatchState.ThrowIn || CurrentState == MatchState.CornerKick ||
+                CurrentState == MatchState.GoalKick || CurrentState == MatchState.FreeKick)
             {
                 RestartTimer -= deltaTime;
                 
@@ -745,7 +746,7 @@ namespace NoPasaranFC.Gameplay
                                 _wasShootButtonDown = true;
                             }
                         }
-                        else if (CurrentState == MatchState.CornerKick)
+                        else if (CurrentState == MatchState.CornerKick || CurrentState == MatchState.FreeKick)
                         {
                             if (_cornerKickRunUp)
                             {
@@ -823,7 +824,7 @@ namespace NoPasaranFC.Gameplay
                     {
                         // AI Logic for set pieces
                         // For throw-ins and corners, wait longer to give teammates time to position
-                        float executeThreshold = (CurrentState == MatchState.ThrowIn || CurrentState == MatchState.CornerKick) ? 2.0f : 0.5f;
+                        float executeThreshold = (CurrentState == MatchState.ThrowIn || CurrentState == MatchState.CornerKick || CurrentState == MatchState.FreeKick) ? 2.0f : 0.5f;
                         if (RestartTimer < executeThreshold)
                         {
                             // Calculate best direction
@@ -838,9 +839,9 @@ namespace NoPasaranFC.Gameplay
                                 target = new Vector2(forwardX, targetY);
                                 ThrowInPowerCharge = 0.55f + (float)_random.NextDouble() * 0.35f;
                             }
-                            else if (CurrentState == MatchState.CornerKick)
+                            else if (CurrentState == MatchState.CornerKick || CurrentState == MatchState.FreeKick)
                             {
-                                // Aim at goal area
+                                // Aim at goal area (free kicks also shoot when in range)
                                 float goalX = RestartPlayer.Team == _homeTeam ? StadiumMargin + FieldWidth : StadiumMargin;
                                 target = new Vector2(goalX, StadiumMargin + FieldHeight / 2);
                                 // AI uses high power (80-100%) for effective corners
@@ -862,7 +863,7 @@ namespace NoPasaranFC.Gameplay
                                 _throwInAnimationStarted = true;
                                 _throwInAnimTimer = 0.65f; // Engine-side release timing
                             }
-                            else if (CurrentState == MatchState.CornerKick)
+                            else if (CurrentState == MatchState.CornerKick || CurrentState == MatchState.FreeKick)
                             {
                                 // Start run-up for AI corner kick
                                 _cornerKickRunUp = true;
@@ -1050,6 +1051,81 @@ namespace NoPasaranFC.Gameplay
         /// <summary>Player knockdowns since engine creation (harness/debug metric).</summary>
         public int KnockdownEvents { get; private set; }
         
+        // ---- Fouls (free kicks; cards build on this) ----
+        
+        /// <summary>A called foul: who offended, who suffered, where, and how severe (0-1).</summary>
+        public readonly struct FoulRecord
+        {
+            public readonly Player Offender;
+            public readonly Player Victim;
+            public readonly Vector2 Position;
+            public readonly float Severity;
+            public FoulRecord(Player offender, Player victim, Vector2 position, float severity)
+            {
+                Offender = offender;
+                Victim = victim;
+                Position = position;
+                Severity = severity;
+            }
+        }
+        
+        /// <summary>All fouls called this match (drives cards later).</summary>
+        public List<FoulRecord> Fouls { get; } = new List<FoulRecord>();
+        
+        private const float TackleFailFoulChance = 0.35f;
+        private const float CarrierKnockdownFoulChance = 0.60f;
+        private const float KnockdownFoulChance = 0.25f;
+        
+        /// <summary>
+        /// Rolls a foul after physical contact. The offender fouls the victim;
+        /// on success the victim's team gets a free kick at the spot.
+        /// </summary>
+        private void MaybeFoul(Player offender, Player victim, float severity, float foulChance)
+        {
+            if (offender == null || victim == null || offender.Team == victim.Team) return;
+            if (CurrentState != MatchState.Playing) return;
+            if (_random.NextDouble() >= foulChance) return;
+            
+            severity = Math.Clamp(severity, 0f, 1f);
+            Fouls.Add(new FoulRecord(offender, victim, BallPosition, severity));
+            AudioManager.Instance.PlaySoundEffect("whistle_end", 0.7f);
+            
+            // Free kick for the victim's team at the foul spot (kept inside the field)
+            float x = Math.Clamp(BallPosition.X, StadiumMargin + 60f, StadiumMargin + FieldWidth - 60f);
+            float y = Math.Clamp(BallPosition.Y, StadiumMargin + 60f, StadiumMargin + FieldHeight - 60f);
+            PlaceBallForFreeKick(new Vector2(x, y), victim);
+        }
+        
+        /// <summary>Sets up the free kick: ball at the spot, victim team's nearest player
+        /// takes it, and a 3-man wall forms between the ball and the goal when in range.</summary>
+        private void PlaceBallForFreeKick(Vector2 spot, Player victim)
+        {
+            bool forHome = victim.Team == _homeTeam;
+            PlaceBallForRestart(spot, forHome, MatchState.FreeKick);
+            
+            // Defensive wall: 3 opponents on the ball-goal line, 9.15m from the ball
+            Vector2 goalCenter = forHome
+                ? new Vector2(StadiumMargin + FieldWidth, StadiumMargin + FieldHeight / 2f)
+                : new Vector2(StadiumMargin, StadiumMargin + FieldHeight / 2f);
+            if (Vector2.Distance(spot, goalCenter) < 2200f)
+            {
+                Vector2 toGoal = goalCenter - spot;
+                if (toGoal.LengthSquared() > 1f) toGoal.Normalize();
+                Vector2 perp = new Vector2(-toGoal.Y, toGoal.X);
+                var opponents = (forHome ? _awayTeam : _homeTeam).Players
+                    .Where(p => p.IsStarting && !p.IsKnockedDown && p.Position != PlayerPosition.Goalkeeper)
+                    .OrderBy(p => Vector2.Distance(p.FieldPosition, spot))
+                    .Take(3).ToList();
+                for (int i = 0; i < opponents.Count; i++)
+                {
+                    Vector2 wallSpot = spot + toGoal * 668f + perp * (i - 1) * 40f;
+                    opponents[i].FieldPosition = wallSpot;
+                    opponents[i].HomePosition = wallSpot;
+                    opponents[i].Velocity = Vector2.Zero;
+                }
+            }
+        }
+        
         private void UpdateControlledPlayerInput(
             Player player,
             Vector2 moveDirection,
@@ -1147,8 +1223,8 @@ namespace NoPasaranFC.Gameplay
             }
             else
             {
-                // Check if player is in corner kick run-up mode
-                bool inCornerRunUp = CurrentState == MatchState.CornerKick &&
+                // Check if player is in corner/free kick run-up mode
+                bool inCornerRunUp = (CurrentState == MatchState.CornerKick || CurrentState == MatchState.FreeKick) &&
                                      player == RestartPlayer &&
                                      _cornerKickRunUp;
 
@@ -1168,7 +1244,8 @@ namespace NoPasaranFC.Gameplay
                     // Check if player should be frozen during set piece (not during run-up)
                     bool frozenForSetPiece = (CurrentState == MatchState.ThrowIn ||
                                               CurrentState == MatchState.CornerKick ||
-                                              CurrentState == MatchState.GoalKick) &&
+                                              CurrentState == MatchState.GoalKick ||
+                                              CurrentState == MatchState.FreeKick) &&
                                              player == RestartPlayer;
 
                     // Normal movement (only if not knocked down and not frozen for set piece)
@@ -1266,8 +1343,9 @@ namespace NoPasaranFC.Gameplay
                 }
             }
             
-            // Handle set piece behavior (ThrowIn, CornerKick, GoalKick)
-            if (CurrentState == MatchState.ThrowIn || CurrentState == MatchState.CornerKick || CurrentState == MatchState.GoalKick)
+            // Handle set piece behavior (ThrowIn, CornerKick, GoalKick, FreeKick)
+            if (CurrentState == MatchState.ThrowIn || CurrentState == MatchState.CornerKick ||
+                CurrentState == MatchState.GoalKick || CurrentState == MatchState.FreeKick)
             {
                 // If this is the restart player, handle special movement
                 if (player == RestartPlayer)
@@ -1666,17 +1744,26 @@ namespace NoPasaranFC.Gameplay
                                 {
                                     // P2 gets knocked down by P1
                                     KnockDownPlayer(p2, p1.Velocity);
+                                    MaybeFoul(p1, p2, Math.Min(1f, p1Force / 200f),
+                                        p2 == _lastPlayerTouchedBall ? CarrierKnockdownFoulChance : KnockdownFoulChance);
                                 }
                                 else if (p2Force > knockdownThreshold && randomFactor < 0.25f)
                                 {
                                     // P1 gets knocked down by P2
                                     KnockDownPlayer(p1, p2.Velocity);
+                                    MaybeFoul(p2, p1, Math.Min(1f, p2Force / 200f),
+                                        p1 == _lastPlayerTouchedBall ? CarrierKnockdownFoulChance : KnockdownFoulChance);
                                 }
                                 else if (nearBall && !sameTeam && (p1Force + p2Force) > 60f && randomFactor > 0.9f)
                                 {
                                     // Both get knocked down in intense collision near ball (only opposing teams)
                                     KnockDownPlayer(p1, p2.Velocity * 0.5f);
                                     KnockDownPlayer(p2, p1.Velocity * 0.5f);
+                                    // 50/50 who the ref blames
+                                    if (_random.Next(2) == 0)
+                                        MaybeFoul(p1, p2, 0.5f, KnockdownFoulChance);
+                                    else
+                                        MaybeFoul(p2, p1, 0.5f, KnockdownFoulChance);
                                 }
                             }
                         }
@@ -1709,7 +1796,8 @@ namespace NoPasaranFC.Gameplay
             // ball during his run-up)
             if (CurrentState == MatchState.ThrowIn ||
                 CurrentState == MatchState.CornerKick ||
-                CurrentState == MatchState.GoalKick) return;
+                CurrentState == MatchState.GoalKick ||
+                CurrentState == MatchState.FreeKick) return;
             
             // Check if any player is colliding with the ball
             var allPlayers = GetAllPlayers();
@@ -2041,7 +2129,8 @@ namespace NoPasaranFC.Gameplay
             // Don't check for goals/out-of-bounds during set pieces
             if (CurrentState == MatchState.ThrowIn || 
                 CurrentState == MatchState.CornerKick || 
-                CurrentState == MatchState.GoalKick)
+                CurrentState == MatchState.GoalKick ||
+                CurrentState == MatchState.FreeKick)
             {
                 return;
             }
@@ -2301,9 +2390,9 @@ namespace NoPasaranFC.Gameplay
                     float yOffset = isTopSideline ? -50f : 50f;
                     nearestPlayer.FieldPosition = new Vector2(position.X, position.Y + yOffset);
                 }
-                else if (restartState == MatchState.CornerKick)
+                else if (restartState == MatchState.CornerKick || restartState == MatchState.FreeKick)
                 {
-                    // Corner kick - place player further behind ball for run-up (80px back)
+                    // Corner/free kick - place player further behind ball for run-up (80px back)
                     Vector2 directionToCenter = new Vector2(StadiumMargin + FieldWidth/2, StadiumMargin + FieldHeight/2) - position;
                     if (directionToCenter != Vector2.Zero) directionToCenter.Normalize();
                     nearestPlayer.FieldPosition = position - directionToCenter * 80f;
@@ -2367,7 +2456,7 @@ namespace NoPasaranFC.Gameplay
                 float volume = 0.4f + 0.3f * chargeAmount;
                 AudioManager.Instance.PlaySoundEffect("kick_ball", volume);
             }
-            else if (CurrentState == MatchState.CornerKick)
+            else if (CurrentState == MatchState.CornerKick || CurrentState == MatchState.FreeKick)
             {
                 // Power ranges from 500f (minimum) to 2400f (maximum) based on charge
                 float minPower = 500f;
@@ -2399,7 +2488,7 @@ namespace NoPasaranFC.Gameplay
             
             // Apply velocity based on set piece type
             if (CurrentState == MatchState.ThrowIn || CurrentState == MatchState.CornerKick ||
-                CurrentState == MatchState.GoalKick)
+                CurrentState == MatchState.GoalKick || CurrentState == MatchState.FreeKick)
             {
                 // Direct power application
                 BallVelocity = RestartDirection * power;
@@ -2906,6 +2995,9 @@ namespace NoPasaranFC.Gameplay
                         BallVelocity = escapeDirection * 100f;
                         _lastPlayerTouchedBall = nearestOpponent;
                     }
+                    
+                    // ...and maybe a foul for the victim (free kick)
+                    MaybeFoul(player, nearestOpponent, 0.3f, TackleFailFoulChance);
                 }
             }
         }
@@ -2997,6 +3089,19 @@ namespace NoPasaranFC.Gameplay
             float cornerY = StadiumMargin + 20; // Top corner
             
             PlaceBallForRestart(new Vector2(cornerX, cornerY), giveToHomeTeam, MatchState.CornerKick);
+        }
+        
+        /// <summary>Debug: stage a dangerous free kick for the victim's team.</summary>
+        public void DebugTriggerFreeKick(Player victim)
+        {
+            if (CurrentState != MatchState.Playing || victim == null) return;
+            
+            // Spot ~20m out, central: dangerous free kick position
+            bool forHome = victim.Team == _homeTeam;
+            float x = forHome ? StadiumMargin + FieldWidth - 1460f : StadiumMargin + 1460f;
+            float y = StadiumMargin + FieldHeight / 2f;
+            BallPosition = new Vector2(x, y);
+            PlaceBallForFreeKick(BallPosition, victim);
         }
         
         public void DebugTriggerGoalKick()

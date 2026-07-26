@@ -1252,7 +1252,8 @@ namespace NoPasaranFC.Screens
                 // For throw-ins and corners, show power charge with arrow length
                 float arrowLength = 150f * _matchEngine.Camera.Zoom; // Scale arrow with zoom
                 if (_matchEngine.CurrentState == MatchEngine.MatchState.ThrowIn || 
-                    _matchEngine.CurrentState == MatchEngine.MatchState.CornerKick)
+                    _matchEngine.CurrentState == MatchEngine.MatchState.CornerKick ||
+                    _matchEngine.CurrentState == MatchEngine.MatchState.FreeKick)
                 {
                     // Arrow grows from 100px to 250px based on power (scaled by zoom)
                     arrowLength = (100f + 150f * _matchEngine.ThrowInPowerCharge) * _matchEngine.Camera.Zoom;
@@ -1270,7 +1271,8 @@ namespace NoPasaranFC.Screens
                 // Color changes with power (white -> yellow -> orange) for throw-ins and corners
                 Color arrowColor = Color.Yellow * 0.7f;
                 if (_matchEngine.CurrentState == MatchEngine.MatchState.ThrowIn || 
-                    _matchEngine.CurrentState == MatchEngine.MatchState.CornerKick)
+                    _matchEngine.CurrentState == MatchEngine.MatchState.CornerKick ||
+                    _matchEngine.CurrentState == MatchEngine.MatchState.FreeKick)
                 {
                     arrowColor = Color.Lerp(Color.White * 0.6f, Color.Orange * 0.9f, _matchEngine.ThrowInPowerCharge);
                 }

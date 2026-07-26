@@ -343,6 +343,19 @@ public class Game1 : Game
                 cms.Engine.DebugTriggerCornerKick();
                 return "OK corner";
             }
+            case "freekick":
+            {
+                // Stage a dangerous free kick for the player team (tests the foul flow)
+                if (_screenManager.CurrentScreen is not MatchScreen fms || fms.Engine == null)
+                    return "ERR no active match";
+                var victim = fms.Engine.GetAllPlayers()
+                    .Where(p => p.Team?.IsPlayerControlled == true)
+                    .OrderBy(p => Vector2.Distance(p.FieldPosition, fms.Engine.BallPosition))
+                    .FirstOrDefault();
+                if (victim == null) return "ERR no player team";
+                fms.Engine.DebugTriggerFreeKick(victim);
+                return "OK freekick";
+            }
             case "ball":
             {
                 if (parts.Length < 3 || !float.TryParse(parts[1], out float bx) || !float.TryParse(parts[2], out float by))
