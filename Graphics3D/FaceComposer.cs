@@ -112,16 +112,32 @@ namespace NoPasaranFC.Graphics3D
             
             var src = new Color[baseAtlas.Width * baseAtlas.Height];
             baseAtlas.GetData(src);
+            var pixels = ComposePixels(src, baseAtlas.Width, baseAtlas.Height, a);
             
+            var texture = new Texture2D(device, OutSize, OutSize);
+            texture.SetData(pixels);
+            var mipmapped = TextureTools.MakeMipmapped(device, texture);
+            texture.Dispose();
+            _cache[key] = mipmapped;
+            return mipmapped;
+        }
+        
+        /// <summary>
+        /// The pure pixel pipeline (no GraphicsDevice): upscale to OutSize,
+        /// skin-tone shift, hair block, expression + feature stamps. Separated so
+        /// it can be unit-tested headless.
+        /// </summary>
+        public static Color[] ComposePixels(Color[] src, int srcW, int srcH, Appearance a)
+        {
             // Upscale to OutSize (nearest neighbor keeps the flat palette colors)
             var pixels = new Color[OutSize * OutSize];
             for (int y = 0; y < OutSize; y++)
             {
-                int sy = Math.Min(y / AtlasScale, baseAtlas.Height - 1);
+                int sy = Math.Min(y / AtlasScale, srcH - 1);
                 for (int x = 0; x < OutSize; x++)
                 {
-                    int sx = Math.Min(x / AtlasScale, baseAtlas.Width - 1);
-                    pixels[y * OutSize + x] = src[sy * baseAtlas.Width + sx];
+                    int sx = Math.Min(x / AtlasScale, srcW - 1);
+                    pixels[y * OutSize + x] = src[sy * srcW + sx];
                 }
             }
             
@@ -156,12 +172,7 @@ namespace NoPasaranFC.Graphics3D
             // Facial feature on top
             StampFeature(pixels, a.Feat, hair);
             
-            var texture = new Texture2D(device, OutSize, OutSize);
-            texture.SetData(pixels);
-            var mipmapped = TextureTools.MakeMipmapped(device, texture);
-            texture.Dispose();
-            _cache[key] = mipmapped;
-            return mipmapped;
+            return pixels;
         }
         
         private static Rectangle ScaleRect(Rectangle r) =>

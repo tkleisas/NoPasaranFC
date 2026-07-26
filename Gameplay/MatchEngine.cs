@@ -1002,8 +1002,9 @@ namespace NoPasaranFC.Gameplay
             bool easyMode = GameSettings.Instance.BallControl == "Easy";
             if (!easyMode && !charging) return false;
             
-            // Just kicked: let the pass/shot fly (also covers a fresh bobble)
-            if ((float)MatchTime - player.LastKickTime < AutoKickCooldown) return false;
+            // Just kicked: let the pass/shot fly (also covers a fresh bobble).
+            // LastKickTime == 0 means "never kicked" (match start) - no cooldown
+            if (player.LastKickTime > 0f && (float)MatchTime - player.LastKickTime < AutoKickCooldown) return false;
             if (Vector2.Distance(player.FieldPosition, BallPosition) >= DribbleGlueDistance) return false;
             // Contested: an opponent is close enough to poke the ball loose
             if (NearestOpponentToBall(player) < DribbleContestDistance) return false;
@@ -1230,7 +1231,7 @@ namespace NoPasaranFC.Gameplay
                         // (not right after a kick, not while an opponent contests)
                         if (GameSettings.Instance.BallControl == "Easy" &&
                             CurrentState == MatchState.Playing && BallHeight < 100f &&
-                            (float)MatchTime - player.LastKickTime >= AutoKickCooldown &&
+                            (player.LastKickTime <= 0f || (float)MatchTime - player.LastKickTime >= AutoKickCooldown) &&
                             NearestOpponentToBall(player) >= DribbleContestDistance &&
                             BallVelocity.Length() < DribbleTrapMaxBallSpeed &&
                             Vector2.Distance(player.FieldPosition, BallPosition) < DribbleTrapDistance)

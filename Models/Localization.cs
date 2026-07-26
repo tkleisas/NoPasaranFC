@@ -70,7 +70,7 @@ namespace NoPasaranFC.Models
             }
         }
         
-        private Dictionary<string, string> GetEnglishStrings()
+        internal Dictionary<string, string> GetEnglishStrings()
         {
             return new Dictionary<string, string>
             {
@@ -218,7 +218,7 @@ namespace NoPasaranFC.Models
             };
         }
 
-        private Dictionary<string, string> GetGreekStrings()
+        internal Dictionary<string, string> GetGreekStrings()
         {
             return new Dictionary<string, string>
             {

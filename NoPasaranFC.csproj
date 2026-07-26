@@ -19,6 +19,12 @@
     <Content Remove="NoPasaranFC.Android\**" />
     <EmbeddedResource Remove="NoPasaranFC.Android\**" />
     <None Remove="NoPasaranFC.Android\**" />
+    <Compile Remove="NoPasaranFC.Tests\**" />
+  </ItemGroup>
+
+  <!-- The test assembly may see internal members -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="NoPasaranFC.Tests" />
   </ItemGroup>
 
   <!-- Exclude spikes (standalone experiments with their own csproj) -->

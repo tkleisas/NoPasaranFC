@@ -40,7 +40,23 @@ namespace NoPasaranFC.Graphics3D
 
             var pixels = new Color[baseTexture.Width * baseTexture.Height];
             baseTexture.GetData(pixels);
+            RecolorPixels(pixels, baseTexture.Width, r, kitColor);
 
+            var texture = new Texture2D(device, baseTexture.Width, baseTexture.Height);
+            texture.SetData(pixels);
+            var mipmapped = TextureTools.MakeMipmapped(device, texture);
+            texture.Dispose();
+            _cache[key] = mipmapped;
+            return mipmapped;
+        }
+        
+        /// <summary>
+        /// Pure recolor pipeline (no GraphicsDevice): remaps the region onto
+        /// kitColor while preserving the authored luminance gradient (brightest
+        /// shade maps exactly onto the kit color). Separated for headless tests.
+        /// </summary>
+        public static void RecolorPixels(Color[] pixels, int width, Rectangle r, Color kitColor)
+        {
             // Normalize by the region's max luminance so the brightest authored
             // shade maps exactly onto the kit color (white kits stay white even
             // in regions authored dark, and vice versa).
@@ -49,7 +65,7 @@ namespace NoPasaranFC.Graphics3D
             {
                 for (int x = r.X; x < r.X + r.Width; x++)
                 {
-                    Color p = pixels[y * baseTexture.Width + x];
+                    Color p = pixels[y * width + x];
                     float l = (p.R * 0.299f + p.G * 0.587f + p.B * 0.114f) / 255f;
                     if (l > maxLuminance) maxLuminance = l;
                 }
@@ -59,7 +75,7 @@ namespace NoPasaranFC.Graphics3D
             {
                 for (int x = r.X; x < r.X + r.Width; x++)
                 {
-                    int i = y * baseTexture.Width + x;
+                    int i = y * width + x;
                     Color p = pixels[i];
                     float luminance = (p.R * 0.299f + p.G * 0.587f + p.B * 0.114f) / 255f;
                     float k = Math.Min(1f, luminance / maxLuminance);
@@ -70,13 +86,6 @@ namespace NoPasaranFC.Graphics3D
                         p.A);
                 }
             }
-
-            var texture = new Texture2D(device, baseTexture.Width, baseTexture.Height);
-            texture.SetData(pixels);
-            var mipmapped = TextureTools.MakeMipmapped(device, texture);
-            texture.Dispose();
-            _cache[key] = mipmapped;
-            return mipmapped;
         }
 
         /// <summary>Darker variant of a kit color, used for shorts/socks.</summary>
@@ -125,14 +134,28 @@ namespace NoPasaranFC.Graphics3D
             if (_cache.TryGetValue(key, out var cached))
                 return cached;
             
-            int scale = Math.Max(1, shirtTexture.Width / 512);
+            var pixels = new Color[shirtTexture.Width * shirtTexture.Height];
+            shirtTexture.GetData(pixels);
+            StampNumberPixels(pixels, shirtTexture.Width, shirtTexture.Height, shirtNumber, digitColor);
+            
+            var texture = new Texture2D(device, shirtTexture.Width, shirtTexture.Height);
+            texture.SetData(pixels);
+            var mipmapped = TextureTools.MakeMipmapped(device, texture);
+            texture.Dispose();
+            _cache[key] = mipmapped;
+            return mipmapped;
+        }
+        
+        /// <summary>Pure number-stamp pipeline (no GraphicsDevice): draws the
+        /// shirt number in the 3x5 block font centered on the shirt back.
+        /// Separated for headless tests.</summary>
+        public static void StampNumberPixels(Color[] pixels, int width, int height, int shirtNumber, Color digitColor)
+        {
+            int scale = Math.Max(1, width / 512);
             int centerX = ShirtBackCenter.X * scale;
             int centerY = ShirtBackCenter.Y * scale;
             int block = DigitBlock * scale;
             int gap = DigitGap * scale;
-            
-            var pixels = new Color[shirtTexture.Width * shirtTexture.Height];
-            shirtTexture.GetData(pixels);
             
             string digits = Math.Clamp(shirtNumber, 1, 99).ToString();
             int digitWidth = 3 * block;
@@ -144,32 +167,25 @@ namespace NoPasaranFC.Graphics3D
             for (int d = 0; d < digits.Length; d++)
             {
                 string glyph = DigitGlyphs[digits[d] - '0'];
-                int baseX = startX + d * (digitWidth + DigitGap);
+                int baseX = startX + d * (digitWidth + gap);
                 for (int row = 0; row < 5; row++)
                 {
                     for (int col = 0; col < 3; col++)
                     {
                         if (glyph[row * 3 + col] != '1') continue;
-                        for (int by = 0; by < DigitBlock; by++)
+                        for (int by = 0; by < block; by++)
                         {
-                            for (int bx = 0; bx < DigitBlock; bx++)
+                            for (int bx = 0; bx < block; bx++)
                             {
-                                int x = baseX + col * DigitBlock + bx;
-                                int y = startY + row * DigitBlock + by;
-                                if (x >= 0 && x < shirtTexture.Width && y >= 0 && y < shirtTexture.Height)
-                                    pixels[y * shirtTexture.Width + x] = digitColor;
+                                int x = baseX + col * block + bx;
+                                int y = startY + row * block + by;
+                                if (x >= 0 && x < width && y >= 0 && y < height)
+                                    pixels[y * width + x] = digitColor;
                             }
                         }
                     }
                 }
             }
-            
-            var texture = new Texture2D(device, shirtTexture.Width, shirtTexture.Height);
-            texture.SetData(pixels);
-            var mipmapped = TextureTools.MakeMipmapped(device, texture);
-            texture.Dispose();
-            _cache[key] = mipmapped;
-            return mipmapped;
         }
         
         /// <summary>Readable digit color for a kit: black on light shirts, white on dark.</summary>

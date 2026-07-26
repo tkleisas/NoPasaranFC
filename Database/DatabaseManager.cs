@@ -28,6 +28,16 @@ namespace NoPasaranFC.Database
             RunMigrations();
         }
         
+        /// <summary>Explicit database path (used by tests to work on temp files).</summary>
+        public DatabaseManager(string dbPath)
+        {
+            PlatformHelper.InitializeSQLite();
+            
+            ConnectionString = $"Data Source={dbPath};Mode=ReadWriteCreate;";
+            InitializeDatabase();
+            RunMigrations();
+        }
+        
         private void InitializeDatabase()
         {
             using var connection = new SqliteConnection(ConnectionString);
