@@ -174,6 +174,29 @@ public class MatchEngineTests
     }
 
     [Fact]
+    public void AfterGoal_KickoffGoesToConcedingTeam()
+    {
+        var engine = TestHelper.MakeEngine();
+        TestHelper.ReachPlaying(engine);
+
+        // Home scores in the right goal -> AWAY conceded -> away kicks off
+        engine.BallPosition = new Vector2(MatchEngine.StadiumMargin + MatchEngine.FieldWidth + 30,
+            MatchEngine.StadiumMargin + MatchEngine.FieldHeight / 2f);
+        engine.BallVelocity = Vector2.Zero;
+
+        // Wait for the post-goal reset (Countdown), then for play to resume
+        bool reset = TestHelper.StepUntil(engine,
+            () => engine.HomeScore == 1 && engine.CurrentState == MatchEngine.MatchState.Countdown, 30f);
+        Assert.True(reset, "post-goal countdown should start");
+        Assert.Equal(engine.AwayTeam.Id, engine.KickoffTeamId);
+
+        bool resumed = TestHelper.StepUntil(engine,
+            () => engine.CurrentState == MatchEngine.MatchState.Playing, 10f);
+        Assert.True(resumed, "play should resume after the post-goal countdown");
+        Assert.Equal(engine.AwayTeam.Id, engine.KickoffTeamId);
+    }
+
+    [Fact]
     public void KickoffSafetyNet_ReleasesStuckKickoffAfter4Seconds()
     {
         var engine = TestHelper.MakeEngine();

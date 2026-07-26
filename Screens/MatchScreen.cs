@@ -381,14 +381,10 @@ namespace NoPasaranFC.Screens
             
             // Update player animations
             UpdatePlayerAnimations(gameTime);
-            
-            // Card banner countdown (fouls & cards)
-            if (_matchEngine.LastCardShown is { } card)
-            {
-                card.Timer -= (float)gameTime.ElapsedGameTime.TotalSeconds;
-                _matchEngine.LastCardShown = card.Timer > 0f ? card : null;
-            }
-            
+
+            // (Card banner countdown lives in MatchEngine.Update so the cutscene
+            // also completes headless)
+
             // Update ball animation
             UpdateBallAnimation(gameTime);
             

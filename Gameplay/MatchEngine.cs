@@ -634,7 +634,23 @@ namespace NoPasaranFC.Gameplay
 
             // Event banner countdown (FOUL/OFFSIDE/PENALTY text overlay)
             if (EventBannerTimer > 0f)
+            {
                 EventBannerTimer -= deltaTime;
+                if (EventBannerTimer <= 0f && _eventBannerQueue.Count > 0)
+                {
+                    EventBannerText = _eventBannerQueue.Dequeue();
+                    EventBannerTimer = EventBannerDuration;
+                }
+            }
+
+            // Card banner countdown. Engine-side (not MatchScreen) so the card
+            // cutscene also completes headless - otherwise CardPhase stays
+            // Showing forever and the frozen RestartTimer deadlocks set pieces.
+            if (LastCardShown is { } shownCard)
+            {
+                shownCard.Timer -= deltaTime;
+                LastCardShown = shownCard.Timer > 0f ? shownCard : null;
+            }
 
             // Handle camera initialization
             if (CurrentState == MatchState.CameraInit)
@@ -724,7 +740,7 @@ namespace NoPasaranFC.Gameplay
                     // Smoothly zoom back in to normal
                     Camera.Zoom = MathHelper.Lerp(Camera.Zoom, _normalZoom, deltaTime * 2f);
 
-                    ResetAfterGoal();
+                    ResetAfterGoal(kickoffToConcedingTeam: true);
                     CurrentState = MatchState.Countdown;
                     CountdownTimer = 3.5f; // 3 seconds countdown + 0.5 for "GO!"
                     CountdownNumber = 3;
@@ -1267,10 +1283,19 @@ namespace NoPasaranFC.Gameplay
         public string EventBannerText { get; private set; }
         /// <summary>Seconds left on the event banner (0 = hidden).</summary>
         public float EventBannerTimer { get; private set; }
+        // Banners fired while one is showing queue up (e.g. FOUL -> FREE KICK)
+        private readonly Queue<string> _eventBannerQueue = new Queue<string>();
 
         private void ShowEventBanner(string localizationKey)
         {
-            EventBannerText = Models.Localization.Instance.Get(localizationKey);
+            string text = Models.Localization.Instance.Get(localizationKey);
+            if (EventBannerTimer > 0f)
+            {
+                if (_eventBannerQueue.Count < 2 && !_eventBannerQueue.Contains(text))
+                    _eventBannerQueue.Enqueue(text);
+                return;
+            }
+            EventBannerText = text;
             EventBannerTimer = EventBannerDuration;
         }
 
@@ -1479,6 +1504,7 @@ namespace NoPasaranFC.Gameplay
         {
             bool forHome = victim.Team == _homeTeam;
             PlaceBallForRestart(spot, forHome, MatchState.FreeKick);
+            ShowEventBanner("match.freeKick");
             
             // Defensive wall: 3 opponents on the ball-goal line, 9.15m from the ball
             Vector2 goalCenter = GetOpponentGoalCenter(victim.Team);
@@ -3124,13 +3150,20 @@ namespace NoPasaranFC.Gameplay
             BallVerticalVelocity = 0f;
         }
         
-        private void ResetAfterGoal()
+        private void ResetAfterGoal(bool kickoffToConcedingTeam = false)
         {
             BallPosition = new Vector2(StadiumMargin + FieldWidth / 2, StadiumMargin + FieldHeight / 2);
             BallVelocity = Vector2.Zero;
             BallHeight = 0f;
             BallVerticalVelocity = 0f;
             InitializePositions();
+
+            // IFAB: after a goal the kickoff goes to the team that CONCEDED
+            if (kickoffToConcedingTeam && _scoringTeam != null)
+            {
+                KickoffTeamId = _scoringTeam == _homeTeam ? _awayTeam.Id : _homeTeam.Id;
+                _scoringTeam = null;
+            }
         }
         
         /// <summary>

@@ -75,6 +75,10 @@ public class PenaltyTests
         Assert.True(freeKickSeen, "midfield foul should be a free kick");
         Assert.False(penaltySeen, "midfield foul must not be a penalty");
         Assert.Equal(Localization.Instance.Get("match.foul"), engine.EventBannerText);
+
+        // The FOUL banner is followed by the FREE KICK banner (queued)
+        TestHelper.Step(engine, MatchEngine.EventBannerDuration + 0.2f);
+        Assert.Equal(Localization.Instance.Get("match.freeKick"), engine.EventBannerText);
     }
 
     [Fact]

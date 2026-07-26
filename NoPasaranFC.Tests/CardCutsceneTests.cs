@@ -89,6 +89,42 @@ public class CardCutsceneTests
     }
 
     [Fact]
+    public void CardedFoul_FreeKickEventuallyExecutes_Headless()
+    {
+        var engine = TestHelper.MakeEngine(seed: 11);
+        TestHelper.ReachPlaying(engine);
+
+        // Stage a booking foul that produces a free kick (midfield)
+        var offender = engine.ControlledPlayer;
+        var victim = engine.AwayTeam.Players.First(p => p.IsStarting && p.Position == PlayerPosition.Forward);
+        offender.Defending = 1; offender.Agility = 1;
+        victim.Technique = 99; victim.Agility = 99;
+        offender.YellowCards = 1; // guarantee a booking (second yellow -> red)
+
+        bool freeKickWithCard = false;
+        for (int i = 0; i < 40 && !freeKickWithCard; i++)
+        {
+            offender.FieldPosition = new Vector2(4000f, 2682f);
+            victim.FieldPosition = offender.FieldPosition + new Vector2(40f, 0f);
+            engine.BallPosition = victim.FieldPosition + new Vector2(20f, 0f);
+            engine.BallVelocity = Vector2.Zero;
+            engine.LastPlayerTouchedBall = victim;
+            engine.Tackle(offender);
+            TestHelper.Step(engine, 0.1f);
+            freeKickWithCard = engine.CurrentState == MatchEngine.MatchState.FreeKick
+                && engine.CardPhase != MatchEngine.RefCardPhase.None;
+        }
+        Assert.True(freeKickWithCard, "expected a free kick with a card cutscene");
+
+        // Regression: without a renderer consuming the banner, the cutscene used
+        // to never finish - the frozen RestartTimer deadlocked the set piece
+        bool resumed = TestHelper.StepUntil(engine,
+            () => engine.CurrentState == MatchEngine.MatchState.Playing, 30f);
+        Assert.True(resumed, "free kick must execute headless after the card cutscene");
+        Assert.Equal(MatchEngine.RefCardPhase.None, engine.CardPhase);
+    }
+
+    [Fact]
     public void Cutscene_Ends_RefResumesNormalDuty()
     {
         var (engine, offender, _) = StageCard(11);
