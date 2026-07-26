@@ -51,13 +51,26 @@ namespace NoPasaranFC.Graphics3D
         public void Update(float dt, MatchEngine engine)
         {
             // Referee: waypoint patrol on a diagonal lane (how real refs cover the
-            // pitch) - reposition when the ball moves, face play when settled
+            // pitch) - reposition when the ball moves, face play when settled.
+            // During a card cutscene the ref abandons patrol and walks to the
+            // booked player instead (the engine's RefereePosition drives this).
             Vector3 ballWorld = WorldUnits.ToWorld(engine.BallPosition, engine.BallHeight);
-            Vector3 waypoint = GetRefereeWaypoint(ballWorld);
-            MoveOfficial(_referee, waypoint, dt, 4.5f, faceTarget: ballWorld);
-            engine.RefereePosition = new Vector2(
-                WorldUnits.MToPx(_referee.Position.X) + MatchEngine.StadiumMargin + MatchEngine.FieldWidth / 2f,
-                WorldUnits.MToPx(_referee.Position.Z) + MatchEngine.StadiumMargin + MatchEngine.FieldHeight / 2f);
+            if (engine.CardPhase != MatchEngine.RefCardPhase.None && engine.CardPlayer != null)
+            {
+                Vector3 playerWorld = WorldUnits.ToWorld(engine.CardPlayer.FieldPosition);
+                MoveOfficial(_referee, playerWorld, dt, 5.5f, faceTarget: playerWorld);
+                engine.RefereePosition = new Vector2(
+                    WorldUnits.MToPx(_referee.Position.X) + MatchEngine.StadiumMargin + MatchEngine.FieldWidth / 2f,
+                    WorldUnits.MToPx(_referee.Position.Z) + MatchEngine.StadiumMargin + MatchEngine.FieldHeight / 2f);
+            }
+            else
+            {
+                Vector3 waypoint = GetRefereeWaypoint(ballWorld);
+                MoveOfficial(_referee, waypoint, dt, 4.5f, faceTarget: ballWorld);
+                engine.RefereePosition = new Vector2(
+                    WorldUnits.MToPx(_referee.Position.X) + MatchEngine.StadiumMargin + MatchEngine.FieldWidth / 2f,
+                    WorldUnits.MToPx(_referee.Position.Z) + MatchEngine.StadiumMargin + MatchEngine.FieldHeight / 2f);
+            }
             
             // Linesmen: track the ball's length (X) on their half of the touchline
             float ballWorldX = ballWorld.X;
@@ -68,8 +81,21 @@ namespace NoPasaranFC.Graphics3D
             Vector2 southTarget = new Vector2(
                 Math.Clamp(ballWorldX, 0f, WorldUnits.PitchLengthMeters / 2f), halfW + 0.8f);
             
-            MoveOfficial(_linesmanNorth, new Vector3(northTarget.X, 0f, northTarget.Y), dt, LinesmanSpeed, null);
-            MoveOfficial(_linesmanSouth, new Vector3(southTarget.X, 0f, southTarget.Y), dt, LinesmanSpeed, null);
+            // Offside flag: the linesman on the offside side raises the flag (Wave)
+            var flagLinesman = engine.OffsideFlagRaised
+                ? (ballWorldX < 0f ? _linesmanNorth : _linesmanSouth)
+                : null;
+            if (flagLinesman != null)
+            {
+                flagLinesman.Instance.Play("Wave");
+                flagLinesman.Yaw = flagLinesman.Position.Z > 0 ? (float)Math.PI : 0f;
+                flagLinesman.Instance.Update(dt);
+            }
+            
+            MoveOfficial(_linesmanNorth, new Vector3(northTarget.X, 0f, northTarget.Y), dt, LinesmanSpeed, null,
+                skip: flagLinesman == _linesmanNorth);
+            MoveOfficial(_linesmanSouth, new Vector3(southTarget.X, 0f, southTarget.Y), dt, LinesmanSpeed, null,
+                skip: flagLinesman == _linesmanSouth);
         }
         
         // Diagonal patrol lane (center circle to both corners-ish), real refs
@@ -105,8 +131,11 @@ namespace NoPasaranFC.Graphics3D
             return best;
         }
         
-        private void MoveOfficial(Official official, Vector3 target, float dt, float speed, Vector3? faceTarget)
+        private void MoveOfficial(Official official, Vector3 target, float dt, float speed, Vector3? faceTarget,
+            bool skip = false)
         {
+            if (skip) return; // flag is up: hold position and play the signal
+            
             Vector3 delta = target - official.Position;
             delta.Y = 0f;
             float distance = delta.Length();

@@ -127,6 +127,9 @@ namespace NoPasaranFC.Harness
                 int totalFrames = seconds * 60;
                 for (int frame = 0; frame < totalFrames; frame++)
                 {
+                    // Cross halftime automatically so long sims cover the full match
+                    if (engine.CurrentState == MatchEngine.MatchState.HalfTime)
+                        engine.StartSecondHalf();
                     Step();
                     float t = (frame + 1) * FixedDeltaTime;
                     metrics.RecordFrame(engine, players, FixedDeltaTime);

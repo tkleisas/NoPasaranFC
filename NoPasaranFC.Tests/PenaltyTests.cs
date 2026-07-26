@@ -74,6 +74,7 @@ public class PenaltyTests
 
         Assert.True(freeKickSeen, "midfield foul should be a free kick");
         Assert.False(penaltySeen, "midfield foul must not be a penalty");
+        Assert.Equal(Localization.Instance.Get("match.foul"), engine.EventBannerText);
     }
 
     [Fact]
@@ -91,6 +92,20 @@ public class PenaltyTests
         bool leftSpot = System.Math.Abs(engine.BallPosition.X - (MatchEngine.StadiumMargin + 803f)) < 1f;
         bool rightSpot = System.Math.Abs(engine.BallPosition.X - (MatchEngine.StadiumMargin + MatchEngine.FieldWidth - 803f)) < 1f;
         Assert.True(leftSpot || rightSpot, "ball must be on a penalty spot");
+    }
+
+    [Fact]
+    public void Penalty_ShowsEventBanner_ThenExpires()
+    {
+        var engine = TestHelper.MakeEngine(seed: 42);
+        TestHelper.ReachPlaying(engine);
+
+        engine.DebugTriggerPenalty();
+        Assert.Equal(Localization.Instance.Get("match.penalty"), engine.EventBannerText);
+        Assert.True(engine.EventBannerTimer > 0f);
+
+        TestHelper.Step(engine, MatchEngine.EventBannerDuration + 0.5f);
+        Assert.True(engine.EventBannerTimer <= 0f, "banner should expire");
     }
 
     [Fact]

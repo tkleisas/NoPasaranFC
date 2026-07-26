@@ -319,7 +319,7 @@ namespace NoPasaranFC.Gameplay.UtilityAI
             float goalLineX = ctx.OwnGoalCenter.X;
             float goalTop = centerY - MatchEngine.GoalWidth / 2f;
             float goalBottom = centerY + MatchEngine.GoalWidth / 2f;
-            bool isHome = ctx.IsHomeTeam;
+            bool defendsLeft = ctx.AttackSign > 0f; // attacking right -> own goal on the left
             float defendingRatio = player.Defending / 100f;
             
             // GK with ball: distribute to an open teammate when there is one,
@@ -337,7 +337,7 @@ namespace NoPasaranFC.Gameplay.UtilityAI
             if (ballSpeed > UtilityTuning.GKShotDetectSpeed)
             {
                 float vx = ctx.BallVelocity.X;
-                bool towardGoal = isHome ? vx < -100f : vx > 100f;
+                bool towardGoal = defendsLeft ? vx < -100f : vx > 100f;
                 if (towardGoal && Math.Abs(vx) > 1f)
                 {
                     float t = (goalLineX - ctx.BallPosition.X) / vx;
@@ -393,8 +393,8 @@ namespace NoPasaranFC.Gameplay.UtilityAI
             float ballDistToGoal = Math.Abs(ctx.BallPosition.X - goalLineX);
             float advanceAmount = Math.Clamp(1f - ballDistToGoal / (MatchEngine.FieldWidth * 0.5f), 0f, 1f);
             float advance = advanceAmount * UtilityTuning.GKAdvanceMax * (0.5f + 0.5f * defendingRatio);
-            float holdX = goalLineX + (isHome ? UtilityTuning.GKLineOffset + advance
-                                              : -UtilityTuning.GKLineOffset - advance);
+            float holdX = goalLineX + (defendsLeft ? UtilityTuning.GKLineOffset + advance
+                                                   : -UtilityTuning.GKLineOffset - advance);
             return new UtilityAction(UtilityActionType.HoldPosition, new Vector2(holdX, targetY), 50f);
         }
         
@@ -649,7 +649,7 @@ namespace NoPasaranFC.Gameplay.UtilityAI
             else
             {
                 // Defending/neutral: home position shifted by ball progress
-                float attackSign = ctx.IsHomeTeam ? 1f : -1f;
+                float attackSign = ctx.AttackSign;
                 float roleDepth = player.Position switch
                 {
                     PlayerPosition.Defender => UtilityTuning.DefendDepthDefender,
@@ -659,7 +659,7 @@ namespace NoPasaranFC.Gameplay.UtilityAI
                 };
                 
                 float fieldSpan = MatchEngine.FieldWidth;
-                float ballProgress = ctx.IsHomeTeam
+                float ballProgress = ctx.AttackSign > 0f
                     ? (ctx.BallPosition.X - MatchEngine.StadiumMargin) / fieldSpan
                     : (MatchEngine.StadiumMargin + fieldSpan - ctx.BallPosition.X) / fieldSpan;
                 ballProgress = MathHelper.Clamp(ballProgress, 0f, 1f);

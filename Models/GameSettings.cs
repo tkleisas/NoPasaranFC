@@ -55,7 +55,10 @@ namespace NoPasaranFC.Models
         public string Venue { get; set; } = "Bahramis";
         
         /// <summary>Dribbling feel: Easy (ball stays glued to the controlled player) or Classic (loose ball).</summary>
-        public string BallControl { get; set; } = "Easy"; // "Bahramis" (default) or "Sperchogeia"
+        public string BallControl { get; set; } = "Easy";
+        
+        /// <summary>Offside rule enforcement with linesman flags (default off).</summary>
+        public bool OffsidesEnabled { get; set; } = false; // "Bahramis" (default) or "Sperchogeia"
         
         // Language settings
         public string Language { get; set; } = "el"; // "el" Greek (default) or "en" English

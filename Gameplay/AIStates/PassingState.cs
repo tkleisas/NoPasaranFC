@@ -149,7 +149,7 @@ namespace NoPasaranFC.Gameplay.AIStates
             }
 
             // Aim upfield and toward the nearer sideline — away from the dangerous center
-            float attackSign = context.IsHomeTeam ? 1f : -1f;
+            float attackSign = context.AttackSign;
             float centerY = MatchEngine.StadiumMargin + MatchEngine.FieldHeight / 2f;
             float wideSign = player.FieldPosition.Y < centerY ? -1f : 1f;
 

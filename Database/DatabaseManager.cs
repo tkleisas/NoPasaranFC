@@ -204,6 +204,40 @@ namespace NoPasaranFC.Database
                 SetSchemaVersion(connection, 8);
                 currentVersion = 8;
             }
+            
+            if (currentVersion < 9)
+            {
+                // Migration 9: Add OffsidesEnabled column to Settings table
+                ApplyMigration9_AddOffsidesEnabled(connection);
+                SetSchemaVersion(connection, 9);
+                currentVersion = 9;
+            }
+        }
+        
+        private void ApplyMigration9_AddOffsidesEnabled(SqliteConnection connection)
+        {
+            var checkCommand = connection.CreateCommand();
+            checkCommand.CommandText = "PRAGMA table_info(Settings)";
+
+            bool columnExists = false;
+            using (var reader = checkCommand.ExecuteReader())
+            {
+                while (reader.Read())
+                {
+                    if (reader.GetString(1) == "OffsidesEnabled")
+                    {
+                        columnExists = true;
+                        break;
+                    }
+                }
+            }
+
+            if (!columnExists)
+            {
+                var alterCommand = connection.CreateCommand();
+                alterCommand.CommandText = "ALTER TABLE Settings ADD COLUMN OffsidesEnabled INTEGER DEFAULT 0";
+                alterCommand.ExecuteNonQuery();
+            }
         }
         
         private void ApplyMigration8_AddBallControl(SqliteConnection connection)
@@ -787,14 +821,14 @@ namespace NoPasaranFC.Database
                     Difficulty, MatchDurationMinutes, PlayerSpeedMultiplier,
                     ShowMinimap, ShowPlayerNames, ShowStamina,
                     CameraZoom, CameraSpeed, Language, MatchViewMode,
-                    CameraMode, TimeOfDay, Weather, AIDecisionInterval, Venue, BallControl
+                    CameraMode, TimeOfDay, Weather, AIDecisionInterval, Venue, BallControl, OffsidesEnabled
                 ) VALUES (
                     1, @resWidth, @resHeight, @fullscreen, @vsync,
                     @masterVol, @musicVol, @sfxVol, @muteAll,
                     @difficulty, @matchDuration, @speedMulti,
                     @showMap, @showNames, @showStamina,
                     @camZoom, @camSpeed, @language, @matchViewMode,
-                    @cameraMode, @timeOfDay, @weather, @aiDecisionInterval, @venue, @ballControl
+                    @cameraMode, @timeOfDay, @weather, @aiDecisionInterval, @venue, @ballControl, @offsides
                 );
             ";
             
@@ -822,6 +856,7 @@ namespace NoPasaranFC.Database
             command.Parameters.AddWithValue("@aiDecisionInterval", settings.AIDecisionInterval);
             command.Parameters.AddWithValue("@venue", settings.Venue ?? "Bahramis");
             command.Parameters.AddWithValue("@ballControl", settings.BallControl ?? "Easy");
+            command.Parameters.AddWithValue("@offsides", settings.OffsidesEnabled ? 1 : 0);
             
             command.ExecuteNonQuery();
         }
@@ -862,7 +897,8 @@ namespace NoPasaranFC.Database
                     Weather = reader.FieldCount > 21 && !reader.IsDBNull(21) ? reader.GetString(21) : "Clear",
                     AIDecisionInterval = reader.FieldCount > 22 && !reader.IsDBNull(22) ? reader.GetFloat(22) : 0.1f,
                     Venue = reader.FieldCount > 23 && !reader.IsDBNull(23) ? reader.GetString(23) : "Bahramis",
-                    BallControl = reader.FieldCount > 24 && !reader.IsDBNull(24) ? reader.GetString(24) : "Easy"
+                    BallControl = reader.FieldCount > 24 && !reader.IsDBNull(24) ? reader.GetString(24) : "Easy",
+                    OffsidesEnabled = reader.FieldCount > 25 && !reader.IsDBNull(25) && reader.GetInt32(25) == 1
                 };
                 return settings;
             }

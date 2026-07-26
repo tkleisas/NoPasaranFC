@@ -75,6 +75,90 @@ namespace NoPasaranFC.Gameplay
             if (player == null) return;
             _lastKicker = player;
             SetLastPlayerTouchedBall(player);
+            
+            // Offside snapshot: which of the kicker's teammates are offside NOW
+            if (GameSettings.Instance.OffsidesEnabled && CurrentState == MatchState.Playing)
+                SnapshotOffsideCandidates(player);
+        }
+        
+        // ---- Offside detection ----
+        
+        private readonly List<Player> _offsideCandidates = new List<Player>();
+        
+        /// <summary>True while an offside flag is up (linesman/UI display).</summary>
+        public bool OffsideFlagRaised { get; private set; }
+        private float _offsideFlagTimer;
+        
+        /// <summary>
+        /// Offside candidates at kick time: teammates of the kicker who are in
+        /// the opponent's half, ahead of the ball, and deeper than the
+        /// second-last defender.
+        /// </summary>
+        private void SnapshotOffsideCandidates(Player kicker)
+        {
+            _offsideCandidates.Clear();
+            var team = kicker.Team;
+            if (team == null) return;
+            
+            bool attacksRight = AttackSign(team) > 0;
+            float centerX = StadiumMargin + FieldWidth / 2f;
+            float goalLineX = attacksRight ? StadiumMargin + FieldWidth : StadiumMargin;
+
+            // Second-last defender by distance to the defended goal line
+            var defendingTeam = team == _homeTeam ? _awayTeam : _homeTeam;
+            var secondLast = defendingTeam.Players
+                .Where(p => p.IsStarting)
+                .OrderBy(p => Math.Abs(p.FieldPosition.X - goalLineX))
+                .Skip(1).FirstOrDefault();
+            if (secondLast == null) return;
+
+            foreach (var p in team.Players.Where(p => p.IsStarting && p != kicker))
+            {
+                bool inOppHalf = attacksRight ? p.FieldPosition.X > centerX : p.FieldPosition.X < centerX;
+                bool aheadOfBall = attacksRight ? p.FieldPosition.X > BallPosition.X : p.FieldPosition.X < BallPosition.X;
+                bool deeper = attacksRight ? p.FieldPosition.X > secondLast.FieldPosition.X
+                                           : p.FieldPosition.X < secondLast.FieldPosition.X;
+                if (inOppHalf && aheadOfBall && deeper)
+                    _offsideCandidates.Add(p);
+            }
+        }
+        
+        /// <summary>
+        /// Whistles offside when an offside-positioned attacker plays the ball:
+        /// flag up and an (indirect) free kick for the defending team.
+        /// </summary>
+        private void CheckOffside()
+        {
+            if (_offsideFlagTimer > 0f)
+            {
+                _offsideFlagTimer -= 1f / 60f;
+                if (_offsideFlagTimer <= 0f)
+                    OffsideFlagRaised = false;
+            }
+            
+            if (!GameSettings.Instance.OffsidesEnabled || _offsideCandidates.Count == 0) return;
+            if (CurrentState != MatchState.Playing)
+            {
+                _offsideCandidates.Clear();
+                return;
+            }
+            
+            var toucher = _lastPlayerTouchedBall;
+            if (toucher == null || !_offsideCandidates.Contains(toucher)) return;
+            if (Vector2.Distance(toucher.FieldPosition, BallPosition) > 100f) return;
+            
+            // OFFSIDE: flag, banner, free kick for the defending team
+            AudioManager.Instance.PlaySoundEffect("whistle_start", 0.8f); // single blow
+            ShowEventBanner("match.offside");
+            OffsideFlagRaised = true;
+            _offsideFlagTimer = 2.5f;
+            _offsideCandidates.Clear();
+            
+            var victim = (toucher.Team == _homeTeam ? _awayTeam : _homeTeam).Players
+                .Where(p => p.IsStarting)
+                .OrderBy(p => Vector2.Distance(p.FieldPosition, BallPosition))
+                .First();
+            PlaceBallForFreeKick(BallPosition, victim);
         }
         
         // First-touch grace: a teammate who just received the ball can't be
@@ -87,8 +171,12 @@ namespace NoPasaranFC.Gameplay
         // the ball until the kickoff taker has played it
         public bool KickoffTaken { get; private set; } = true;
         public int KickoffTeamId { get; private set; }
+        private int _firstHalfKickoffTeamId = -1; // who kicked off the first half (2nd half goes to the other team)
         private float _kickoffHoldTime; // safety: force-release a stuck kickoff
         private bool _halftimeReached;
+        
+        /// <summary>Debug: freeze match-time progression (scenario staging).</summary>
+        public bool DebugHoldTime { get; set; }
         
         /// <summary>True while the player is in their post-reception grace window.</summary>
         public bool HasFirstTouchGrace(Player player)
@@ -171,7 +259,12 @@ namespace NoPasaranFC.Gameplay
         private float _shootButtonHoldTime = 0f;
         private bool _wasShootButtonDown = false;
         private bool _goalScored = false;
-        private bool _isOwnGoal = false;
+        private Team _scoringTeam; // Team that benefits from the current goal (set at detection)
+
+        /// <summary>Team that celebrated the most recent goal (test/debug introspection).</summary>
+        internal Team LastCelebratingTeam { get; private set; }
+        /// <summary>Player who led the most recent celebration (test/debug introspection).</summary>
+        internal Player LastCelebrationScorer { get; private set; }
         private float _goalCelebrationDelay = 0f;
         private const float GoalCelebrationDelayTime = 0.5f; // Half second delay to see ball in goal
         private float _normalZoom;
@@ -184,8 +277,42 @@ namespace NoPasaranFC.Gameplay
         public Camera Camera { get; private set; }
         
         // Track ball half for hysteresis (prevent oscillation at center line)
-        private bool _ballInHomeHalfCache = true; // Home team's half
-        
+        private bool _ballInHomeHalfCache = true; // Ball in the LEFT half of the pitch
+
+        // ---- Halves / attack direction ----
+        // First half: home defends the LEFT goal, attacks right (+X).
+        // Teams switch sides at halftime (Half = 2 flips every direction).
+
+        /// <summary>Current half (1 or 2). Teams switch sides at halftime.</summary>
+        public int Half { get; private set; } = 1;
+
+        /// <summary>+1 when the team attacks toward +X (right goal), -1 toward -X (left goal).</summary>
+        public int AttackSign(Team team)
+        {
+            bool isHome = team == _homeTeam;
+            bool homeAttacksRight = Half == 1;
+            return (isHome == homeAttacksRight) ? 1 : -1;
+        }
+
+        /// <summary>X of the goal line this team defends this half.</summary>
+        public float DefendedGoalLineX(Team team) =>
+            AttackSign(team) > 0 ? StadiumMargin : StadiumMargin + FieldWidth;
+
+        /// <summary>X of the goal line this team attacks this half.</summary>
+        public float AttackedGoalLineX(Team team) =>
+            AttackSign(team) > 0 ? StadiumMargin + FieldWidth : StadiumMargin;
+
+        public Vector2 GetOwnGoalCenter(Team team) =>
+            new Vector2(DefendedGoalLineX(team), StadiumMargin + FieldHeight / 2f);
+
+        public Vector2 GetOpponentGoalCenter(Team team) =>
+            new Vector2(AttackedGoalLineX(team), StadiumMargin + FieldHeight / 2f);
+
+        /// <summary>Team defending the left goal this half.</summary>
+        public Team LeftDefendingTeam => Half == 1 ? _homeTeam : _awayTeam;
+        /// <summary>Team defending the right goal this half.</summary>
+        public Team RightDefendingTeam => Half == 1 ? _awayTeam : _homeTeam;
+
         // Field dimensions scaled to player size
         // Player sprite (128px rendered) ≈ 1.75m tall → 73 pixels per meter
         // FIFA standard pitch: 105m × 68m
@@ -331,9 +458,9 @@ namespace NoPasaranFC.Gameplay
         
         private void InitializePositions()
         {
-            // Formation 4-4-2 for both teams
-            SetupTeamPositions(_homeTeam, true);
-            SetupTeamPositions(_awayTeam, false);
+            // Formation 4-4-2 for both teams (sides are half-aware)
+            SetupTeamPositions(_homeTeam);
+            SetupTeamPositions(_awayTeam);
             
             // Ball at center
             BallPosition = new Vector2(StadiumMargin + FieldWidth / 2, StadiumMargin + FieldHeight / 2);
@@ -360,7 +487,20 @@ namespace NoPasaranFC.Gameplay
                     ?? controlledTeamPlayers.FirstOrDefault(p => p.Position != PlayerPosition.Goalkeeper)
                     ?? controlledTeamPlayers[0];
                 _controlledPlayer.IsControlled = true;
-                KickoffTeamId = _controlledPlayer.TeamId;
+
+                // Kickoff: first half goes to the player's team; the second half
+                // goes to the team that did NOT kick off the first (IFAB rule)
+                if (Half == 1)
+                {
+                    KickoffTeamId = _controlledPlayer.TeamId;
+                    if (_firstHalfKickoffTeamId == -1)
+                        _firstHalfKickoffTeamId = KickoffTeamId;
+                }
+                else
+                {
+                    KickoffTeamId = _firstHalfKickoffTeamId == _homeTeam.Id
+                        ? _awayTeam.Id : _homeTeam.Id;
+                }
             }
 
             // If Player 2 has already joined (e.g. resetting after a goal), re-pick a
@@ -390,7 +530,7 @@ namespace NoPasaranFC.Gameplay
             Camera.Follow(BallPosition, 1f);
         }
         
-        private void SetupTeamPositions(Team team, bool isHome)
+        private void SetupTeamPositions(Team team)
         {
             // Get starting players sorted by position to match 4-4-2 formation:
             // GK first, then DEF, MID, FWD — ensures correct AI state assignment
@@ -404,11 +544,14 @@ namespace NoPasaranFC.Gameplay
             float centerX = xOffset + FieldWidth / 2;
             float centerY = yOffset + FieldHeight / 2;
             
-            // Positions relative to team's goal (left for home, right for away)
-            float defenseX = isHome ? xOffset + FieldWidth * 0.2f : xOffset + FieldWidth * 0.8f;
-            float midfieldX = isHome ? xOffset + FieldWidth * 0.4f : xOffset + FieldWidth * 0.6f;
-            float attackX = isHome ? xOffset + FieldWidth * 0.6f : xOffset + FieldWidth * 0.4f;
-            float goalX = isHome ? xOffset + 50f : xOffset + FieldWidth - 50f;
+            // Positions relative to the goal the team defends THIS half
+            // (half 1: home left/away right — sides switch at halftime).
+            // Attacking right (+1) means defending the LEFT goal.
+            bool defendsLeft = AttackSign(team) > 0;
+            float defenseX = defendsLeft ? xOffset + FieldWidth * 0.2f : xOffset + FieldWidth * 0.8f;
+            float midfieldX = defendsLeft ? xOffset + FieldWidth * 0.4f : xOffset + FieldWidth * 0.6f;
+            float attackX = defendsLeft ? xOffset + FieldWidth * 0.6f : xOffset + FieldWidth * 0.4f;
+            float goalX = defendsLeft ? xOffset + 50f : xOffset + FieldWidth - 50f;
             
             // Goalkeeper — also set Position to ensure AIController creates GoalkeeperState
             startingPlayers[0].FieldPosition = new Vector2(goalX, centerY);
@@ -488,7 +631,11 @@ namespace NoPasaranFC.Gameplay
             _p2IsPassKeyDown = isPassKeyDown2;
 
             float deltaTime = (float)gameTime.ElapsedGameTime.TotalSeconds;
-            
+
+            // Event banner countdown (FOUL/OFFSIDE/PENALTY text overlay)
+            if (EventBannerTimer > 0f)
+                EventBannerTimer -= deltaTime;
+
             // Handle camera initialization
             if (CurrentState == MatchState.CameraInit)
             {
@@ -546,7 +693,6 @@ namespace NoPasaranFC.Gameplay
                 {
                     TriggerGoalCelebration();
                     _goalScored = false;
-                    _isOwnGoal = false; // Reset own goal flag
                 }
                 // Let ball physics continue during delay
             }
@@ -624,7 +770,8 @@ namespace NoPasaranFC.Gameplay
             // Update match time - map real time to game time (90 minutes)
             float realTimeDuration = GameSettings.Instance.GetMatchDurationSeconds();
             float gameTimeIncrement = (90f / realTimeDuration) * deltaTime;
-            MatchTime += gameTimeIncrement;
+            if (!DebugHoldTime)
+                MatchTime += gameTimeIncrement;
             _timeSinceKickoff += deltaTime; // Update kickoff timer
             _timeSinceSetPiece += deltaTime; // Update set piece timer
             UpdateFirstTouchGrace(deltaTime); // Decay first-touch grace windows
@@ -835,9 +982,9 @@ namespace NoPasaranFC.Gameplay
                             if (CurrentState == MatchState.GoalKick)
                             {
                                 // Aim deep into the opponent half (30-40m upfield, varied lane)
-                                float forwardX = RestartPlayer.Team == _homeTeam
-                                    ? RestartPlayer.FieldPosition.X + 2200f + (float)_random.NextDouble() * 800f
-                                    : RestartPlayer.FieldPosition.X - 2200f - (float)_random.NextDouble() * 800f;
+                                float gkAttackSign = AttackSign(RestartPlayer.Team);
+                                float forwardX = RestartPlayer.FieldPosition.X
+                                    + gkAttackSign * (2200f + (float)_random.NextDouble() * 800f);
                                 float targetY = StadiumMargin + (float)(_random.NextDouble() * FieldHeight);
                                 target = new Vector2(forwardX, targetY);
                                 ThrowInPowerCharge = 0.55f + (float)_random.NextDouble() * 0.35f;
@@ -846,7 +993,7 @@ namespace NoPasaranFC.Gameplay
                             {
                                 // Aim at goal area (free kicks also shoot when in range;
                                 // penalties aim at a post)
-                                float goalX = RestartPlayer.Team == _homeTeam ? StadiumMargin + FieldWidth : StadiumMargin;
+                                float goalX = AttackedGoalLineX(RestartPlayer.Team);
                                 float centerY = StadiumMargin + FieldHeight / 2f;
                                 float aimY = CurrentState == MatchState.PenaltyKick
                                     ? centerY + (_random.Next(2) == 0 ? -1f : 1f) * (MatchEngine.GoalWidth / 2f - 60f)
@@ -901,6 +1048,11 @@ namespace NoPasaranFC.Gameplay
                 // But we need to make sure the RestartPlayer stays pinned in UpdatePlayers.
             }
 
+            // Offside check BEFORE players act: the whistle must fire on the
+            // attacker's first touch, before he can play the ball (his kick
+            // would re-snapshot the candidate list)
+            CheckOffside();
+            
             // Update all players
             UpdatePlayers(deltaTime, moveDirection, isShootKeyDown, isPassKeyDown);
             
@@ -1107,7 +1259,21 @@ namespace NoPasaranFC.Gameplay
             public float Timer;
         }
         public CardEvent? LastCardShown { get; set; }
-        
+
+        // ---- Event banner: big center-screen text (FOUL, OFFSIDE, PENALTY) ----
+
+        public const float EventBannerDuration = 2.2f;
+        /// <summary>Localized banner text while <see cref="EventBannerTimer"/> &gt; 0.</summary>
+        public string EventBannerText { get; private set; }
+        /// <summary>Seconds left on the event banner (0 = hidden).</summary>
+        public float EventBannerTimer { get; private set; }
+
+        private void ShowEventBanner(string localizationKey)
+        {
+            EventBannerText = Models.Localization.Instance.Get(localizationKey);
+            EventBannerTimer = EventBannerDuration;
+        }
+
         // ---- Card cutscene: the ref walks to the offender and shows the card ----
         
         public enum RefCardPhase { None, Going, Showing }
@@ -1140,7 +1306,7 @@ namespace NoPasaranFC.Gameplay
             
             severity = Math.Clamp(severity, 0f, 1f);
             Fouls.Add(new FoulRecord(offender, victim, BallPosition, severity));
-            AudioManager.Instance.PlaySoundEffect("whistle_end", 0.7f);
+            AudioManager.Instance.PlaySoundEffect("whistle_start", 0.7f); // single blow
             
             // Carding: harsh fouls book the offender; second yellow = red
             MaybeCard(offender, severity);
@@ -1148,10 +1314,12 @@ namespace NoPasaranFC.Gameplay
             // Penalty when the foul lands inside the offender's box
             if (IsInPenaltyArea(BallPosition, offender.Team))
             {
-                PlacePenaltyKick(victim);
+                PlacePenaltyKick(victim); // shows the PENALTY banner
                 return;
             }
-            
+
+            ShowEventBanner("match.foul");
+
             // Free kick for the victim's team at the foul spot (kept inside the field)
             float x = Math.Clamp(BallPosition.X, StadiumMargin + 60f, StadiumMargin + FieldWidth - 60f);
             float y = Math.Clamp(BallPosition.Y, StadiumMargin + 60f, StadiumMargin + FieldHeight - 60f);
@@ -1165,7 +1333,7 @@ namespace NoPasaranFC.Gameplay
             bool inY = spot.Y >= centerY - AIConstants.GKPenaltyAreaWidth / 2f &&
                        spot.Y <= centerY + AIConstants.GKPenaltyAreaWidth / 2f;
             if (!inY) return false;
-            if (team == _homeTeam)
+            if (AttackSign(team) > 0) // attacks right -> defends the left goal
                 return spot.X >= StadiumMargin && spot.X <= StadiumMargin + AIConstants.GKPenaltyAreaDepth;
             return spot.X <= StadiumMargin + FieldWidth && spot.X >= StadiumMargin + FieldWidth - AIConstants.GKPenaltyAreaDepth;
         }
@@ -1174,8 +1342,8 @@ namespace NoPasaranFC.Gameplay
         private void PlacePenaltyKick(Player victim)
         {
             bool forHome = victim.Team == _homeTeam;
-            float goalX = forHome ? StadiumMargin + FieldWidth : StadiumMargin;
-            float attackSign = forHome ? 1f : -1f;
+            float goalX = AttackedGoalLineX(victim.Team);
+            float attackSign = AttackSign(victim.Team);
             
             // Ball on the penalty spot (11m), taker behind it, GK on the line
             var spot = new Vector2(goalX - attackSign * 803f, StadiumMargin + FieldHeight / 2f);
@@ -1201,6 +1369,7 @@ namespace NoPasaranFC.Gameplay
             _cornerKickRunUp = false;
             RestartDirection = new Vector2(attackSign, 0f);
             CurrentState = MatchState.PenaltyKick;
+            ShowEventBanner("match.penalty");
         }
         
         // Penalty dive state (GK guesses a side as the kick is taken)
@@ -1312,9 +1481,7 @@ namespace NoPasaranFC.Gameplay
             PlaceBallForRestart(spot, forHome, MatchState.FreeKick);
             
             // Defensive wall: 3 opponents on the ball-goal line, 9.15m from the ball
-            Vector2 goalCenter = forHome
-                ? new Vector2(StadiumMargin + FieldWidth, StadiumMargin + FieldHeight / 2f)
-                : new Vector2(StadiumMargin, StadiumMargin + FieldHeight / 2f);
+            Vector2 goalCenter = GetOpponentGoalCenter(victim.Team);
             if (Vector2.Distance(spot, goalCenter) < 2200f)
             {
                 Vector2 toGoal = goalCenter - spot;
@@ -2117,22 +2284,21 @@ namespace NoPasaranFC.Gameplay
         internal bool IsBallInHalf(string teamName)
         {
             float centerX = StadiumMargin + FieldWidth / 2;
-            bool isHomeTeam = teamName == _homeTeam.Name;
-            
+
             // Hysteresis zone around center line to prevent oscillation
             // Ball must move 100 pixels past center to change half
             const float hysteresisZone = 100f;
-            
-            // Check current ball position
-            bool ballActuallyInHomeHalf = BallPosition.X < centerX;
-            
+
+            // Check current ball position (cache tracks the LEFT half)
+            bool ballActuallyInLeftHalf = BallPosition.X < centerX;
+
             // Update cache only if ball has moved significantly past center
-            if (ballActuallyInHomeHalf)
+            if (ballActuallyInLeftHalf)
             {
                 // Ball in left side
                 if (BallPosition.X < centerX - hysteresisZone)
                 {
-                    // Clearly in home half
+                    // Clearly in left half
                     _ballInHomeHalfCache = true;
                 }
                 // else: in hysteresis zone, keep previous state
@@ -2142,17 +2308,15 @@ namespace NoPasaranFC.Gameplay
                 // Ball in right side
                 if (BallPosition.X > centerX + hysteresisZone)
                 {
-                    // Clearly in away half
+                    // Clearly in right half
                     _ballInHomeHalfCache = false;
                 }
                 // else: in hysteresis zone, keep previous state
             }
-            
-            // Return appropriate value based on team
-            if (isHomeTeam)
-                return _ballInHomeHalfCache; // Home team: is ball in their (left) half?
-            else
-                return !_ballInHomeHalfCache; // Away team: is ball in their (right) half?
+
+            // Return appropriate value based on the half the team defends
+            bool teamDefendsLeft = (teamName == _homeTeam.Name) == (Half == 1);
+            return teamDefendsLeft ? _ballInHomeHalfCache : !_ballInHomeHalfCache;
         }
         
         private void PerformShoot(Player player, Vector2 moveDirection, float shootButtonHoldTime)
@@ -2428,35 +2592,31 @@ namespace NoPasaranFC.Gameplay
             }
             
             // === GOAL DETECTION ===
-            // Left goal (home team defends) - Ball must cross the goal line
+            // Left goal - the team NOT defending it this half scores
             if (BallPosition.X < leftGoalLine &&
                 BallPosition.Y >= goalTop && BallPosition.Y <= goalBottom &&
                 ballBelowGoalHeight && !_goalScored)
             {
-                AwayScore++;
+                // The team attacking the left goal benefits - even if the last
+                // kicker was a defender (own goal), the attacking side celebrates
+                _scoringTeam = RightDefendingTeam;
+                if (_scoringTeam == _homeTeam) HomeScore++; else AwayScore++;
                 _goalScored = true;
                 _goalCelebrationDelay = 0f;
-
-                // Check if it's an own goal (home team scored on themselves).
-                // Attribution uses the last KICKER: a defender blocking or the GK
-                // parrying a shot doesn't turn it into an own goal
-                _isOwnGoal = LastKicker != null && LastKicker.Team == _homeTeam;
 
                 AudioManager.Instance.PlaySoundEffect("goal");
                 // Don't trigger celebration yet - let ball continue for visual effect
                 return;
             }
-            // Right goal (away team defends) - Ball must cross the goal line
+            // Right goal - the team NOT defending it this half scores
             else if (BallPosition.X > rightGoalLine &&
                      BallPosition.Y >= goalTop && BallPosition.Y <= goalBottom &&
                      ballBelowGoalHeight && !_goalScored)
             {
-                HomeScore++;
+                _scoringTeam = LeftDefendingTeam;
+                if (_scoringTeam == _homeTeam) HomeScore++; else AwayScore++;
                 _goalScored = true;
                 _goalCelebrationDelay = 0f;
-
-                // Check if it's an own goal (away team scored on themselves)
-                _isOwnGoal = LastKicker != null && LastKicker.Team == _awayTeam;
 
                 AudioManager.Instance.PlaySoundEffect("goal");
                 // Don't trigger celebration yet - let ball continue for visual effect
@@ -2522,24 +2682,16 @@ namespace NoPasaranFC.Gameplay
             
             if (_lastPlayerTouchedBall != null)
             {
-                // Check if last touch was from defending team
-                bool lastTouchWasHomeTeam = _homeTeam.Players.Contains(_lastPlayerTouchedBall);
-                
-                // Home team defends left goal, away team defends right goal
-                // If defending team touched it last -> corner kick for attacking team
-                // If attacking team touched it last -> goal kick for defending team
-                if (leftSide)
-                {
-                    // Left goal (defended by home team)
-                    isCornerKick = lastTouchWasHomeTeam; // Home defender touched = corner for away
-                    giveToHomeTeam = isCornerKick ? false : true; // Corner: give to away, Goal kick: give to home
-                }
-                else // right side
-                {
-                    // Right goal (defended by away team)
-                    isCornerKick = !lastTouchWasHomeTeam; // Away defender touched = corner for home
-                    giveToHomeTeam = isCornerKick ? true : false; // Corner: give to home, Goal kick: give to away
-                }
+                // The goal on this side is defended by LeftDefendingTeam/RightDefendingTeam
+                // (half-aware). If the defending team touched it last -> corner kick
+                // for the attacking team; otherwise goal kick for the defending team.
+                var defendingTeam = leftSide ? LeftDefendingTeam : RightDefendingTeam;
+                bool lastTouchWasDefending = defendingTeam.Players.Contains(_lastPlayerTouchedBall);
+                isCornerKick = lastTouchWasDefending;
+                var restartTeam = isCornerKick
+                    ? (defendingTeam == _homeTeam ? _awayTeam : _homeTeam) // corner: attackers
+                    : defendingTeam;                                        // goal kick: defenders
+                giveToHomeTeam = restartTeam == _homeTeam;
             }
             
             float xPos, yPos;
@@ -2882,40 +3034,36 @@ namespace NoPasaranFC.Gameplay
             BallVerticalVelocity = 0f;
 
             // Start player celebration using the new CelebrationManager.
-            // The scorer is the last KICKER (not whoever last contacted the ball)
-            var scorer = LastKicker;
-            if (scorer != null)
+            // The team that BENEFITS from the goal celebrates - even for an own
+            // goal, where the "scorer" is on the conceding side. LastKicker can be
+            // stale (a defensive clearance long before the goal), so never use its
+            // team to decide who celebrates.
+            var scoringTeam = _scoringTeam ?? LastKicker?.Team;
+            Player scorer = LastKicker;
+            if (scorer == null || scorer.Team != scoringTeam)
             {
-                List<Player> teammates;
-                List<Player> opponents;
+                // Own goal or unknown kicker: a player from the benefiting team
+                // leads the celebration (nearest to the ball)
+                scorer = scoringTeam?.Players
+                    .Where(p => p.IsStarting && !p.IsKnockedDown)
+                    .OrderBy(p => Vector2.Distance(p.FieldPosition, BallPosition))
+                    .FirstOrDefault();
+            }
+            if (scorer != null && scoringTeam != null)
+            {
+                LastCelebratingTeam = scoringTeam;
+                LastCelebrationScorer = scorer;
 
-                if (_isOwnGoal)
-                {
-                    // Own goal - BOTH teams celebrate together!
-                    // The "scorer" is the player who made the own goal
-                    teammates = _homeTeam.Players
-                        .Where(p => p.IsStarting && p != scorer && !p.IsKnockedDown)
-                        .Concat(_awayTeam.Players.Where(p => p.IsStarting && p != scorer && !p.IsKnockedDown))
-                        .ToList();
+                List<Player> teammates = scoringTeam.Players
+                    .Where(p => p.IsStarting && p != scorer && !p.IsKnockedDown)
+                    .ToList();
 
-                    // No opponents - everyone celebrates
-                    opponents = new List<Player>();
-                }
-                else
-                {
-                    // Normal goal - only scoring team celebrates
-                    teammates = scorer.Team.Players
-                        .Where(p => p.IsStarting && p != scorer && !p.IsKnockedDown)
-                        .ToList();
+                var opponentTeam = scoringTeam == _homeTeam ? _awayTeam : _homeTeam;
+                List<Player> opponents = opponentTeam.Players
+                    .Where(p => p.IsStarting && !p.IsKnockedDown)
+                    .ToList();
 
-                    var opponentTeam = scorer.Team == _homeTeam ? _awayTeam : _homeTeam;
-                    opponents = opponentTeam.Players
-                        .Where(p => p.IsStarting && !p.IsKnockedDown)
-                        .ToList();
-                }
-
-                // Start celebration (own goals always use "run_around_pitch")
-                CelebrationManager.StartCelebration(scorer, teammates, opponents, _isOwnGoal);
+                CelebrationManager.StartCelebration(scorer, teammates, opponents);
             }
 
             // Start visual celebration (ball animation and text) - must be after CelebrationManager.StartCelebration
@@ -3011,8 +3159,9 @@ namespace NoPasaranFC.Gameplay
             // Halftime recovery for everyone on the pitch (subs come in fresh anyway)
             foreach (var player in GetAllPlayers())
                 player.Stamina = Math.Min(100f, player.Stamina + 25f);
-            
-            ResetAfterGoal(); // positions + ball for the kickoff
+
+            Half = 2; // teams switch sides for the second half
+            ResetAfterGoal(); // positions + ball for the kickoff (half-aware)
             CurrentState = MatchState.Countdown;
             CountdownTimer = 3.5f;
             CountdownNumber = 3;
@@ -3349,7 +3498,8 @@ namespace NoPasaranFC.Gameplay
             
             // Place corner for player's team (attacking corner)
             bool giveToHomeTeam = _homeTeam.IsPlayerControlled;
-            float cornerX = giveToHomeTeam ? StadiumMargin + FieldWidth - 20 : StadiumMargin + 20;
+            var attackingTeam = giveToHomeTeam ? _homeTeam : _awayTeam;
+            float cornerX = AttackedGoalLineX(attackingTeam) + (AttackSign(attackingTeam) > 0 ? -20f : 20f);
             float cornerY = StadiumMargin + 20; // Top corner
             
             PlaceBallForRestart(new Vector2(cornerX, cornerY), giveToHomeTeam, MatchState.CornerKick);
@@ -3361,8 +3511,7 @@ namespace NoPasaranFC.Gameplay
             if (CurrentState != MatchState.Playing || victim == null) return;
             
             // Spot ~20m out, central: dangerous free kick position
-            bool forHome = victim.Team == _homeTeam;
-            float x = forHome ? StadiumMargin + FieldWidth - 1460f : StadiumMargin + 1460f;
+            float x = AttackedGoalLineX(victim.Team) - AttackSign(victim.Team) * 1460f;
             float y = StadiumMargin + FieldHeight / 2f;
             BallPosition = new Vector2(x, y);
             PlaceBallForFreeKick(BallPosition, victim);
@@ -3372,9 +3521,10 @@ namespace NoPasaranFC.Gameplay
         {
             if (CurrentState != MatchState.Playing) return;
             
-            // Place goal kick for player's team
+            // Place goal kick for player's team (near the goal they defend this half)
             bool giveToHomeTeam = _homeTeam.IsPlayerControlled;
-            float goalKickX = giveToHomeTeam ? StadiumMargin + 100 : StadiumMargin + FieldWidth - 100;
+            var gkTeam = giveToHomeTeam ? _homeTeam : _awayTeam;
+            float goalKickX = DefendedGoalLineX(gkTeam) + (AttackSign(gkTeam) > 0 ? 100f : -100f);
             float goalKickY = StadiumMargin + FieldHeight / 2;
             
             PlaceBallForRestart(new Vector2(goalKickX, goalKickY), giveToHomeTeam, MatchState.GoalKick);
@@ -3389,15 +3539,16 @@ namespace NoPasaranFC.Gameplay
             {
                 HomeScore++;
                 _lastPlayerTouchedBall = _controlledPlayer;
+                _scoringTeam = _homeTeam;
             }
             else
             {
                 AwayScore++;
                 _lastPlayerTouchedBall = _controlledPlayer;
+                _scoringTeam = _awayTeam;
             }
-            
+
             _goalScored = true;
-            _isOwnGoal = false;
             _goalCelebrationDelay = 0f;
             AudioManager.Instance.PlaySoundEffect("goal", allowRetrigger: false);
         }

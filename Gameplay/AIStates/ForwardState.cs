@@ -12,7 +12,7 @@ namespace NoPasaranFC.Gameplay.AIStates
         protected override AIStateType? CheckChaseBall(Player player, AIContext context)
         {
             bool teamHasBall = context.ClosestToBall != null && context.ClosestToBall.Team == player.Team;
-            bool ballInOpponentHalf = context.IsHomeTeam ?
+            bool ballInOpponentHalf = context.AttackSign > 0f ?
                 (context.BallPosition.X > MatchEngine.StadiumMargin + MatchEngine.FieldWidth * 0.5f) :
                 (context.BallPosition.X < MatchEngine.StadiumMargin + MatchEngine.FieldWidth * 0.5f);
 
@@ -33,7 +33,7 @@ namespace NoPasaranFC.Gameplay.AIStates
         protected override Vector2 CalculateTargetPosition(Player player, AIContext context)
         {
             bool teamHasBall = context.ClosestToBall != null && context.ClosestToBall.Team == player.Team;
-            bool ballInOpponentHalf = context.IsHomeTeam ?
+            bool ballInOpponentHalf = context.AttackSign > 0f ?
                 (context.BallPosition.X > MatchEngine.StadiumMargin + MatchEngine.FieldWidth * 0.5f) :
                 (context.BallPosition.X < MatchEngine.StadiumMargin + MatchEngine.FieldWidth * 0.5f);
 
@@ -44,14 +44,14 @@ namespace NoPasaranFC.Gameplay.AIStates
             if (teamHasBall)
             {
                 float depth = 0.85f + speedRatio * 0.07f;
-                attackingX = context.IsHomeTeam ?
+                attackingX = context.AttackSign > 0f ?
                     MatchEngine.StadiumMargin + MatchEngine.FieldWidth * depth :
                     MatchEngine.StadiumMargin + MatchEngine.FieldWidth * (1f - depth);
             }
             else
             {
                 // Stay higher even when not in possession
-                attackingX = context.IsHomeTeam ?
+                attackingX = context.AttackSign > 0f ?
                     MatchEngine.StadiumMargin + MatchEngine.FieldWidth * 0.70f :
                     MatchEngine.StadiumMargin + MatchEngine.FieldWidth * 0.30f;
             }
@@ -75,7 +75,7 @@ namespace NoPasaranFC.Gameplay.AIStates
                 if (teammateDistToBall < AIConstants.ForwardRunTriggerDistance)
                 {
                     float runDepth = AIConstants.ForwardRunDepth + speedRatio * 0.05f;
-                    float runX = context.IsHomeTeam ?
+                    float runX = context.AttackSign > 0f ?
                         MatchEngine.StadiumMargin + MatchEngine.FieldWidth * runDepth :
                         MatchEngine.StadiumMargin + MatchEngine.FieldWidth * (1f - runDepth);
 

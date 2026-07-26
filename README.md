@@ -39,6 +39,11 @@ Yellow-seat stand with animated NO PASARAN! supporters waving Palestinian flags:
 
 ![Bahramis venue](docs/screenshots/bahramis.png)
 
+### 3D mode — Γήπεδο Σφαγείων (Sfageia)
+Seaside football: beach and sea behind the fence, palms, and the supporters' banners:
+
+![Sfageia venue](docs/screenshots/sfageia.png)
+
 ### Goal replays
 Every goal is re-shown over the post-goal countdown: the build-up at 1.4x from a high sideline camera, then the payoff in 0.5x **slow motion** from a goal-side camera — with the cloth net deforming around the ball, exactly like the live goal. Hold X to skip.
 
@@ -63,11 +68,16 @@ Broadcast / High / TopDown cameras in 3D, plus the original 2D sprite mode:
 - **Two view modes**: full 3D (default) and classic top-down 2D, selectable in Settings
 - **Ball Physics**: Velocity, friction, bouncing, and aerial trajectories (height simulated separately)
 - **Tackle System**: Stat-based success probability with knockdowns
+- **Fouls, Cards & Penalties**: Referee whistles fouls (free kick with a defensive wall, or a penalty inside the box), books players with yellow/red cards — with a walk-over cutscene, close-up camera and the offender's sad/surprised face
+- **Offsides** (optional, default off): snapshot on the pass, whistle on the touch, linesman raises the flag
+- **Real halves**: teams switch sides at halftime, the second-half kickoff goes to the other team, and halftime brings a substitution screen
+- **Event banners**: big center-screen GOAL / FOUL / OFFSIDE / PENALTY callouts (localized)
 - **Goal Detection**: Goal-line crossing with crossbar/post ricochets
 - **Cloth Nets**: Physics-based goal nets that deform on ball impact and sway in the wind
-- **Set Pieces**: Throw-ins, corner kicks, goal kicks with charge aiming; proper last-touch detection
+- **Set Pieces**: Throw-ins, corner kicks, goal kicks, free kicks and penalties with charge aiming; proper last-touch detection
 - **Match Simulation**: Realistic simulation of all non-player matches based on team strength
 - **Stamina System**: Players tire during the match, affecting speed and performance
+- **Ball Control**: Easy (glued dribbling with skill-based miscontrols) or Classic, same rules for human and AI
 - **Difficulty System**: Easy/Normal/Hard affects AI reaction speed and accuracy
 - **Match Duration**: Configurable 1-10 minutes
 - **Local Co-op**: Player 2 can join mid-match (distinct indicators)
@@ -75,10 +85,12 @@ Broadcast / High / TopDown cameras in 3D, plus the original 2D sprite mode:
 ### 🏟️ 3D Mode
 - **Rigged, animated players**: skinned GLB models (male + female bodies) with the KayKit clip library — running, walking, tackling, celebrations, knockdowns
 - **Per-team kits**: shirt/shorts/socks recolored from the player atlas (luminance-normalized), back numbers, distinct goalkeeper kits
-- **Two venues**, selectable in Settings:
+- **Appearance variety**: face expressions (neutral/smile/sad/wow — the booked player looks the part), facial hair, hair colors, male + female bodies
+- **Three venues + Random**, selectable in Settings:
   - **Παναγιώτης Μπαχράμης** — municipal ground with chain-link fence, yellow bucket-seat stand, scoreboard arch, trees and houses
   - **ΓΗΠΕΔΟ ΣΠΕΡΧΟΓΕΙΑΣ** — rural ground in an olive grove with the Taygetos ridge behind, sponsor banners on the fence, floodlight pylons, dirt road
-- **Animated fans**: adults and children in team colors, seated and standing, waving Palestinian flags; they celebrate goals
+  - **Γήπεδο Σφαγείων** — seaside ground: beach and sea with foam lines, rock breakwaters, palms, tennis courts, clubhouse
+- **Animated fans**: adults and children in team colors, seated and standing, waving Palestinian flags; they celebrate goals; NO PASARAN! supporters' banners on the fence (FREE PALESTINE, ΛΕΥΤΕΡΙΑ ΣΤΗ ΠΑΛΑΙΣΤΙΝΗ, ΤΕΜΠΗ - ΠΥΛΟΣ - ΠΑΛΑΙΣΤΙΝΗ, ΔΙΚΑΙΩΣΗ ΓΙΑ ΤΟ ΘΟΔΩΡΗ)
 - **Match atmosphere**: team benches with substitutes and animated coaches directing play, referee and linesmen, corner flags, easter-egg fox wandering the apron
 - **Day/Sunset/Night + weather**: clear or rain (random by default), floodlights at night, environment-aware lighting on every object
 - **Goal replays**: two-angle replay (high sideline build-up → slow-motion goal-side payoff) with cloth-net deformation, skippable
@@ -108,10 +120,10 @@ Broadcast / High / TopDown cameras in 3D, plus the original 2D sprite mode:
 ### ⚙️ Settings (all persisted)
 - **Video**: Resolution, Fullscreen, VSync
 - **Audio**: Master/Music/SFX volumes, mute
-- **Gameplay**: Difficulty, match duration, player speed (0.5x-4.0x), AI decision interval
+- **Gameplay**: Difficulty, match duration, player speed (0.5x-4.0x), AI decision interval, ball control (Easy/Classic), offsides (on/off)
 - **Display**: Minimap, player names, stamina bars
 - **View**: 3D/2D mode, camera mode (Broadcast/High/TopDown), zoom, follow speed
-- **Atmosphere**: Venue (Bahramis/Sperchogeia), time of day (Day/Sunset/Night/Random), weather (Clear/Rain/Random)
+- **Atmosphere**: Venue (Bahramis/Sperchogeia/Sfageia/Random), time of day (Day/Sunset/Night/Random), weather (Clear/Rain/Random)
 - **Language**: English / Ελληνικά (Greek default on first run)
 
 ### 💾 Data
@@ -182,7 +194,7 @@ Key architectural rule: `MatchEngine` is pure 2D simulation (73 px = 1 m). The 3
 
 ## 🔧 Debug Tooling
 
-- **Debug TCP console** (`NOPASARAN_DEBUG=1`): screenshots, input injection, state dumps, ball teleport, player stat editing, match jumping. Client: `python3 Scripts/dbg.py "state" "shot /tmp/x.png 3"`
+- **Debug TCP console** (`NOPASARAN_DEBUG=1`): screenshots, input injection, state dumps, ball/player teleports (`ball`, `ppos`), forced kicks/touches (`kick`, `touch`), staged scenarios (`corner`, `freekick`, `penalty`, `card`, `halftime`), match-clock freeze (`hold`), player stat editing, match jumping. Client: `python3 Scripts/dbg.py "state" "shot /tmp/x.png 3"`
 - **AI harness**: `dotnet run --project NoPasaranFC.csproj -- harness <scenario> --seconds N --seed 42 --out <prefix>` — headless deterministic matches with per-frame logs and trajectory plots (`Scripts/trajectory_plot.py`)
 - **Blender pipeline**: `python3 Scripts/blender_exec.py <script.py>` runs scripts inside a running Blender (blender-mcp) for asset authoring
 
@@ -195,27 +207,29 @@ Key architectural rule: `MatchEngine` is pure 2D simulation (73 px = 1 m). The 3
 - **docs/screenshots/**: README captures; **docs/harness-*/**: AI harness trajectory studies
 - Older design/fix notes live in git history
 
-## 🚀 Current Status (v2.6.0)
+## 🚀 Current Status (v2.13.0)
 
-**Fully playable on desktop and Android**, with the 3D view as the default experience.
+**Fully playable on desktop and Android**, with the 3D view as the default experience. 60+ automated tests guard the match engine.
 
 Recent highlights:
-- **v2.6.0**: ΓΗΠΕΔΟ ΣΠΕΡΧΟΓΕΙΑΣ venue (olive grove, Taygetos, sponsor banners, floodlights), venue selector in Settings; two-angle slow-motion goal replays with deforming nets
-- **v2.5.0**: Attacking AI depth, referee waypoints, benches with animated coaches
-- **v2.4.0**: Utility-AI rewrite, headless AI harness with trajectory plots, in-game stat editing
-- **v2.3.0**: Team benches, match officials, cloth goal nets
+- **v2.13.0**: Offsides (optional, linesman flag), teams switch sides at halftime (+ second-half kickoff to the other team), big GOAL/FOUL/OFFSIDE/PENALTY banners, card cutscene (ref walk-over, close-up, sad/surprised face), celebration attribution fix
+- **v2.12.0**: Fouls, free kicks with defensive walls, yellow/red cards, penalty kicks with GK dive
+- **v2.11.0**: Halftime substitutions, appearance system (expressions, facial hair), test suite
+- **v2.10.0**: Seaside Γήπεδο Σφαγείων venue, Random venue option, fan banners
+- **v2.9.1**: Real goalkeepers — shot dives, angle play, distribution
+- **v2.8.0**: ES-tuned attacking AI + offline parameter search
+- **v2.7.0**: Ball Control setting (Easy/Classic)
+- **v2.6.0**: ΓΗΠΕΔΟ ΣΠΕΡΧΟΓΕΙΑΣ venue; two-angle slow-motion goal replays with deforming nets
 - **v2.0.0**: Full 3D match view — skinned players, kits, Bahramis venue, fans, day/night, weather, celebrations
 - **v1.2.0**: Android port with touch controls
-- **v1.1.0**: AI state machine, aerial passing, match simulation, dynamic goal nets
 
 ## 🎯 Future Enhancements
 
-- [ ] Penalty kicks (needs a foul system) and cards
-- [ ] Offsides detection
 - [ ] More venues; venue selection per home team
-- [ ] Substitutions, transfers/training
+- [ ] In-game substitutions (injuries), transfers/training
 - [ ] Tournament/knockout modes
 - [ ] Detailed match statistics
+- [ ] More easter eggs (dog, crows, seagulls at Sfageia, tornado in rain)
 - [ ] iOS support
 
 ## 👥 Credits

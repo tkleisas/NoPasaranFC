@@ -98,7 +98,9 @@ namespace NoPasaranFC.Gameplay
                 && BallCarrier.Id != player.Id
                 && BallCarrier.TeamId == player.TeamId;
         }
-        public bool IsHomeTeam { get; set; } // True if defending left goal
+        public bool IsHomeTeam { get; set; } // True if on the home team
+        /// <summary>+1 when attacking toward +X (right goal), -1 toward -X. Half-aware (sides switch at halftime).</summary>
+        public float AttackSign { get; set; } = 1f;
         public Random PlayerRandom { get; set; } // Unique random instance per player (breaks synchronization)
         
         // Ball steering helper
@@ -118,11 +120,12 @@ namespace NoPasaranFC.Gameplay
         // True when the player stands in their own defensive third of the pitch
         public bool IsInOwnThird(Player player)
         {
-            float boundary = IsHomeTeam
+            bool defendsLeft = AttackSign > 0f; // attacking right -> defending left
+            float boundary = defendsLeft
                 ? MatchEngine.StadiumMargin + MatchEngine.FieldWidth * 0.33f
                 : MatchEngine.StadiumMargin + MatchEngine.FieldWidth * 0.67f;
-            return IsHomeTeam ? player.FieldPosition.X < boundary
-                              : player.FieldPosition.X > boundary;
+            return defendsLeft ? player.FieldPosition.X < boundary
+                               : player.FieldPosition.X > boundary;
         }
 
         // Get ideal position to kick ball in desired direction

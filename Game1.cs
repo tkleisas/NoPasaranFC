@@ -408,11 +408,73 @@ public class Game1 : Game
                 oms.Engine.LastPlayerTouchedBall = nearest;
                 return $"OK ball at {nearest.Name} ({best:F0}px)";
             }
+            case "hold":
+            {
+                // Freeze/unfreeze the match clock (scenario staging must not run into halftime/end)
+                if (_screenManager.CurrentScreen is not MatchScreen hms || hms.Engine == null)
+                    return "ERR no active match";
+                if (parts.Length > 1)
+                    hms.Engine.DebugHoldTime = parts[1].Equals("on", StringComparison.OrdinalIgnoreCase);
+                else
+                    hms.Engine.DebugHoldTime = !hms.Engine.DebugHoldTime;
+                return $"OK hold={(hms.Engine.DebugHoldTime ? "on" : "off")}";
+            }
+            case "ppos":
+            {
+                if (parts.Length < 4 ||
+                    !float.TryParse(parts[2], out float px) || !float.TryParse(parts[3], out float py))
+                    return "ERR usage: ppos <name> <x> <y>  (engine pixel coords)";
+                if (_screenManager.CurrentScreen is not MatchScreen ppms || ppms.Engine == null)
+                    return "ERR no active match";
+                var pp = FindMatchPlayer(ppms.Engine, parts[1]);
+                if (pp == null) return $"ERR no player matching '{parts[1]}'";
+                pp.FieldPosition = new Vector2(px, py);
+                pp.Velocity = Vector2.Zero;
+                return $"OK {pp.Name} -> ({px:F0},{py:F0})";
+            }
+            case "kick":
+            {
+                // Force a deliberate kick by a player (updates LastKicker via RegisterKick)
+                if (_screenManager.CurrentScreen is not MatchScreen kms || kms.Engine == null)
+                    return "ERR no active match";
+                if (parts.Length < 2) return "ERR usage: kick <name> [vx vy]";
+                var kp = FindMatchPlayer(kms.Engine, parts[1]);
+                if (kp == null) return $"ERR no player matching '{parts[1]}'";
+                kms.Engine.BallPosition = kp.FieldPosition;
+                Vector2 kv = Vector2.Zero;
+                if (parts.Length >= 4 &&
+                    float.TryParse(parts[2], out float kvx) && float.TryParse(parts[3], out float kvy))
+                    kv = new Vector2(kvx, kvy);
+                kms.Engine.BallVelocity = kv;
+                kms.Engine.RegisterKick(kp);
+                return $"OK {kp.Name} kicked ({kv.X:F0},{kv.Y:F0})";
+            }
+            case "touch":
+            {
+                // Register a touch (no deliberate kick) — drives offside whistle checks etc.
+                if (_screenManager.CurrentScreen is not MatchScreen tms || tms.Engine == null)
+                    return "ERR no active match";
+                if (parts.Length < 2) return "ERR usage: touch <name>";
+                var tp = FindMatchPlayer(tms.Engine, parts[1]);
+                if (tp == null) return $"ERR no player matching '{parts[1]}'";
+                tms.Engine.BallPosition = tp.FieldPosition;
+                tms.Engine.BallVelocity = Vector2.Zero;
+                tms.Engine.LastPlayerTouchedBall = tp;
+                return $"OK {tp.Name} touched";
+            }
+            case "halftime":
+            {
+                // Jump straight to the second half (side switch) for testing
+                if (_screenManager.CurrentScreen is not MatchScreen htms || htms.Engine == null)
+                    return "ERR no active match";
+                htms.Engine.StartSecondHalf();
+                return $"OK half={htms.Engine.Half}";
+            }
             case "quit":
                 ExitGame();
                 return "OK";
             default:
-                return "ERR unknown command (shot|key|down|up|state|match|quit)";
+                return "ERR unknown command (shot|key|down|up|state|players|setstat|match|construct|corner|freekick|penalty|card|ball|ballopp|hold|ppos|kick|touch|halftime|quit)";
         }
     }
 
@@ -439,6 +501,7 @@ public class Game1 : Game
             if (controlled != null) s += $" controlled={controlled}";
             var cp = e.GetAllPlayers().FirstOrDefault(p => p.IsControlled);
             if (cp != null) s += $" cpos=({cp.FieldPosition.X:F0},{cp.FieldPosition.Y:F0})";
+            if (e.DebugHoldTime) s += " hold=on";
             s += " " + ms.ReplayDebug;
         }
         return s;
@@ -483,6 +546,14 @@ public class Game1 : Game
         return sb.ToString();
     }
     
+    /// <summary>Finds a match player by exact or prefix name match (case-insensitive).</summary>
+    private static NoPasaranFC.Models.Player FindMatchPlayer(Gameplay.MatchEngine engine, string name)
+    {
+        return engine.GetAllPlayers().FirstOrDefault(p =>
+            p.Name.Equals(name, StringComparison.OrdinalIgnoreCase) ||
+            p.Name.StartsWith(name, StringComparison.OrdinalIgnoreCase));
+    }
+
     private string SetPlayerStat(string name, string stat, string valueStr)
     {
         if (!int.TryParse(valueStr, out int value) || value < 0 || value > 99)

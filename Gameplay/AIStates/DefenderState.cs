@@ -61,14 +61,14 @@ namespace NoPasaranFC.Gameplay.AIStates
             Vector2 basePos = player.HomePosition;
             if (teamHasBall && context.IsAttackingHalf)
             {
-                float pushX = context.IsHomeTeam ?
+                float pushX = context.AttackSign > 0f ?
                     MatchEngine.StadiumMargin + MatchEngine.FieldWidth * 0.45f :
                     MatchEngine.StadiumMargin + MatchEngine.FieldWidth * 0.55f;
                 basePos.X = MathHelper.Lerp(player.HomePosition.X, pushX, 0.5f);
             }
             else if (teamHasBall)
             {
-                float pushX = context.IsHomeTeam ?
+                float pushX = context.AttackSign > 0f ?
                     MatchEngine.StadiumMargin + MatchEngine.FieldWidth * 0.35f :
                     MatchEngine.StadiumMargin + MatchEngine.FieldWidth * 0.65f;
                 basePos.X = MathHelper.Lerp(player.HomePosition.X, pushX, 0.3f);

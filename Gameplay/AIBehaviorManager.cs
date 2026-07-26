@@ -94,9 +94,7 @@ namespace NoPasaranFC.Gameplay
 
             var activeOpponents = opponentTeam.Players.Where(p => p.IsStarting && !p.IsKnockedDown).ToList();
 
-            Vector2 opponentGoalCenter = isHomeTeam
-                ? new Vector2(MatchEngine.StadiumMargin + MatchEngine.FieldWidth, MatchEngine.StadiumMargin + MatchEngine.FieldHeight / 2)
-                : new Vector2(MatchEngine.StadiumMargin, MatchEngine.StadiumMargin + MatchEngine.FieldHeight / 2);
+            Vector2 opponentGoalCenter = _engine.GetOpponentGoalCenter(player.Team);
 
             foreach (var teammate in myTeam.Players.Where(p => p.IsStarting && !p.IsKnockedDown && p != player))
             {
@@ -116,7 +114,7 @@ namespace NoPasaranFC.Gameplay
                 passScore += (1f - normalizedGoalDist) * 1200f;
                 
                 // Explicit bonus for targets ahead of the ball toward the goal
-                float attackSign = isHomeTeam ? 1f : -1f;
+                float attackSign = _engine.AttackSign(player.Team);
                 float targetProgress = (teammate.FieldPosition.X - _engine.BallPosition.X) * attackSign;
                 if (targetProgress > 0f)
                     passScore += 300f;
@@ -217,13 +215,8 @@ namespace NoPasaranFC.Gameplay
             bool hasControl = _engine.LastPlayerTouchedBall == player && distanceToBall < 80f;
             bool shouldChaseBall = ShouldPlayerChaseBall(player);
 
-            Vector2 ownGoalCenter = isHomeTeam
-                ? new Vector2(MatchEngine.StadiumMargin, MatchEngine.StadiumMargin + MatchEngine.FieldHeight / 2)
-                : new Vector2(MatchEngine.StadiumMargin + MatchEngine.FieldWidth, MatchEngine.StadiumMargin + MatchEngine.FieldHeight / 2);
-
-            Vector2 opponentGoalCenterFinal = isHomeTeam
-                ? new Vector2(MatchEngine.StadiumMargin + MatchEngine.FieldWidth, MatchEngine.StadiumMargin + MatchEngine.FieldHeight / 2)
-                : new Vector2(MatchEngine.StadiumMargin, MatchEngine.StadiumMargin + MatchEngine.FieldHeight / 2);
+            Vector2 ownGoalCenter = _engine.GetOwnGoalCenter(player.Team);
+            Vector2 opponentGoalCenterFinal = opponentGoalCenter;
 
             bool ballInDefensiveHalf = _engine.IsBallInHalf(player.Team.Name);
 
@@ -243,6 +236,7 @@ namespace NoPasaranFC.Gameplay
                 OwnGoalCenter = ownGoalCenter,
                 IsPlayerTeam = player.Team != null && player.Team.IsPlayerControlled,
                 IsHomeTeam = isHomeTeam,
+                AttackSign = _engine.AttackSign(player.Team),
                 Random = _engine.SharedRandom,
                 ClosestToBall = GetPlayerClosestToBall(),
                 ShouldChaseBall = shouldChaseBall,

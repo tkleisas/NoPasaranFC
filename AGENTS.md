@@ -14,6 +14,7 @@ The game has TWO match view modes, selectable in Settings:
 ```bash
 dotnet build NoPasaranFC.csproj          # desktop (net9.0)
 dotnet run --project NoPasaranFC.csproj  # run desktop
+dotnet test NoPasaranFC.Tests/NoPasaranFC.Tests.csproj  # xUnit suite (60+ tests, serialized)
 dotnet build NoPasaranFC.Android/NoPasaranFC.Android.csproj  # Android (needs android workload)
 ```
 
@@ -27,7 +28,10 @@ dotnet build NoPasaranFC.Android/NoPasaranFC.Android.csproj  # Android (needs an
   Commands: `shot <path> [delayFrames]` (screenshot), `key|down|up <Keys name>` (inject input),
   `state` (screen, fps, match + animation census + replay diagnostics), `match` (jump to next match),
   `players`, `setstat <name> <stat> <value>`, `ball <x> <y> [vx vy]` (teleport ball),
-  `ballopp` (give ball to nearest opponent, stages a tackle), `corner` (force a corner), `quit`.
+  `ballopp` (give ball to nearest opponent, stages a tackle), `corner` (force a corner),
+  `freekick` / `penalty` / `card` (stage set piece / card), `halftime` (jump to 2nd half, sides switch),
+  `hold [on|off]` (freeze the match clock), `ppos <name> <x> <y>` (teleport player),
+  `kick <name> [vx vy]` (force a deliberate kick), `touch <name>` (register a touch), `quit`.
   Client: `python3 Scripts/dbg.py "state" "shot /tmp/x.png 3"`.
 - **Blender pipeline**: `python3 Scripts/blender_exec.py <script.py>` runs a Python script inside a
   running Blender instance (blender-mcp addon on 127.0.0.1:9876). Asset sources: `Content/Models3D/*.blend`.
@@ -51,9 +55,11 @@ dotnet build NoPasaranFC.Android/NoPasaranFC.Android.csproj  # Android (needs an
 
 - `Models/` — Player, Team, Match, Championship, GameSettings, Localization, Version
 - `Database/` — SQLite manager + JSON seeders (`teams_seed.json`, `championships_seed.json`)
-- `Gameplay/` — MatchEngine (simulation, no drawing!), AI states (`AIStates/`), Camera (2D), Minimap, audio
+- `Gameplay/` — MatchEngine (simulation, no drawing!), utility AI (`UtilityAI/`, the live path) +
+  legacy FSM (`AIStates/`), celebrations (`Celebrations/`), Camera (2D), Minimap, audio
 - `Graphics3D/` — the 3D renderer: Camera3D, World3D (venue geometry), Ball3D, MatchRenderer3D,
-  PlayerAnimator, FanSection, FoxWalker, GoalNet3D, MatchEnvironment (lighting/weather), RainSystem,
+  PlayerAnimator, FanSection, FoxWalker, GoalNet3D, TeamBench, MatchOfficials, ReplayBuffer,
+  FaceComposer, MatchEnvironment (lighting/weather), RainSystem,
   KitTextureFactory, `Skinning/` (GLB loader + skinned playback, SharpGLTF + SkinnedEffect)
 - `Screens/` — Screen system: Menu, Match, Lineup, Standings, Settings, RoundResults, etc.
 - `Debugging/` — DebugInput (input seam), DebugServer (TCP), ScreenCapture
@@ -64,6 +70,11 @@ dotnet build NoPasaranFC.Android/NoPasaranFC.Android.csproj  # Android (needs an
 - **World scale**: 73 px = 1 meter everywhere (engine px ↔ 3D meters via `Graphics3D/WorldUnits.cs`).
 - **Sim/render split**: `MatchEngine` is pure simulation (Vector2, ball height simulated separately).
   Renderers read engine state; never the reverse. Keep it that way.
+- **Sides switch at halftime** (`MatchEngine.Half` 1→2). NEVER hardcode home=left/away=right.
+  Use `MatchEngine.AttackSign(team)` (+1 attacks right), `GetOwnGoalCenter`/`GetOpponentGoalCenter`,
+  `DefendedGoalLineX`/`AttackedGoalLineX`, `LeftDefendingTeam`/`RightDefendingTeam`.
+  AI consumes `AIContext.AttackSign` + `OwnGoalCenter`/`OpponentGoalCenter` (built half-aware
+  in `AIBehaviorManager.BuildAIContext`).
 - **Additive 3D**: the 2D mode must keep working; new 3D features go in `Graphics3D/`, minimal seams in `MatchScreen`.
 - **Settings**: add to `GameSettings` + a numbered migration in `DatabaseManager` + a `SettingsScreen`
   row + `Localization` keys (en + el). Defaults apply to fresh installs only.
@@ -77,9 +88,16 @@ dotnet build NoPasaranFC.Android/NoPasaranFC.Android.csproj  # Android (needs an
 
 - Championship: round-robin fixtures, match simulation for non-player matches, standings, round results, seasons
 - Match gameplay: ball physics (incl. height/aerial), tackling, stamina, set pieces (throw-ins, corners,
-  goal kicks with charge aiming), goal detection with crossbar/post ricochets, cloth nets
-- AI: role-based states (GK/DEF/MID/FWD), passing/shooting/dribbling decisions, sideline avoidance
-- 3D mode: skinned players (male + female bodies), per-team kits with back numbers, GK distinct kits,
+  goal kicks, free kicks with a defensive wall, penalties with GK dive), fouls with yellow/red cards
+  (ref walk-over cutscene, close-up camera, sad/surprised face), optional offsides (snapshot-on-kick,
+  whistle-on-touch, linesman flag; setting default off), goal detection with crossbar/post ricochets,
+  cloth nets; big center-screen banners for GOAL/FOUL/OFFSIDE/PENALTY
+- Halves: teams switch sides at halftime, second-half kickoff goes to the other team,
+  halftime substitution screen
+- AI: utility-scoring brain (`UtilityAI/UtilityBrain`, the live path; legacy role FSM kept as fallback),
+  passing/shooting/dribbling decisions, real GKs (shot dives, angle play, distribution), sideline avoidance
+- 3D mode: skinned players (male + female bodies) with appearance variety (face expressions
+  neutral/smile/sad/wow, facial hair, hair colors), per-team kits with back numbers, GK distinct kits,
   three venues selectable in Settings (+Random): Bahramis (fence, yellow-seat stand, scoreboard,
   trees, houses), Sperchogeia (olive grove ring, Taygetos backdrop, fence sponsor banners,
   floodlight pylons) and seaside Sfageia (beach + sea with foam lines, rock breakwaters, palms,
@@ -95,10 +113,10 @@ dotnet build NoPasaranFC.Android/NoPasaranFC.Android.csproj  # Android (needs an
 
 ## Next steps (candidates)
 
-- Penalty kicks (needs foul system)
-- AI balance/oscillation tuning follow-up (knobs: `AIConstants`, `PlayerAnimator`)
+- AI balance/oscillation tuning follow-up (knobs: `AIConstants`, `UtilityTuning`, `PlayerAnimator`)
 - More venues; venue selection per home team (venue is a Settings option since v2.6.0)
-- Tournament mode, substitutions, transfers/training
-- Detailed match statistics, replays
+- Tournament mode, in-game substitutions (injuries), transfers/training
+- Detailed match statistics
+- Easter eggs beyond the fox (dog, crows, seagulls at Sfageia, tornado in rain — audio samples TBD)
 
 Detailed design/fix documents live in the repo root (`AI_*.md`, `*_SYSTEM.md`, etc.).

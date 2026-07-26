@@ -956,6 +956,28 @@ namespace NoPasaranFC.Screens
                 DrawCardBanner(spriteBatch, font, card);
             }
             
+            // Event banner (FOUL / OFFSIDE / PENALTY) - big center text, goal-style
+            if (_matchEngine.EventBannerTimer > 0f && _matchEngine.EventBannerText != null)
+            {
+                string text = _matchEngine.EventBannerText;
+                float elapsed = MatchEngine.EventBannerDuration - _matchEngine.EventBannerTimer;
+
+                // Scale in fast, hold, fade out over the last 0.4s
+                float scale = Math.Min(1f, elapsed * 4f) * 2.5f;
+                float alpha = _matchEngine.EventBannerTimer < 0.4f
+                    ? _matchEngine.EventBannerTimer / 0.4f : 1f;
+
+                Vector2 textSize = font.MeasureString(text);
+                Vector2 position = new Vector2(
+                    Game1.ScreenWidth / 2f - (textSize.X * scale) / 2f,
+                    Game1.ScreenHeight * 0.30f);
+
+                spriteBatch.DrawString(font, text, position + new Vector2(4, 4) * scale,
+                    Color.Black * 0.5f * alpha, 0f, Vector2.Zero, scale, SpriteEffects.None, 0f);
+                spriteBatch.DrawString(font, text, position,
+                    Color.Yellow * alpha, 0f, Vector2.Zero, scale, SpriteEffects.None, 0f);
+            }
+            
             // Player indicators projected onto the 3D view (names, stamina bars, shot power)
             if (is3DMode && !replayActive)
             {

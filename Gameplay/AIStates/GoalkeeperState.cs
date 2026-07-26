@@ -26,14 +26,14 @@ namespace NoPasaranFC.Gameplay.AIStates
             if (context.HasBallPossession)
                 return AIStateType.Passing;
 
-            bool isHomeGK = context.IsHomeTeam;
+            bool defendsLeft = context.AttackSign > 0f; // attacking right -> own goal on the left
             float centerY = MatchEngine.StadiumMargin + MatchEngine.FieldHeight / 2;
 
             float penaltyTop = centerY - AIConstants.GKPenaltyAreaWidth / 2;
             float penaltyBottom = centerY + AIConstants.GKPenaltyAreaWidth / 2;
             float penaltyLeft, penaltyRight, goalLineX;
 
-            if (isHomeGK)
+            if (defendsLeft)
             {
                 penaltyLeft = MatchEngine.StadiumMargin;
                 penaltyRight = MatchEngine.StadiumMargin + AIConstants.GKPenaltyAreaDepth;
@@ -70,7 +70,7 @@ namespace NoPasaranFC.Gameplay.AIStates
             float speed;
 
             // Shot detection: predict ball trajectory and dive to intercept
-            bool shotDetected = DetectShot(context, isHomeGK, goalLineX, centerY);
+            bool shotDetected = DetectShot(context, defendsLeft, goalLineX, centerY);
             if (_isDiving)
             {
                 _diveTimer -= deltaTime;
@@ -116,8 +116,8 @@ namespace NoPasaranFC.Gameplay.AIStates
                 // Advance slightly off goal line when ball is far away
                 float ballDistToGoal = Math.Abs(context.BallPosition.X - goalLineX);
                 float advanceAmount = MathHelper.Clamp(ballDistToGoal / (MatchEngine.FieldWidth * 0.5f), 0f, 1f);
-                float advanceX = isHomeGK ? goalLineX + advanceAmount * 200f * defendingRatio :
-                                            goalLineX - advanceAmount * 200f * defendingRatio;
+                float advanceX = defendsLeft ? goalLineX + advanceAmount * 200f * defendingRatio :
+                                               goalLineX - advanceAmount * 200f * defendingRatio;
 
                 targetPosition = new Vector2(advanceX, targetY);
                 speed = player.Speed * 2f;
@@ -162,14 +162,14 @@ namespace NoPasaranFC.Gameplay.AIStates
         /// <summary>
         /// Detects if the ball is being shot toward goal based on velocity and direction.
         /// </summary>
-        private bool DetectShot(AIContext context, bool isHomeGK, float goalLineX, float centerY)
+        private bool DetectShot(AIContext context, bool defendsLeft, float goalLineX, float centerY)
         {
             float ballSpeed = context.BallVelocity.Length();
             if (ballSpeed < AIConstants.GKShotDetectionSpeed)
                 return false;
 
             // Ball must be moving toward our goal
-            bool movingTowardGoal = isHomeGK ? context.BallVelocity.X < -100f : context.BallVelocity.X > 100f;
+            bool movingTowardGoal = defendsLeft ? context.BallVelocity.X < -100f : context.BallVelocity.X > 100f;
             if (!movingTowardGoal)
                 return false;
 

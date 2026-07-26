@@ -11,7 +11,7 @@ namespace NoPasaranFC.Gameplay.AIStates
         protected override AIStateType? CheckChaseBall(Player player, AIContext context)
         {
             bool teamHasBall = context.ClosestToBall != null && context.ClosestToBall.Team == player.Team;
-            bool ballInOpponentHalf = context.IsHomeTeam ?
+            bool ballInOpponentHalf = context.AttackSign > 0f ?
                 (context.BallPosition.X > MatchEngine.StadiumMargin + MatchEngine.FieldWidth * 0.5f) :
                 (context.BallPosition.X < MatchEngine.StadiumMargin + MatchEngine.FieldWidth * 0.5f);
 
@@ -44,7 +44,7 @@ namespace NoPasaranFC.Gameplay.AIStates
         protected override Vector2 CalculateTargetPosition(Player player, AIContext context)
         {
             bool teamHasBall = context.ClosestToBall != null && context.ClosestToBall.Team == player.Team;
-            bool ballInOpponentHalf = context.IsHomeTeam ?
+            bool ballInOpponentHalf = context.AttackSign > 0f ?
                 (context.BallPosition.X > MatchEngine.StadiumMargin + MatchEngine.FieldWidth * 0.5f) :
                 (context.BallPosition.X < MatchEngine.StadiumMargin + MatchEngine.FieldWidth * 0.5f);
 
@@ -60,7 +60,7 @@ namespace NoPasaranFC.Gameplay.AIStates
 
             if (teamHasBall && ballInOpponentHalf)
             {
-                float forwardX = context.IsHomeTeam ?
+                float forwardX = context.AttackSign > 0f ?
                     MatchEngine.StadiumMargin + MatchEngine.FieldWidth * (isAttackingMidfielder ? 0.82f : 0.72f) :
                     MatchEngine.StadiumMargin + MatchEngine.FieldWidth * (isAttackingMidfielder ? 0.18f : 0.28f);
                 basePosition = new Vector2(forwardX, player.HomePosition.Y);
@@ -68,7 +68,7 @@ namespace NoPasaranFC.Gameplay.AIStates
             }
             else if (teamHasBall)
             {
-                float forwardX = context.IsHomeTeam ?
+                float forwardX = context.AttackSign > 0f ?
                     MatchEngine.StadiumMargin + MatchEngine.FieldWidth * (isAttackingMidfielder ? 0.72f : 0.62f) :
                     MatchEngine.StadiumMargin + MatchEngine.FieldWidth * (isAttackingMidfielder ? 0.28f : 0.38f);
                 basePosition = new Vector2(forwardX, player.HomePosition.Y);
