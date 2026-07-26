@@ -60,6 +60,12 @@ namespace NoPasaranFC.Gameplay
 
             TryLoadSoundEffect("crowd_cheer", "Audio/SFX/crowd_cheer");
             TryLoadSoundEffect("crowd_aww", "Audio/SFX/crowd_aww");
+
+            // Easter egg ambience
+            TryLoadSoundEffect("dog_bark", "Audio/SFX/dog_bark");
+            TryLoadSoundEffect("craw", "Audio/SFX/craw");
+            TryLoadSoundEffect("seagulls", "Audio/SFX/seagulls");
+            TryLoadSoundEffect("whirlwind", "Audio/SFX/whirlwind");
             
             // Try to load music (gracefully handle missing files)
             TryLoadSong("menu_music", "Audio/Music/empros_no_pasaran");

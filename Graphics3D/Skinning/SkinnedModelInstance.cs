@@ -84,6 +84,16 @@ namespace NoPasaranFC.Graphics3D.Skinning
         {
             _tint = tint?.ToVector3() ?? Vector3.One;
         }
+
+        private readonly Dictionary<int, float> _boneScales = new Dictionary<int, float>();
+
+        /// <summary>Scales a named bone's local scale on every frame
+        /// (e.g. shrinking the fox tail bones turns the fox into a dog).</summary>
+        public void SetBoneScale(string nodeName, float scale)
+        {
+            int idx = _model.FindNodeIndex(nodeName);
+            if (idx >= 0) _boneScales[idx] = scale;
+        }
         
         /// <summary>
         /// Overrides the texture of one mesh part for this instance only
@@ -133,6 +143,9 @@ namespace NoPasaranFC.Graphics3D.Skinning
                 _previousClip = null;
                 _model.SampleClip(CurrentClip, CurrentTime, _poseOut, CurrentLooping);
             }
+
+            foreach (var (boneIdx, boneScale) in _boneScales)
+                _poseOut[boneIdx].S *= boneScale;
 
             _model.ComputeBoneMatrices(_poseOut, _boneMatrices);
         }

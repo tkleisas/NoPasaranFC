@@ -96,6 +96,30 @@
 /processorParam:Quality=Best
 /build:Audio/SFX/whistle_start.wav
 
+#begin Audio/SFX/dog_bark.wav
+/importer:WavImporter
+/processor:SoundEffectProcessor
+/processorParam:Quality=Best
+/build:Audio/SFX/dog_bark.wav
+
+#begin Audio/SFX/craw.wav
+/importer:WavImporter
+/processor:SoundEffectProcessor
+/processorParam:Quality=Best
+/build:Audio/SFX/craw.wav
+
+#begin Audio/SFX/seagulls.wav
+/importer:WavImporter
+/processor:SoundEffectProcessor
+/processorParam:Quality=Best
+/build:Audio/SFX/seagulls.wav
+
+#begin Audio/SFX/whirlwind.wav
+/importer:WavImporter
+/processor:SoundEffectProcessor
+/processorParam:Quality=Best
+/build:Audio/SFX/whirlwind.wav
+
 #begin Font.spritefont
 /importer:FontDescriptionImporter
 /processor:FontDescriptionProcessor

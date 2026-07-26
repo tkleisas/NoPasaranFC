@@ -467,6 +467,14 @@ public class Game1 : Game
                 tms.Engine.LastPlayerTouchedBall = tp;
                 return $"OK {tp.Name} touched";
             }
+            case "easter":
+            {
+                // Force an easter egg: fox|dog|crows|seagulls|tornado
+                if (parts.Length < 2) return "ERR usage: easter <fox|dog|crows|seagulls|tornado>";
+                if (_screenManager.CurrentScreen is not MatchScreen ems || ems.Engine == null)
+                    return "ERR no active match";
+                return ems.DebugTriggerEasterEgg(parts[1]);
+            }
             case "halftime":
             {
                 // Jump straight to the second half (side switch) for testing
@@ -479,7 +487,7 @@ public class Game1 : Game
                 ExitGame();
                 return "OK";
             default:
-                return "ERR unknown command (shot|key|down|up|state|players|setstat|match|construct|corner|freekick|penalty|card|ball|ballopp|hold|ppos|kick|touch|halftime|quit)";
+                return "ERR unknown command (shot|key|down|up|state|players|setstat|match|construct|corner|freekick|penalty|card|ball|ballopp|hold|ppos|kick|touch|halftime|easter|quit)";
         }
     }
 

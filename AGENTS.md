@@ -30,6 +30,7 @@ dotnet build NoPasaranFC.Android/NoPasaranFC.Android.csproj  # Android (needs an
   `players`, `setstat <name> <stat> <value>`, `ball <x> <y> [vx vy]` (teleport ball),
   `ballopp` (give ball to nearest opponent, stages a tackle), `corner` (force a corner),
   `freekick` / `penalty` / `card` (stage set piece / card), `halftime` (jump to 2nd half, sides switch),
+  `easter <fox|dog|crows|seagulls|tornado>` (force an easter egg),
   `hold [on|off]` (freeze the match clock), `ppos <name> <x> <y>` (teleport player),
   `kick <name> [vx vy]` (force a deliberate kick), `touch <name>` (register a touch), `quit`.
   Client: `python3 Scripts/dbg.py "state" "shot /tmp/x.png 3"`.
@@ -108,7 +109,12 @@ dotnet build NoPasaranFC.Android/NoPasaranFC.Android.csproj  # Android (needs an
   trees, houses), Sperchogeia (olive grove ring, Taygetos backdrop, fence sponsor banners,
   floodlight pylons) and seaside Sfageia (beach + sea with foam lines, rock breakwaters, palms,
   tennis courts, clubhouse), fan banners on the fence (FREE PALESTINE etc.), animated fans
-  (+ children, Palestinian flags), corner flags, easter-egg fox, rain, day/sunset/night,
+  (+ children, Palestinian flags), corner flags, rain, day/sunset/night,
+  easter eggs (`EasterEggManager`, per-match rolls): fox (10%), ball-chasing dog (5% —
+  `Dog.glb`, fox mesh with a repainted atlas; faster than players, dribbles the ball
+  toward NO PASARAN's goal until one is scored, bark sample), crow flock (10%, craw.wav),
+  seagull flock (50% at Sfageia, seagulls.wav), giant whirlwind (5% in rain — approaches
+  from afar, roams the pitch all match, shoves players, whirlwind.wav),
   celebration camera, goal replays (build-up at 1.4x from a high sideline camera, then the last 2s of
   footage in 0.5x slow motion from a goal-side camera with live cloth-net deformation, over the
   extended post-goal countdown, hold X to skip;

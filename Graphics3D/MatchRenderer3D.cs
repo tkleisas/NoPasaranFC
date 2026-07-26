@@ -42,8 +42,8 @@ namespace NoPasaranFC.Graphics3D
         private readonly Dictionary<Player, SkinnedModel> _playerModelChoice = new Dictionary<Player, SkinnedModel>();
         private readonly HashSet<Player> _kitsApplied = new HashSet<Player>();
         
-        // Easter egg fox wandering the apron (null if Fox.glb missing)
-        private FoxWalker _fox;
+        // Easter eggs (fox, dog, crows, seagulls, tornado) - per-match rolls
+        private EasterEggManager _easterEggs;
         
         // Animated supporters on the stand (null if no player model)
         private FanSection _fans;
@@ -167,17 +167,16 @@ namespace NoPasaranFC.Graphics3D
             
             _rain = _environment.IsRaining ? new RainSystem(device) : null;
             
-            // Easter egg: the stadium fox (tolerant of a missing file)
+            // Easter eggs: per-match rolls (fox/dog/crows/seagulls/tornado)
             try
             {
-                var foxModel = ModelCache.TryGet(device, "Fox.glb");
-                if (foxModel != null)
-                    _fox = new FoxWalker(foxModel);
+                _easterEggs = new EasterEggManager(device,
+                    ModelCache.TryGet(device, "Fox.glb"), _venue, _environment.IsRaining);
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"MatchRenderer3D: no fox ({ex.Message}).");
-                _fox = null;
+                Debug.WriteLine($"MatchRenderer3D: no easter eggs ({ex.Message}).");
+                _easterEggs = null;
             }
             
             // Supporters on the stand (reuses the player models/atlases);
@@ -186,6 +185,10 @@ namespace NoPasaranFC.Graphics3D
                 _fans = new FanSection(device, _playerModel, _playerModelF, _venue != Venue.Bahramis);
         }
         
+        /// <summary>Debug console: force an easter egg (fox|dog|crows|seagulls|tornado).</summary>
+        public string DebugTriggerEasterEgg(string name) =>
+            _easterEggs?.Trigger(name) ?? "ERR no easter egg manager";
+
         /// <summary>Creates the team dugouts once the match engine exists.</summary>
         public void InitializeBenches(GraphicsDevice device, MatchEngine engine, int homeTeamId)
         {
@@ -327,7 +330,7 @@ namespace NoPasaranFC.Graphics3D
             }
             
             _rain?.Update(dt, _camera.Target);
-            _fox?.Update(dt, engine);
+            _easterEggs?.Update(dt, engine);
             _fans?.Update(dt, engine);
             float ballWorldX = WorldUnits.ToWorld(engine.BallPosition).X;
             _homeBench?.Update(dt, ballWorldX);
@@ -359,7 +362,7 @@ namespace NoPasaranFC.Graphics3D
             _ball.Draw(device, _camera.View, _camera.Projection);
             DrawPlayers(device, engine, homeTeamId);
             DrawSetPieceArrow(device, engine);
-            _fox?.Draw(device, _camera.View, _camera.Projection, _environment);
+            _easterEggs?.Draw(device, _camera.View, _camera.Projection, _environment);
             _fans?.Draw(device, _camera.View, _camera.Projection, _environment);
             _homeBench?.Draw(device, _camera.View, _camera.Projection, _environment);
             _awayBench?.Draw(device, _camera.View, _camera.Projection, _environment);
@@ -1157,7 +1160,7 @@ namespace NoPasaranFC.Graphics3D
                 animator.Instance.Draw(device, world, _camera.View, _camera.Projection);
             }
             
-            _fox?.Draw(device, _camera.View, _camera.Projection, _environment);
+            _easterEggs?.Draw(device, _camera.View, _camera.Projection, _environment);
             _fans?.Draw(device, _camera.View, _camera.Projection, _environment);
             _homeBench?.Draw(device, _camera.View, _camera.Projection, _environment);
             _awayBench?.Draw(device, _camera.View, _camera.Projection, _environment);

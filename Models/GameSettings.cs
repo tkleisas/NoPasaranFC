@@ -44,7 +44,7 @@ namespace NoPasaranFC.Models
         
         // Match view settings
         public string MatchViewMode { get; set; } = "3D"; // "3D" (default) or "2D"
-        public string CameraMode { get; set; } = "TopDown"; // "TopDown" (default), "Broadcast" or "High"
+        public string CameraMode { get; set; } = "Broadcast"; // "Broadcast" (default), "High" or "TopDown"
         public string TimeOfDay { get; set; } = "Random"; // "Random" (default), "Day", "Sunset" or "Night"
         public string Weather { get; set; } = "Random"; // "Random" (default), "Clear" or "Rain"
         

@@ -76,6 +76,7 @@ namespace NoPasaranFC.Graphics3D.Skinning
         public BoundingBox BindPoseBounds { get; private set; }
 
         private int[] _nodeParents;                 // -1 for roots
+        private string[] _nodeNames;
         private Numerics.Vector3[] _bindT;
         private Numerics.Quaternion[] _bindR;
         private Numerics.Vector3[] _bindS;
@@ -102,6 +103,15 @@ namespace NoPasaranFC.Graphics3D.Skinning
             return Clips.FirstOrDefault(c => string.Equals(c.Name, clipName, StringComparison.OrdinalIgnoreCase));
         }
 
+        /// <summary>Finds a skeleton node index by (prefix) name, or -1.</summary>
+        public int FindNodeIndex(string nodeName)
+        {
+            for (int i = 0; i < _nodeNames.Length; i++)
+                if (_nodeNames[i].StartsWith(nodeName, StringComparison.OrdinalIgnoreCase))
+                    return i;
+            return -1;
+        }
+
         private static SkinnedModel LoadCore(GraphicsDevice device, ModelRoot gltf)
         {
             var model = new SkinnedModel();
@@ -125,6 +135,7 @@ namespace NoPasaranFC.Graphics3D.Skinning
 
             int n = nodeList.Count;
             model._nodeParents = parentList.ToArray();
+            model._nodeNames = nodeList.Select(nd => nd.Name ?? "").ToArray();
             model._bindT = new Numerics.Vector3[n];
             model._bindR = new Numerics.Quaternion[n];
             model._bindS = new Numerics.Vector3[n];

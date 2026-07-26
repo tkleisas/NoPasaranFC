@@ -91,7 +91,8 @@ Broadcast / High / TopDown cameras in 3D, plus the original 2D sprite mode:
   - **ΓΗΠΕΔΟ ΣΠΕΡΧΟΓΕΙΑΣ** — rural ground in an olive grove with the Taygetos ridge behind, sponsor banners on the fence, floodlight pylons, dirt road
   - **Γήπεδο Σφαγείων** — seaside ground: beach and sea with foam lines, rock breakwaters, palms, tennis courts, clubhouse
 - **Animated fans**: adults and children in team colors, seated and standing, waving Palestinian flags; they celebrate goals; NO PASARAN! supporters' banners on the fence (FREE PALESTINE, ΛΕΥΤΕΡΙΑ ΣΤΗ ΠΑΛΑΙΣΤΙΝΗ, ΤΕΜΠΗ - ΠΥΛΟΣ - ΠΑΛΑΙΣΤΙΝΗ, ΔΙΚΑΙΩΣΗ ΓΙΑ ΤΟ ΘΟΔΩΡΗ)
-- **Match atmosphere**: team benches with substitutes and animated coaches directing play, referee and linesmen, corner flags, easter-egg fox wandering the apron
+- **Match atmosphere**: team benches with substitutes and animated coaches directing play, referee and linesmen, corner flags
+- **Easter eggs** (rolled per match): a wandering fox (10%), a ball-chasing dog that's faster than the players and dribbles the ball toward NO PASARAN's goal until it scores (5%, with barking), crow flocks (10%), seagulls at Sfageia (50%), and a giant whirlwind in the rain (5%) that roams the pitch all match and shoves players around
 - **Day/Sunset/Night + weather**: clear or rain (random by default), floodlights at night, environment-aware lighting on every object
 - **Goal replays**: two-angle replay (high sideline build-up → slow-motion goal-side payoff) with cloth-net deformation, skippable
 - **Celebration camera**: follows the celebrating players after every goal
