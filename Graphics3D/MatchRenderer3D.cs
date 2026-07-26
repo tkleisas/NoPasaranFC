@@ -170,15 +170,9 @@ namespace NoPasaranFC.Graphics3D
             // Easter egg: the stadium fox (tolerant of a missing file)
             try
             {
-#if ANDROID
-                var context = global::Android.App.Application.Context;
-                using (var stream = context.Assets.Open("Content/Models3D/Fox.glb"))
-                    _fox = new FoxWalker(SkinnedModel.Load(device, stream));
-#else
-                string foxPath = PlatformHelper.GetAssetPath(Path.Combine("Content", "Models3D", "Fox.glb"));
-                if (File.Exists(foxPath))
-                    _fox = new FoxWalker(SkinnedModel.Load(device, foxPath));
-#endif
+                var foxModel = ModelCache.TryGet(device, "Fox.glb");
+                if (foxModel != null)
+                    _fox = new FoxWalker(foxModel);
             }
             catch (Exception ex)
             {
@@ -223,49 +217,24 @@ namespace NoPasaranFC.Graphics3D
         {
             foreach (string fileName in new[] { "Player.glb", "Knight.glb" })
             {
-                try
+                _playerModel = ModelCache.TryGet(device, fileName);
+                if (_playerModel != null)
                 {
-#if ANDROID
-                    var context = global::Android.App.Application.Context;
-                    using (var stream = context.Assets.Open($"Content/Models3D/{fileName}"))
-                        _playerModel = SkinnedModel.Load(device, stream);
-#else
-                    string glbPath = PlatformHelper.GetAssetPath(Path.Combine("Content", "Models3D", fileName));
-                    if (!File.Exists(glbPath)) continue;
-                    _playerModel = SkinnedModel.Load(device, glbPath);
-#endif
                     _playerModelKind = fileName.StartsWith("Player") ? PlayerModelKind.SoccerPlayer : PlayerModelKind.Knight;
                     return;
                 }
-                catch (Exception ex)
-                {
-                    Debug.WriteLine($"MatchRenderer3D: failed to load {fileName} ({ex.Message}).");
-                }
+                Debug.WriteLine($"MatchRenderer3D: failed to load {fileName}.");
             }
             Debug.WriteLine("MatchRenderer3D: no player model found - using billboard players.");
             _playerModel = null;
         }
-        
+
         /// <summary>Loads the optional female player variant (PlayerF.glb).</summary>
         private void TryLoadFemalePlayerModel(GraphicsDevice device)
         {
-            try
-            {
-#if ANDROID
-                var context = global::Android.App.Application.Context;
-                using (var stream = context.Assets.Open("Content/Models3D/PlayerF.glb"))
-                    _playerModelF = SkinnedModel.Load(device, stream);
-#else
-                string glbPath = PlatformHelper.GetAssetPath(Path.Combine("Content", "Models3D", "PlayerF.glb"));
-                if (File.Exists(glbPath))
-                    _playerModelF = SkinnedModel.Load(device, glbPath);
-#endif
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine($"MatchRenderer3D: failed to load PlayerF.glb ({ex.Message}).");
-                _playerModelF = null;
-            }
+            _playerModelF = ModelCache.TryGet(device, "PlayerF.glb");
+            if (_playerModelF == null)
+                Debug.WriteLine("MatchRenderer3D: failed to load PlayerF.glb.");
         }
         
         /// <summary>Deterministic per-player model choice (~1 in 4 female when available).</summary>

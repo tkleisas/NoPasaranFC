@@ -749,7 +749,21 @@ namespace NoPasaranFC.Screens
         
         public override void Draw(SpriteBatch spriteBatch, SpriteFont font)
         {
-            if (_pixel == null) return;
+            if (_pixel == null)
+            {
+                // Graphics still initializing (3D assets) - show a loading note
+                // instead of black frames
+                if (font != null)
+                {
+                    string loadingText = Localization.Instance.Get("match.loading");
+                    Vector2 loadingSize = font.MeasureString(loadingText);
+                    spriteBatch.DrawString(font, loadingText,
+                        new Vector2((Game1.ScreenWidth - loadingSize.X) / 2f,
+                                    (Game1.ScreenHeight - loadingSize.Y) / 2f),
+                        Color.White);
+                }
+                return;
+            }
             
             // 3D match view: draw the 3D scene (no sprite batch), then only HUD/overlay UI.
             // The 2D world rendering (field, players, ball, nets, stadium) is skipped.

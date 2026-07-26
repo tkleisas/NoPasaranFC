@@ -80,6 +80,12 @@ dotnet build NoPasaranFC.Android/NoPasaranFC.Android.csproj  # Android (needs an
   row + `Localization` keys (en + el). Defaults apply to fresh installs only.
 - **Kits**: team shirt/shorts/socks via `KitTextureFactory` (region recolor of the player atlas,
   luminance-normalized). Kit colors live in `MatchRenderer3D.GetKitColors`.
+- **Asset caching** (v2.13.1+, Android ANR fix): GLB models load once per process via
+  `Graphics3D/Skinning/ModelCache` (preloaded in `Game1.LoadContent`); parts sharing an atlas
+  share one texture (`SkinnedModel.LoadCore` dedup); venue procedural textures are static-cached
+  per venue in `World3D`. `FaceComposer.AtlasScale` is 2 on desktop, 1 on Android.
+  Never reload GLBs per match — stable atlas identity is what keeps the
+  FaceComposer/KitTextureFactory caches (keyed on texture instance) hitting instead of leaking.
 - **Animations**: KayKit clips on all humanoids (same skeleton). State→clip mapping in `PlayerAnimator`.
 - **Anti-oscillation**: AI uses target inertia + start/stop hysteresis (`AIConstants`), animations use
   hysteresis (`PlayerAnimator`). Don't reintroduce raw per-frame target/state flipping.

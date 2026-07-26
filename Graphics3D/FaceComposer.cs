@@ -22,10 +22,16 @@ namespace NoPasaranFC.Graphics3D
         public enum Expression { Smile, Neutral, Sad, Wow }
         public enum Feature { None, Beard, Goatee, Sideburns, Eyelashes }
         
-        /// <summary>Composed atlases are rendered at 512 * AtlasScale px (crisper faces).</summary>
-        public const int AtlasScale = 2;
+        /// <summary>Composed atlases are rendered at 512 * AtlasScale px (crisper faces).
+        /// Android caps at 1 (512px): the ~200 per-match bakes at 1024px were the
+        /// main driver of the match-entry stall and GPU memory pressure.</summary>
+#if ANDROID
+        public static readonly int AtlasScale = 1;
+#else
+        public static readonly int AtlasScale = 2;
+#endif
         private const int BaseSize = 512;
-        private const int OutSize = BaseSize * AtlasScale;
+        private static readonly int OutSize = BaseSize * AtlasScale;
         
         public readonly struct Appearance
         {

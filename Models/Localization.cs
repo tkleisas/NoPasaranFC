@@ -100,6 +100,7 @@ namespace NoPasaranFC.Models
                 
                 // Match
                 ["match.goal"] = "GOAL!",
+                ["match.loading"] = "LOADING...",
                 ["match.finalScore"] = "FINAL SCORE",
                 ["match.halfTime"] = "HALF TIME",
                 ["match.throwIn"] = "THROW-IN",
@@ -256,6 +257,7 @@ namespace NoPasaranFC.Models
                 
                 // Match
                 ["match.goal"] = "ΓΚΟΛ!",
+                ["match.loading"] = "ΦΟΡΤΩΣΗ...",
                 ["match.finalScore"] = "ΤΕΛΙΚΟ ΣΚΟΡ",
                 ["match.halfTime"] = "ΗΜΙΧΡΟΝΟ",
                 ["match.throwIn"] = "ΠΛΑΓΙΟ",

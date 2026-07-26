@@ -77,18 +77,34 @@ namespace NoPasaranFC.Graphics3D
         private const float LineY = 0.02f;
         private const float LineWidth = 0.12f; // FIFA ~12cm lines
         
+        // Procedural/baked textures are invariant per venue - cache them for the
+        // process lifetime instead of rebuilding (RenderTarget2D text bakes and
+        // CPU texture loops stall match entry, especially on Android GLES).
+        // Note: the random fan-banner selection is now made once per process.
+        private static readonly Dictionary<string, Texture2D> _textureCache =
+            new Dictionary<string, Texture2D>();
+
+        private static Texture2D CachedTexture(string key, Func<Texture2D> create)
+        {
+            if (_textureCache.TryGetValue(key, out var cached))
+                return cached;
+            var texture = create();
+            _textureCache[key] = texture;
+            return texture;
+        }
+
         public World3D(GraphicsDevice device, ContentManager content = null, Venue venue = Venue.Bahramis)
         {
             _venue = venue;
-            
+
             _colorEffect = new BasicEffect(device)
             {
                 VertexColorEnabled = true,
                 TextureEnabled = false,
                 LightingEnabled = false
             };
-            
-            _grassTexture = CreateGrassTexture(device);
+
+            _grassTexture = CachedTexture($"grass:{venue}", () => CreateGrassTexture(device));
             _pitchEffect = new BasicEffect(device)
             {
                 VertexColorEnabled = false,
@@ -110,7 +126,7 @@ namespace NoPasaranFC.Graphics3D
             }
             else
             {
-                _fenceTexture = CreateChainLinkTexture(device);
+                _fenceTexture = CachedTexture("chainlink", () => CreateChainLinkTexture(device));
                 _fenceEffect = new BasicEffect(device)
                 {
                     VertexColorEnabled = false,
@@ -125,7 +141,7 @@ namespace NoPasaranFC.Graphics3D
                     Venue.Sfageia => "ΓΗΠΕΔΟ ΣΦΑΓΕΙΩΝ",
                     _ => "ΠΑΝΑΓΙΩΤΗΣ ΜΠΑΧΡΑΜΗΣ",
                 };
-                _scoreboardTexture = CreateScoreboardTexture(device, content, signText);
+                _scoreboardTexture = CachedTexture($"scoreboard:{signText}", () => CreateScoreboardTexture(device, content, signText));
                 _scoreboardEffect = new BasicEffect(device)
                 {
                     VertexColorEnabled = false,
@@ -136,7 +152,7 @@ namespace NoPasaranFC.Graphics3D
                 
                 if (_venue == Venue.Sperchogeia || _venue == Venue.Sfageia)
                 {
-                    _bannerTexture = CreateBannerTexture(device, content);
+                    _bannerTexture = CachedTexture($"sponsor:{venue}", () => CreateBannerTexture(device, content));
                     _bannerEffect = new BasicEffect(device)
                     {
                         VertexColorEnabled = false,
@@ -147,7 +163,7 @@ namespace NoPasaranFC.Graphics3D
                 }
                 
                 // Fan-made banners (all grounds with a fence)
-                _fanBannerTexture = CreateFanBannerTexture(device, content);
+                _fanBannerTexture = CachedTexture($"fanbanners:{venue}", () => CreateFanBannerTexture(device, content));
                 _fanBannerEffect = new BasicEffect(device)
                 {
                     VertexColorEnabled = false,

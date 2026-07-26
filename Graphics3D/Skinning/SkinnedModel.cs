@@ -145,6 +145,9 @@ namespace NoPasaranFC.Graphics3D.Skinning
             model._inverseBindMatrices = ibm.Select((Numerics.Matrix4x4 m) => ToXna(m)).ToArray();
 
             // ---- Meshes (bind them to every node that has a skinned mesh) ----
+            // Parts sharing one atlas share ONE decoded+mipmapped texture
+            // (decoding + software mip chain per part was pure waste)
+            var textureCache = new Dictionary<Image, Texture2D>();
             var boundsMin = new Vector3(float.MaxValue);
             var boundsMax = new Vector3(float.MinValue);
             foreach (var node in nodeList.Where(nd => nd.Mesh != null && nd.Skin != null))
@@ -192,7 +195,7 @@ namespace NoPasaranFC.Graphics3D.Skinning
                     part.Indices.SetData(indices);
                     part.PrimitiveCount = indices.Length / 3;
 
-                    part.Texture = LoadBaseColorTexture(device, prim);
+                    part.Texture = LoadBaseColorTexture(device, prim, textureCache);
                     model.Parts.Add(part);
                 }
             }
@@ -253,7 +256,8 @@ namespace NoPasaranFC.Graphics3D.Skinning
             return sum > 0.0001f ? w / sum : new Vector4(1, 0, 0, 0);
         }
 
-        private static Texture2D LoadBaseColorTexture(GraphicsDevice device, MeshPrimitive prim)
+        private static Texture2D LoadBaseColorTexture(GraphicsDevice device, MeshPrimitive prim,
+            Dictionary<Image, Texture2D> textureCache)
         {
             try
             {
@@ -261,12 +265,19 @@ namespace NoPasaranFC.Graphics3D.Skinning
                 var image = texture?.PrimaryImage;
                 if (image != null)
                 {
+                    if (textureCache.TryGetValue(image, out var shared))
+                        return shared;
+
                     ReadOnlyMemory<byte> bytes = image.Content.Content;
                     if (bytes.Length > 0)
                     {
                         using (var ms = new MemoryStream(bytes.ToArray()))
+                        {
                             // Mipmaps keep small features (faces) visible at distance
-                            return TextureTools.MakeMipmapped(device, Texture2D.FromStream(device, ms));
+                            var loaded = TextureTools.MakeMipmapped(device, Texture2D.FromStream(device, ms));
+                            textureCache[image] = loaded;
+                            return loaded;
+                        }
                     }
                 }
             }

@@ -172,7 +172,12 @@ public class Game1 : Game
         
         // Start menu music
         AudioManager.Instance.PlayMusic("menu_music");
-        
+
+        // Preload the skinned GLB models into the process cache so entering the
+        // first match doesn't stall (this was the biggest chunk of the old
+        // 2-3s match load, and the root cause of the Android ANR dialogs)
+        Graphics3D.Skinning.ModelCache.Preload(GraphicsDevice, "Player.glb", "PlayerF.glb", "Fox.glb");
+
         // Start with menu screen
         var menuScreen = new MenuScreen(_championship, _database, _screenManager, _contentManager, GraphicsDevice);
         _screenManager.PushScreen(menuScreen);
