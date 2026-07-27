@@ -95,7 +95,8 @@ public class MatchEngineTests
             () => engine.CurrentState == MatchEngine.MatchState.HalfTime, timeoutSeconds: 120f);
         Assert.True(reachedHalftime, "halftime should trigger at 45'");
         float halftimeTime = engine.MatchTime;
-        Assert.InRange(halftimeTime, 45f, 46f);
+        // Fires in open play only, so a stoppage in progress delays it (realistic)
+        Assert.InRange(halftimeTime, 45f, 50f);
 
         // Frozen while in HalfTime
         TestHelper.Step(engine, 1f);
@@ -194,6 +195,36 @@ public class MatchEngineTests
             () => engine.CurrentState == MatchEngine.MatchState.Playing, 10f);
         Assert.True(resumed, "play should resume after the post-goal countdown");
         Assert.Equal(engine.AwayTeam.Id, engine.KickoffTeamId);
+    }
+
+    [Fact]
+    public void StallWatchdog_ForcesNearestPlayersToEngage()
+    {
+        var engine = TestHelper.MakeEngine();
+        TestHelper.ReachPlaying(engine);
+
+        // Park everyone far from a stationary ball in midfield
+        float centerY = MatchEngine.StadiumMargin + MatchEngine.FieldHeight / 2f;
+        foreach (var p in engine.GetAllPlayers())
+            p.FieldPosition = new Vector2(MatchEngine.StadiumMargin + 100f, MatchEngine.StadiumMargin + 100f);
+        engine.BallPosition = new Vector2(MatchEngine.StadiumMargin + MatchEngine.FieldWidth / 2f, centerY);
+        engine.BallVelocity = Vector2.Zero;
+        engine.LastPlayerTouchedBall = null;
+
+        // Past the 2.5s watchdog threshold, the nearest player of each team must
+        // be forced to pounce (GKs excluded when the ball is outside their box)
+        TestHelper.Step(engine, 3.0f);
+        bool homeForced = engine.HomeTeam.Players.Any(p =>
+            p.Position != PlayerPosition.Goalkeeper && engine.IsForcedPouncer(p));
+        bool awayForced = engine.AwayTeam.Players.Any(p =>
+            p.Position != PlayerPosition.Goalkeeper && engine.IsForcedPouncer(p));
+        Assert.True(homeForced, "watchdog should force a home player to pounce");
+        Assert.True(awayForced, "watchdog should force an away player to pounce");
+
+        // And eventually (they must cross the pitch) the ball must actually move
+        bool ballMoved = TestHelper.StepUntil(engine,
+            () => engine.BallVelocity.Length() > 30f, 20f);
+        Assert.True(ballMoved, "a stalled ball must get played after the watchdog fires");
     }
 
     [Fact]

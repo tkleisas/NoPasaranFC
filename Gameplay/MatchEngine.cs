@@ -103,6 +103,32 @@ namespace NoPasaranFC.Gameplay
         /// the opponent's half, ahead of the ball, and deeper than the
         /// second-last defender.
         /// </summary>
+        /// <summary>
+        /// Would `target` be offside if `kicker` played the ball right now?
+        /// (opponent half + ahead of the ball + deeper than the second-last
+        /// defender). Used by the AI to avoid offside passes/runs.
+        /// </summary>
+        internal bool WouldBeOffside(Player kicker, Player target)
+        {
+            if (kicker?.Team == null || target?.Team != kicker.Team) return false;
+            bool attacksRight = AttackSign(kicker.Team) > 0;
+            float centerX = StadiumMargin + FieldWidth / 2f;
+            float goalLineX = attacksRight ? StadiumMargin + FieldWidth : StadiumMargin;
+
+            var defendingTeam = kicker.Team == _homeTeam ? _awayTeam : _homeTeam;
+            var secondLast = defendingTeam.Players
+                .Where(p => p.IsStarting)
+                .OrderBy(p => Math.Abs(p.FieldPosition.X - goalLineX))
+                .Skip(1).FirstOrDefault();
+            if (secondLast == null) return false;
+
+            bool inOppHalf = attacksRight ? target.FieldPosition.X > centerX : target.FieldPosition.X < centerX;
+            bool aheadOfBall = attacksRight ? target.FieldPosition.X > BallPosition.X : target.FieldPosition.X < BallPosition.X;
+            bool deeper = attacksRight ? target.FieldPosition.X > secondLast.FieldPosition.X
+                                       : target.FieldPosition.X < secondLast.FieldPosition.X;
+            return inOppHalf && aheadOfBall && deeper;
+        }
+
         private void SnapshotOffsideCandidates(Player kicker)
         {
             _offsideCandidates.Clear();
@@ -230,6 +256,51 @@ namespace NoPasaranFC.Gameplay
                     Stats.For(player).Saves++;
                     MarkLastShotOnTarget(player.Team);
                 }
+            }
+        }
+
+        // ---- Ball-stall watchdog ----
+        // A loose ball must never sit still for seconds: when it stalls, the
+        // nearest players of BOTH teams are forced to pounce, regardless of
+        // chase-rank scoring (which has dead zones - e.g. post-kickoff resets).
+        private float _stallTimer;
+        private const float StallWatchdogSeconds = 2.5f;
+        private readonly HashSet<int> _forcedPouncers = new HashSet<int>();
+
+        /// <summary>True while this player is watchdog-forced to attack the ball.</summary>
+        internal bool IsForcedPouncer(Player player) =>
+            player != null && _forcedPouncers.Contains(player.Id);
+
+        private void UpdateStallWatchdog(float deltaTime)
+        {
+            bool stalled = CurrentState == MatchState.Playing && BallVelocity.Length() < 5f;
+            if (!stalled)
+            {
+                _stallTimer = 0f;
+                if (BallVelocity.Length() > 30f || _lastPlayerTouchedBall != null)
+                    _forcedPouncers.Clear();
+                return;
+            }
+
+            _stallTimer += deltaTime;
+            if (_stallTimer < StallWatchdogSeconds) return;
+
+            // Force the nearest available player of each team (skip GKs unless
+            // the ball is in their box, and the human-controlled player)
+            foreach (var team in new[] { _homeTeam, _awayTeam })
+            {
+                Player nearest = null;
+                float best = float.MaxValue;
+                foreach (var p in team.Players)
+                {
+                    if (!p.IsStarting || p.IsKnockedDown || p.IsControlled) continue;
+                    if (p.Position == PlayerPosition.Goalkeeper &&
+                        !IsInPenaltyArea(BallPosition, team)) continue;
+                    float d = Vector2.DistanceSquared(p.FieldPosition, BallPosition);
+                    if (d < best) { best = d; nearest = p; }
+                }
+                if (nearest != null)
+                    _forcedPouncers.Add(nearest.Id);
             }
         }
 
@@ -1163,6 +1234,9 @@ namespace NoPasaranFC.Gameplay
             
             // Update ball physics
             UpdateBall(deltaTime);
+
+            // Ball-stall watchdog: nobody may ignore a loose ball for seconds
+            UpdateStallWatchdog(deltaTime);
 
             // Stats: pass-offer expiry + possession (nearest player within 250px)
             _pendingPassTimer -= deltaTime;
@@ -2137,40 +2211,13 @@ namespace NoPasaranFC.Gameplay
                 return;
             }
             
-            // Referee follows play like a real one: holds an ANGLED position to
-            // the side of play (arcs around the action instead of bee-lining
-            // at the ball or backpedaling), sprints when play breaks away
-            Vector2 targetPosition = BallPosition;
-            
-            // Which side of the ball is he on? Stay on that side (slow-flip)
-            float side = Math.Sign(RefereePosition.Y - targetPosition.Y);
-            if (side == 0f) side = 1f;
-            // Desired spot: ~450px to the side and slightly behind play
-            Vector2 desiredSpot = targetPosition + new Vector2(0f, side * 450f);
-            
-            Vector2 toSpot = desiredSpot - RefereePosition;
-            float distance = toSpot.Length();
-            
-            if (distance < 0.001f)
-            {
-                _refereeVelocity = Vector2.Zero;
-                return;
-            }
-            
-            Vector2 desired;
-            if (distance > 700f)
-                desired = toSpot / distance * 400f; // Sprint to catch up
-            else if (distance > 200f)
-                desired = toSpot / distance * 200f; // Jog into the arc
-            else
-                desired = Vector2.Zero; // In position: settle
-            
-            // Smooth velocity changes (no rapid direction oscillation)
-            float blend = Math.Min(1f, deltaTime * 3f);
-            _refereeVelocity = Vector2.Lerp(_refereeVelocity, desired, blend);
-            
+            // No card cutscene: the referee is DRIVEN BY MatchOfficials on the
+            // renderer side (single authority - it overwrites RefereePosition
+            // every frame). Headless the ref simply holds position.
+            _refereeVelocity = Vector2.Lerp(_refereeVelocity, Vector2.Zero,
+                Math.Min(1f, deltaTime * 3f));
             RefereePosition += _refereeVelocity * deltaTime;
-            
+
             // Clamp referee to field
             Vector2 refPos = RefereePosition;
             ClampToField(ref refPos);

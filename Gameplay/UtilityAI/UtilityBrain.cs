@@ -97,7 +97,7 @@ namespace NoPasaranFC.Gameplay.UtilityAI
         public void Update(Player player, AIContext context, float deltaTime)
         {
             _evalTimer -= deltaTime;
-            
+
             // Track the "AFK carrier" case: the ball sits with a controlled player
             // who isn't moving (harness without human input, or a real player who
             // walked away). After 3s of stall, teammates treat the ball as loose.
@@ -111,16 +111,31 @@ namespace NoPasaranFC.Gameplay.UtilityAI
             {
                 _carrierStallTimer = 0f;
             }
-            
+
+            // Dribble failure tracking: lost the ball to an opponent while
+            // dribbling -> dribble less for a while (pass first next time)
+            if (_wasCarrier && _current.Type == UtilityActionType.Dribble &&
+                context.BallCarrier != player && context.BallCarrier != null &&
+                context.BallCarrier.TeamId != player.TeamId)
+            {
+                _dribbleFailures = Math.Min(3, _dribbleFailures + 1);
+                _dribbleFailUntil = context.MatchTime + 10f;
+            }
+            _wasCarrier = context.BallCarrier == player;
+
             // Re-evaluate on tick OR when the current action became impossible
             if (_evalTimer <= 0f || !IsActionViable(player, context, _current))
             {
                 _current = Decide(player, context);
                 _evalTimer = EvalInterval;
             }
-            
+
             Execute(player, context, _current, deltaTime);
         }
+
+        private bool _wasCarrier;
+        private int _dribbleFailures;
+        private float _dribbleFailUntil = -1f;
         
         /// <summary>Ball stuck with an idle controlled carrier for 3s+ = loose ball.</summary>
         private bool IsBallEffectivelyLoose(AIContext ctx)
@@ -137,7 +152,12 @@ namespace NoPasaranFC.Gameplay.UtilityAI
             // Goalkeeper has a specialized, narrow action set
             if (player.Position == PlayerPosition.Goalkeeper)
                 return DecideGoalkeeper(player, ctx);
-            
+
+            // Ball-stall watchdog: a stalled loose ball overrides everything -
+            // this player is the nearest and MUST engage (kills idle dead zones)
+            if (ctx.ForcedPounce && ctx.BallCarrier != player)
+                return new UtilityAction(UtilityActionType.ChaseBall, GetBallInterceptPoint(ctx), 999f);
+
             UtilityAction best;
             
             // Carrier mode: anyone who owns the ball stays in carrier actions
@@ -296,6 +316,24 @@ namespace NoPasaranFC.Gameplay.UtilityAI
                 + (3 - Math.Min(3, laneBlockers)) * UtilityTuning.DribbleLaneBonus; // open lane vs packed
             dribbleScore *= roleAttack;
             if (pressure > 400f) dribbleScore += UtilityTuning.DribbleFreeSpaceBonus;
+
+            // Dead-end detection: converging defenders (2+ closing in) means the
+            // dribble dies here - release the ball instead of hogging into a trap
+            int converging = 0;
+            foreach (var opp in ctx.Opponents)
+            {
+                float d = Vector2.Distance(opp.FieldPosition, player.FieldPosition);
+                if (d < 350f) converging++;
+            }
+            if (converging >= 2)
+            {
+                dribbleScore *= 0.3f;
+                if (passScore > float.MinValue) passScore += 20f; // get rid of it NOW
+            }
+
+            // Recent dribble failures: this player keeps losing it -> pass first
+            if (ctx.MatchTime < _dribbleFailUntil)
+                dribbleScore *= 1f - 0.25f * _dribbleFailures; // x0.75 / x0.5 / x0.25
             
             // Pick the best (shoot can actually win now)
             float bestScore = shootScore;
@@ -312,7 +350,59 @@ namespace NoPasaranFC.Gameplay.UtilityAI
         
         // GK dive state (shot reaction): short burst to the predicted intercept
         private float _gkDiveUntil = -1f;
-        
+
+        /// <summary>
+        /// Forward distribution: the GK starts the attack. Quick roll/throw to an
+        /// open teammate (fullbacks and open midfielders first); a long punt to
+        /// the emptier flank only when every short option is covered.
+        /// </summary>
+        private UtilityAction DecideGkDistribution(Player player, AIContext ctx)
+        {
+            // Find the best open teammate: openness dominates, forward progress
+            // breaks ties. "Open" = no opponent within 250px.
+            Player bestTarget = null;
+            float bestScore = float.MinValue;
+            foreach (var mate in ctx.Teammates)
+            {
+                if (mate.Position == PlayerPosition.Goalkeeper) continue;
+                float dist = Vector2.Distance(player.FieldPosition, mate.FieldPosition);
+                if (dist < 300f || dist > 3500f) continue;
+
+                float openness = float.MaxValue;
+                foreach (var opp in ctx.Opponents)
+                {
+                    float d = Vector2.Distance(opp.FieldPosition, mate.FieldPosition);
+                    if (d < openness) openness = d;
+                }
+                if (openness < 250f) continue; // marked
+
+                float progress = (mate.FieldPosition.X - ctx.OwnGoalCenter.X) * ctx.AttackSign;
+                float score = openness / 100f + progress / 400f;
+                if (mate.Position == PlayerPosition.Defender) score += 5f; // fullbacks are the safe out-ball
+                if (score > bestScore) { bestScore = score; bestTarget = mate; }
+            }
+
+            if (bestTarget != null && bestScore > 4f)
+            {
+                // Open teammate found: roll/throw to them (execution leads the run)
+                return new UtilityAction(UtilityActionType.Pass, Vector2.Zero, bestScore, bestTarget);
+            }
+
+            // Nobody open: punt to the emptier flank, deep into the opponent half
+            float centerY = MatchEngine.StadiumMargin + MatchEngine.FieldHeight / 2f;
+            int lowPressure = 0, highPressure = 0;
+            foreach (var opp in ctx.Opponents)
+            {
+                if (opp.FieldPosition.Y > centerY) highPressure++; else lowPressure++;
+            }
+            float flankY = lowPressure <= highPressure
+                ? centerY + MatchEngine.FieldHeight * 0.35f
+                : centerY - MatchEngine.FieldHeight * 0.35f;
+            var puntTarget = new Vector2(
+                MathHelper.Lerp(ctx.OwnGoalCenter.X, ctx.OpponentGoalCenter.X, 0.65f), flankY);
+            return new UtilityAction(UtilityActionType.Clear, puntTarget, 80f);
+        }
+
         private UtilityAction DecideGoalkeeper(Player player, AIContext ctx)
         {
             float centerY = MatchEngine.StadiumMargin + MatchEngine.FieldHeight / 2f;
@@ -322,14 +412,11 @@ namespace NoPasaranFC.Gameplay.UtilityAI
             bool defendsLeft = ctx.AttackSign > 0f; // attacking right -> own goal on the left
             float defendingRatio = player.Defending / 100f;
             
-            // GK with ball: distribute to an open teammate when there is one,
-            // otherwise boot it long
+            // GK with ball: FORWARD distribution - start the attack with an open
+            // teammate (roll/throw short when possible), punt long only when
+            // every short option is covered
             if (ctx.HasBallPossession || ctx.BallCarrier == player)
-            {
-                if (ctx.BestPassTarget != null && ctx.BestPassScore > UtilityTuning.GKDistributionMinScore)
-                    return new UtilityAction(UtilityActionType.Pass, Vector2.Zero, 85f, ctx.BestPassTarget);
-                return new UtilityAction(UtilityActionType.Clear, ctx.OpponentGoalCenter, 80f);
-            }
+                return DecideGkDistribution(player, ctx);
             
             // Shot detection: ball flying toward our goal -> dive to the predicted
             // crossing point on the line (the save mechanic)
@@ -364,8 +451,38 @@ namespace NoPasaranFC.Gameplay.UtilityAI
                 return new UtilityAction(UtilityActionType.ChaseBall, target, 190f);
             }
             
-            // Ball close to own goal: come out and get it
+            // Sweeper-keeper: a through-ball inside the box that the GK reaches
+            // first (or no attacker near it) -> rush it, don't stay home
             float distBallToGoal = Vector2.Distance(ctx.BallPosition, ctx.OwnGoalCenter);
+            bool ballInBox = ctx.IsInOwnThird(player) && distBallToGoal < 1400f &&
+                Math.Abs(ctx.BallPosition.Y - centerY) < AIConstants.GKPenaltyAreaWidth / 2f;
+            if (ballInBox && ctx.BallCarrier == null && ctx.BallHeight < 80f)
+            {
+                float oppDist = ctx.NearestOpponent != null
+                    ? Vector2.Distance(ctx.NearestOpponent.FieldPosition, ctx.BallPosition)
+                    : float.MaxValue;
+                if (oppDist > 250f || ctx.DistanceToBall < oppDist * 0.9f)
+                    return new UtilityAction(UtilityActionType.ChaseBall, GetBallInterceptPoint(ctx), 120f);
+            }
+
+            // Cross claiming: an aerial ball dropping inside the box with no
+            // attacker at the landing point -> step out and take it
+            if (ctx.BallHeight > 60f && ctx.BallVerticalVelocity < 0f && distBallToGoal < 1400f &&
+                Math.Abs(ctx.BallPosition.Y - centerY) < MatchEngine.GoalWidth / 2f + 150f)
+            {
+                float oppAtDrop = ctx.NearestOpponent != null
+                    ? Vector2.Distance(ctx.NearestOpponent.FieldPosition, ctx.BallPosition)
+                    : float.MaxValue;
+                if (oppAtDrop > 300f)
+                {
+                    var claimPoint = new Vector2(
+                        MathHelper.Lerp(goalLineX, ctx.BallPosition.X, 0.35f),
+                        Math.Clamp(ctx.BallPosition.Y, goalTop + 40f, goalBottom - 40f));
+                    return new UtilityAction(UtilityActionType.HoldPosition, claimPoint, 110f);
+                }
+            }
+
+            // Ball close to own goal: come out and get it
             if (distBallToGoal < UtilityTuning.GKChaseGoalDistance && ctx.DistanceToBall < UtilityTuning.GKChaseBallDistance)
             {
                 float chaseScore = 60f + (UtilityTuning.GKChaseGoalDistance - distBallToGoal) / 30f;
@@ -385,11 +502,19 @@ namespace NoPasaranFC.Gameplay.UtilityAI
                 return new UtilityAction(UtilityActionType.HoldPosition, closeDown, 60f);
             }
             
-            // Default positioning: track ball Y (clamped inside the posts) and
-            // advance off the line as the ball gets closer - narrows the angle
-            float targetY = MathHelper.Lerp(centerY, ctx.BallPosition.Y, UtilityTuning.GKTrackLerp);
-            targetY = Math.Clamp(targetY, goalTop + 60f, goalBottom - 60f);
-            
+            // Default positioning: NEAR-POST DISCIPLINE first. When the ball is
+            // on a flank, the GK seals the ball-side post (nothing squeezes in at
+            // the near post), covering the far side only as the ball centralizes.
+            float trackY = MathHelper.Lerp(centerY, ctx.BallPosition.Y, UtilityTuning.GKTrackLerp);
+            float flankness = Math.Abs(ctx.BallPosition.Y - centerY) / (MatchEngine.FieldHeight * 0.5f);
+            float nearPostBias = Math.Clamp((flankness - 0.2f) * 1.8f, 0f, 0.8f);
+            if (nearPostBias > 0f)
+            {
+                float nearPostY = ctx.BallPosition.Y > centerY ? goalBottom - 70f : goalTop + 70f;
+                trackY = MathHelper.Lerp(trackY, nearPostY, nearPostBias);
+            }
+            float targetY = Math.Clamp(trackY, goalTop + 60f, goalBottom - 60f);
+
             float ballDistToGoal = Math.Abs(ctx.BallPosition.X - goalLineX);
             float advanceAmount = Math.Clamp(1f - ballDistToGoal / (MatchEngine.FieldWidth * 0.5f), 0f, 1f);
             float advance = advanceAmount * UtilityTuning.GKAdvanceMax * (0.5f + 0.5f * defendingRatio);
@@ -526,7 +651,8 @@ namespace NoPasaranFC.Gameplay.UtilityAI
                 case UtilityActionType.Shoot:
                     if (Vector2.Distance(player.FieldPosition, ctx.BallPosition) < 120f)
                     {
-                        _shootBall(player, ctx.OpponentGoalCenter, 0.85f);
+                        var (aim, power) = GetShotAim(player, ctx);
+                        _shootBall(player, aim, power);
                         ShotsAttempted++;
                     }
                     player.Velocity = Vector2.Zero;
@@ -644,6 +770,51 @@ namespace NoPasaranFC.Gameplay.UtilityAI
                         x = ctx.OwnGoalCenter.X + (ctx.OpponentGoalCenter.X - ctx.OwnGoalCenter.X) * UtilityTuning.DeepRunDepth;
                     }
                     y = MathHelper.Lerp(y, centerY, 0.4f);
+
+                    // Box occupation: a teammate has the ball WIDE in the attacking
+                    // third -> get to the posts for the cross. Even shirt numbers
+                    // take the far post, odd take the near post (no double-ups)
+                    if (ctx.TeammateHasBall(player) && carrierProgress > 0.6f &&
+                        Math.Abs(ctx.BallPosition.Y - centerY) > MatchEngine.FieldHeight * 0.2f)
+                    {
+                        bool ballLow = ctx.BallPosition.Y > centerY; // ball on the bottom flank
+                        bool farPost = (player.ShirtNumber % 2) == 0;
+                        float postY = centerY + (farPost ? (ballLow ? -1f : 1f) : (ballLow ? 1f : -1f))
+                            * MatchEngine.GoalWidth * 0.35f;
+                        x = ctx.OpponentGoalCenter.X - ctx.AttackSign * 500f;
+                        y = postY;
+                    }
+                }
+
+                // Offside awareness: hold the line instead of camping offside.
+                // The run target is clamped to the onside side of the offside
+                // line (second-last defender) when it matters (ahead of the ball)
+                if (GameSettings.Instance.OffsidesEnabled && ctx.Opponents != null && ctx.Opponents.Count > 1)
+                {
+                    // Second-last defender by distance to the goal line (loop idiom)
+                    float goalLineX = ctx.OpponentGoalCenter.X;
+                    float d1 = float.MaxValue, d2 = float.MaxValue;
+                    Player closest = null, secondLast = null;
+                    foreach (var opp in ctx.Opponents)
+                    {
+                        float d = Math.Abs(opp.FieldPosition.X - goalLineX);
+                        if (d < d1) { d2 = d1; secondLast = closest; d1 = d; closest = opp; }
+                        else if (d < d2) { d2 = d; secondLast = opp; }
+                    }
+                    if (secondLast != null)
+                    {
+                        float lineX = ctx.AttackSign > 0f
+                            ? secondLast.FieldPosition.X - 60f
+                            : secondLast.FieldPosition.X + 60f;
+                        if (ctx.AttackSign > 0f)
+                        {
+                            if (x > lineX && x > ctx.BallPosition.X) x = lineX;
+                        }
+                        else
+                        {
+                            if (x < lineX && x < ctx.BallPosition.X) x = lineX;
+                        }
+                    }
                 }
             }
             else
@@ -683,6 +854,30 @@ namespace NoPasaranFC.Gameplay.UtilityAI
             return new Vector2(x, y);
         }
         
+        /// <summary>
+        /// Shot aim: far post relative to the shooter (harder for the GK to
+        /// reach), with power scaling by distance. Central shooters aim at the
+        /// post away from their dominant side with a dash of randomness.
+        /// </summary>
+        private (Vector2 aim, float power) GetShotAim(Player player, AIContext ctx)
+        {
+            float centerY = MatchEngine.StadiumMargin + MatchEngine.FieldHeight / 2f;
+            float halfGoal = MatchEngine.GoalWidth / 2f;
+            float goalX = ctx.OpponentGoalCenter.X;
+
+            // Far post: shooter left of center -> aim right post, and vice versa
+            float inset = 60f + (float)_random.NextDouble() * 60f; // inside the frame
+            float aimY = player.FieldPosition.Y < centerY
+                ? centerY + halfGoal - inset
+                : centerY - halfGoal + inset;
+
+            // Power scales with distance (no floaters from range, no blasting 1-on-1)
+            float dist = Vector2.Distance(player.FieldPosition, ctx.OpponentGoalCenter);
+            float power = Math.Clamp(0.55f + dist / 3000f, 0.65f, 1.0f);
+
+            return (new Vector2(goalX, aimY), power);
+        }
+
         /// <summary>
         /// Dribble target: goal center by default, but if the central lane ahead
         /// is crowded, shift to the more open flank (wing attack).

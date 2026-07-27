@@ -123,6 +123,21 @@ public class OffsideTests
     }
 
     [Fact]
+    public void WouldBeOffside_EngineHelper_MatchesOffsideGeometry()
+    {
+        var (engine, offside, _, _) = StageOffsidePass();
+        var onside = engine.HomeTeam.Players.First(p =>
+            p.IsStarting && p.Position == PlayerPosition.Midfielder);
+
+        var kicker = engine.HomeTeam.Players.First(p =>
+            p.Position == PlayerPosition.Midfielder && p.IsStarting && p != offside);
+        Assert.True(engine.WouldBeOffside(kicker, offside),
+            "the deep attacker beyond the second-last defender should be offside");
+        Assert.False(engine.WouldBeOffside(kicker, onside),
+            "a midfielder on the halfway line should be onside");
+    }
+
+    [Fact]
     public void SettingsScreen_OffsidesDefault_IsOff()
     {
         var fresh = new GameSettings(true);

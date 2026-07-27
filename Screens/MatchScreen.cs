@@ -1189,16 +1189,45 @@ namespace NoPasaranFC.Screens
                         int barHeight = 8;
                         int barX = (int)(head.Value.X - barWidth / 2);
                         int barY = (int)(head.Value.Y + (topDown ? -78 : -44)); // above the name label
-                        
+
                         spriteBatch.Draw(_pixel, new Rectangle(barX, barY, barWidth, barHeight),
                             new Color(0, 0, 0, 180));
-                        
+
                         Color powerColor = power < 0.5f ? Color.Yellow : (power < 0.8f ? Color.Orange : Color.Red);
                         spriteBatch.Draw(_pixel, new Rectangle(barX, barY, (int)(barWidth * power), barHeight), powerColor);
-                        
+
                         DrawRectangleOutline(spriteBatch, _pixel,
                             new Rectangle(barX, barY, barWidth, barHeight), Color.White, 2);
                     }
+                }
+            }
+
+            // Staff name labels: referee, linesmen and coaches (light gray, same
+            // anti-collision rules as player labels)
+            if (GameSettings.Instance.ShowPlayerNames)
+            {
+                foreach (var (staffName, staffPos) in _renderer3D.GetStaffLabels())
+                {
+                    var head = _renderer3D.WorldToScreen(staffPos, topDown ? 0f : 140f);
+                    if (!head.HasValue) continue;
+
+                    string displayName = staffName.Length > 16 ? staffName.Substring(0, 16) : staffName;
+                    Vector2 nameSize = font.MeasureString(displayName);
+                    float nameY = head.Value.Y + (topDown ? -46f : -12f);
+                    Vector2 namePos = new Vector2(head.Value.X - nameSize.X / 2, nameY);
+                    var labelRect = new Rectangle((int)(namePos.X - 4), (int)(namePos.Y - 2),
+                        (int)(nameSize.X + 8), (int)(nameSize.Y + 4));
+
+                    bool overlaps = false;
+                    foreach (var r in drawnLabels)
+                    {
+                        if (r.Intersects(labelRect)) { overlaps = true; break; }
+                    }
+                    if (overlaps) continue;
+
+                    drawnLabels.Add(labelRect);
+                    spriteBatch.Draw(_pixel, labelRect, new Color(0, 0, 0, 150));
+                    spriteBatch.DrawString(font, displayName, namePos, Color.LightGray);
                 }
             }
         }

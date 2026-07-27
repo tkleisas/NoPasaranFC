@@ -250,7 +250,33 @@ namespace NoPasaranFC.Graphics3D
                 else _awayBench = bench;
             }
             
-            _officials = new MatchOfficials(device, _playerModel, atlas);
+            _officials = new MatchOfficials(device, _playerModel, atlas,
+                StaffNames.FixtureSeed(engine.HomeTeam.Name, engine.AwayTeam.Name));
+        }
+
+        /// <summary>Names + field positions (engine px) of the referee, linesmen
+        /// and both coaches - for the HUD name labels.</summary>
+        public List<(string Name, Vector2 FieldPosPx)> GetStaffLabels()
+        {
+            var labels = new List<(string, Vector2)>();
+            float cx = MatchEngine.StadiumMargin + MatchEngine.FieldWidth / 2f;
+            float cy = MatchEngine.StadiumMargin + MatchEngine.FieldHeight / 2f;
+            if (_officials != null)
+            {
+                foreach (var (name, worldPos) in _officials.GetNamedOfficials())
+                    labels.Add((name, new Vector2(
+                        WorldUnits.MToPx(worldPos.X) + cx,
+                        WorldUnits.MToPx(worldPos.Z) + cy)));
+            }
+            foreach (var bench in new[] { _homeBench, _awayBench })
+            {
+                var coach = bench?.GetCoachLabel();
+                if (coach.HasValue)
+                    labels.Add((coach.Value.Name, new Vector2(
+                        WorldUnits.MToPx(coach.Value.WorldPosition.X) + cx,
+                        WorldUnits.MToPx(coach.Value.WorldPosition.Z) + cy)));
+            }
+            return labels;
         }
 
         /// <summary>
@@ -374,9 +400,8 @@ namespace NoPasaranFC.Graphics3D
             _rain?.Update(dt, _camera.Target);
             _easterEggs?.Update(dt, engine);
             _fans?.Update(dt, engine);
-            float ballWorldX = WorldUnits.ToWorld(engine.BallPosition).X;
-            _homeBench?.Update(dt, ballWorldX);
-            _awayBench?.Update(dt, ballWorldX);
+            _homeBench?.Update(dt, engine);
+            _awayBench?.Update(dt, engine);
             _officials?.Update(dt, engine);
             
             if (!replayActive)

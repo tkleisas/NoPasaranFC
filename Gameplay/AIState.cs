@@ -79,6 +79,7 @@ namespace NoPasaranFC.Gameplay
         
         // Additional context for role-based AI
         public float BallHeight { get; set; }
+        public float BallVerticalVelocity { get; set; }
         public float MatchTime { get; set; }
         public float TimeSinceKickoff { get; set; } // Time since last kickoff
         public bool IsDefensiveHalf { get; set; }
@@ -101,6 +102,9 @@ namespace NoPasaranFC.Gameplay
         public bool IsHomeTeam { get; set; } // True if on the home team
         /// <summary>+1 when attacking toward +X (right goal), -1 toward -X. Half-aware (sides switch at halftime).</summary>
         public float AttackSign { get; set; } = 1f;
+        /// <summary>The ball-stall watchdog forces this player to attack the loose
+        /// ball NOW, bypassing all chase scoring (a stalled ball must never be ignored).</summary>
+        public bool ForcedPounce { get; set; }
         public Random PlayerRandom { get; set; } // Unique random instance per player (breaks synchronization)
         
         // Ball steering helper

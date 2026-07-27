@@ -19,6 +19,7 @@ namespace NoPasaranFC.Graphics3D
             public SkinnedModelInstance Instance;
             public Vector3 Position;
             public bool Seated;
+            public string Name;
         }
         
         private readonly List<BenchMember> _members = new List<BenchMember>();
@@ -26,12 +27,20 @@ namespace NoPasaranFC.Graphics3D
         private readonly VertexPositionColor[] _shelterVertices;
         private readonly int[] _shelterIndices;
         private readonly Random _random = new Random();
+        private readonly Team _team;
         private float _coachHomeX;
         private bool _coachMoving;
-        
+
+        // Coach event reactions (goal for/against, card against, losing late)
+        private float _reactionUntil = -1f;
+        private string _reactionClip;
+        private bool _celebrationHandled;
+        private Player _lastCardReactedTo;
+
         public TeamBench(GraphicsDevice device, Team team, Vector2 center, SkinnedModel playerModel,
             SkinnedModel femaleModel, Texture2D baseAtlas, Color shirt, int homeTeamId)
         {
+            _team = team;
             _shelterEffect = new BasicEffect(device)
             {
                 VertexColorEnabled = true,
@@ -69,8 +78,20 @@ namespace NoPasaranFC.Graphics3D
                     Instance = coach,
                     Position = new Vector3(_coachHomeX, 0f, center.Y + 0.5f),
                     Seated = false,
+                    Name = StaffNames.Coach(team.Name), // recurring manager per team
                 });
             }
+        }
+
+        /// <summary>The coach's name + world position, for the HUD name label.</summary>
+        public (string Name, Vector3 WorldPosition)? GetCoachLabel()
+        {
+            foreach (var member in _members)
+            {
+                if (!member.Seated && member.Name != null)
+                    return (member.Name, member.Position);
+            }
+            return null;
         }
         
         private static SkinnedModel PickModel(Player player, SkinnedModel male, SkinnedModel female, int index)
@@ -139,33 +160,83 @@ namespace NoPasaranFC.Graphics3D
             indices = inds.ToArray();
         }
         
-        public void Update(float dt, float ballWorldX)
+        public void Update(float dt, MatchEngine engine)
         {
+            // ---- Coach event reactions (priority over ambient behavior) ----
+            if (engine.CurrentState == MatchEngine.MatchState.GoalCelebration &&
+                engine.LastCelebratingTeam != null && !_celebrationHandled)
+            {
+                _celebrationHandled = true;
+                bool ours = engine.LastCelebratingTeam == _team;
+                StartReaction(ours ? "Cheer" : "Hit_Reaction", ours ? 5f : 3f);
+            }
+            if (engine.CurrentState != MatchEngine.MatchState.GoalCelebration)
+                _celebrationHandled = false;
+
+            if (engine.LastCardShown is { } card && card.Player != null &&
+                card.Player.TeamId == _team.Id && card.Player != _lastCardReactedTo)
+            {
+                _lastCardReactedTo = card.Player;
+                StartReaction("Hit_Reaction", 2.5f);
+            }
+
+            bool losingLate = engine.MatchTime > 75f &&
+                ((_team == engine.HomeTeam && engine.HomeScore < engine.AwayScore) ||
+                 (_team == engine.AwayTeam && engine.AwayScore < engine.HomeScore));
+
+            float ballWorldX = WorldUnits.ToWorld(engine.BallPosition).X;
+            bool ballInOurThird = engine.IsBallInHalf(_team.Name);
+
             foreach (var member in _members)
             {
                 if (!member.Seated)
                 {
-                    // Coach: pace along the dugout following the ball
-                    float targetX = MathHelper.Clamp(ballWorldX, _coachHomeX - 2.5f, _coachHomeX + 2.5f);
-                    float delta = targetX - member.Position.X;
-                    
-                    if (Math.Abs(delta) > 0.15f)
+                    if (_reactionUntil > 0f)
                     {
-                        // Walking to a better vantage point
-                        member.Instance.Play("Walking_A");
-                        float step = Math.Sign(delta) * Math.Min(1.2f * dt, Math.Abs(delta));
-                        member.Position += new Vector3(step, 0f, 0f);
-                        _coachMoving = true;
+                        // Reacting to an event: play the reaction clip, hold position
+                        _reactionUntil -= dt;
+                        member.Instance.Play(_reactionClip);
                     }
-                    else if (_coachMoving)
+                    else if (losingLate)
                     {
-                        // Arrived: back to directing
-                        member.Instance.Play("Spellcasting");
-                        _coachMoving = false;
+                        // Losing late: nervous pacing along the dugout
+                        float targetX = MathHelper.Clamp(ballWorldX, _coachHomeX - 2.5f, _coachHomeX + 2.5f);
+                        float delta = targetX - member.Position.X;
+                        if (Math.Abs(delta) > 0.15f)
+                        {
+                            member.Instance.Play("Walking_A");
+                            float step = Math.Sign(delta) * Math.Min(1.6f * dt, Math.Abs(delta));
+                            member.Position += new Vector3(step, 0f, 0f);
+                        }
+                    }
+                    else
+                    {
+                        // Ambient: direct play (more animated under pressure), else watch
+                        float targetX = MathHelper.Clamp(ballWorldX, _coachHomeX - 2.5f, _coachHomeX + 2.5f);
+                        float delta = targetX - member.Position.X;
+
+                        if (Math.Abs(delta) > 0.15f)
+                        {
+                            member.Instance.Play("Walking_A");
+                            float step = Math.Sign(delta) * Math.Min(1.2f * dt, Math.Abs(delta));
+                            member.Position += new Vector3(step, 0f, 0f);
+                            _coachMoving = true;
+                        }
+                        else
+                        {
+                            member.Instance.Play(ballInOurThird ? "Spellcasting" : "Idle");
+                            _coachMoving = false;
+                        }
                     }
                 }
                 member.Instance.Update(dt);
             }
+        }
+
+        private void StartReaction(string clip, float seconds)
+        {
+            _reactionClip = clip;
+            _reactionUntil = seconds;
         }
         
         public void Draw(GraphicsDevice device, Matrix view, Matrix projection, MatchEnvironment environment)

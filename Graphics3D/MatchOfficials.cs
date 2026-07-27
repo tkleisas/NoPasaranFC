@@ -20,14 +20,15 @@ namespace NoPasaranFC.Graphics3D
             public Vector3 Position;
             public float Yaw;
             public string WalkClip = "Walking_A";
+            public string Name;
         }
-        
+
         private readonly Official _referee;
         private readonly Official _linesmanNorth; // far side (-Z)
         private readonly Official _linesmanSouth; // near side (+Z)
         private const float LinesmanSpeed = 2.0f; // m/s
-        
-        public MatchOfficials(GraphicsDevice device, SkinnedModel playerModel, Texture2D baseAtlas)
+
+        public MatchOfficials(GraphicsDevice device, SkinnedModel playerModel, Texture2D baseAtlas, int fixtureSeed = 42)
         {
             SkinnedModelInstance MakeOfficial()
             {
@@ -42,45 +43,86 @@ namespace NoPasaranFC.Graphics3D
                 instance.Play("Idle");
                 return instance;
             }
-            
-            _referee = new Official { Instance = MakeOfficial() };
-            _linesmanNorth = new Official { Instance = MakeOfficial() };
-            _linesmanSouth = new Official { Instance = MakeOfficial() };
+
+            _referee = new Official { Instance = MakeOfficial(), Name = StaffNames.Referee(fixtureSeed) };
+            _linesmanNorth = new Official { Instance = MakeOfficial(), Name = StaffNames.Linesman(fixtureSeed + 101) };
+            _linesmanSouth = new Official { Instance = MakeOfficial(), Name = StaffNames.Linesman(fixtureSeed + 307) };
+        }
+
+        /// <summary>Staff names + world positions, for the HUD name labels.</summary>
+        public IEnumerable<(string Name, Vector3 WorldPosition)> GetNamedOfficials()
+        {
+            yield return (_referee.Name, _referee.Position);
+            yield return (_linesmanNorth.Name, _linesmanNorth.Position);
+            yield return (_linesmanSouth.Name, _linesmanSouth.Position);
         }
         
         public void Update(float dt, MatchEngine engine)
         {
-            // Referee: waypoint patrol on a diagonal lane (how real refs cover the
-            // pitch) - reposition when the ball moves, face play when settled.
-            // During a card cutscene the ref abandons patrol and walks to the
-            // booked player instead (the engine's RefereePosition drives this).
             Vector3 ballWorld = WorldUnits.ToWorld(engine.BallPosition, engine.BallHeight);
+            Vector3 refTarget;
+            Vector3? refFace = ballWorld;
+            float refSpeed = 4.5f;
+
             if (engine.CardPhase != MatchEngine.RefCardPhase.None && engine.CardPlayer != null)
             {
-                Vector3 playerWorld = WorldUnits.ToWorld(engine.CardPlayer.FieldPosition);
-                MoveOfficial(_referee, playerWorld, dt, 5.5f, faceTarget: playerWorld);
-                engine.RefereePosition = new Vector2(
-                    WorldUnits.MToPx(_referee.Position.X) + MatchEngine.StadiumMargin + MatchEngine.FieldWidth / 2f,
-                    WorldUnits.MToPx(_referee.Position.Z) + MatchEngine.StadiumMargin + MatchEngine.FieldHeight / 2f);
+                // Card cutscene: abandon everything and walk to the booked player
+                refTarget = WorldUnits.ToWorld(engine.CardPlayer.FieldPosition);
+                refFace = refTarget;
+                refSpeed = 5.5f;
+            }
+            else if (engine.CurrentState == MatchEngine.MatchState.PenaltyKick && engine.RestartPlayer != null)
+            {
+                // Behind the taker (away from the goal), on the penalty-area arc
+                float goalX = engine.AttackedGoalLineX(engine.RestartPlayer.Team);
+                float sign = Math.Sign(goalX - ballWorld.X);
+                refTarget = new Vector3(ballWorld.X - sign * 4.5f, 0f, ballWorld.Z + 3.5f);
+            }
+            else if (engine.CurrentState == MatchEngine.MatchState.FreeKick && engine.RestartPlayer != null)
+            {
+                // ~9m behind the ball (away from the goal it attacks)
+                float goalX = engine.AttackedGoalLineX(engine.RestartPlayer.Team);
+                float sign = Math.Sign(goalX - ballWorld.X);
+                refTarget = new Vector3(ballWorld.X - sign * 9f, 0f, ballWorld.Z + 2.5f);
+            }
+            else if (engine.Fouls.Count > 0 &&
+                     engine.MatchTime - _lastHandledFoulTime < 3f &&
+                     _lastHandledFoulTime >= 0f)
+            {
+                // A foul just happened (no card): go to the spot
+                var foul = engine.Fouls[engine.Fouls.Count - 1];
+                refTarget = WorldUnits.ToWorld(foul.Position);
+                refSpeed = 5.0f;
             }
             else
             {
-                Vector3 waypoint = GetRefereeWaypoint(ballWorld);
-                MoveOfficial(_referee, waypoint, dt, 4.5f, faceTarget: ballWorld);
-                engine.RefereePosition = new Vector2(
-                    WorldUnits.MToPx(_referee.Position.X) + MatchEngine.StadiumMargin + MatchEngine.FieldWidth / 2f,
-                    WorldUnits.MToPx(_referee.Position.Z) + MatchEngine.StadiumMargin + MatchEngine.FieldHeight / 2f);
+                // Free play: diagonal patrol, sprint when play breaks away
+                refTarget = GetRefereeWaypoint(ballWorld);
             }
-            
-            // Linesmen: track the ball's length (X) on their half of the touchline
-            float ballWorldX = ballWorld.X;
+
+            // Track which foul we've already responded to
+            if (engine.Fouls.Count > 0 && _lastHandledFoulCount != engine.Fouls.Count)
+            {
+                _lastHandledFoulCount = engine.Fouls.Count;
+                _lastHandledFoulTime = engine.MatchTime;
+            }
+
+            MoveOfficial(_referee, refTarget, dt, refSpeed, refFace);
+            engine.RefereePosition = new Vector2(
+                WorldUnits.MToPx(_referee.Position.X) + MatchEngine.StadiumMargin + MatchEngine.FieldWidth / 2f,
+                WorldUnits.MToPx(_referee.Position.Z) + MatchEngine.StadiumMargin + MatchEngine.FieldHeight / 2f);
+
+            // Linesmen: track the OFFSIDE LINE (second-last defender of the team
+            // defending their half), not raw ball X. Sprint when it moves fast.
             float halfW = WorldUnits.PitchWidthMeters / 2f;
-            
-            Vector2 northTarget = new Vector2(
-                Math.Clamp(ballWorldX, -WorldUnits.PitchLengthMeters / 2f, 0f), -halfW - 0.8f);
-            Vector2 southTarget = new Vector2(
-                Math.Clamp(ballWorldX, 0f, WorldUnits.PitchLengthMeters / 2f), halfW + 0.8f);
-            
+            float halfL = WorldUnits.PitchLengthMeters / 2f;
+            float ballWorldX = ballWorld.X;
+
+            float northLineX = GetOffsideLineX(engine, leftHalf: true);
+            float southLineX = GetOffsideLineX(engine, leftHalf: false);
+            Vector2 northTarget = new Vector2(Math.Clamp(northLineX, -halfL, 0f), -halfW - 0.8f);
+            Vector2 southTarget = new Vector2(Math.Clamp(southLineX, 0f, halfL), halfW + 0.8f);
+
             // Offside flag: the linesman on the offside side raises the flag (Wave)
             var flagLinesman = engine.OffsideFlagRaised
                 ? (ballWorldX < 0f ? _linesmanNorth : _linesmanSouth)
@@ -91,11 +133,40 @@ namespace NoPasaranFC.Graphics3D
                 flagLinesman.Yaw = flagLinesman.Position.Z > 0 ? (float)Math.PI : 0f;
                 flagLinesman.Instance.Update(dt);
             }
-            
-            MoveOfficial(_linesmanNorth, new Vector3(northTarget.X, 0f, northTarget.Y), dt, LinesmanSpeed, null,
+
+            // Sprint on fast-moving lines (counter-attacks)
+            float northSpeed = Math.Abs(northTarget.X - _linesmanNorth.Position.X) > 8f ? 4.5f : LinesmanSpeed;
+            float southSpeed = Math.Abs(southTarget.X - _linesmanSouth.Position.X) > 8f ? 4.5f : LinesmanSpeed;
+
+            MoveOfficial(_linesmanNorth, new Vector3(northTarget.X, 0f, northTarget.Y), dt, northSpeed, null,
                 skip: flagLinesman == _linesmanNorth);
-            MoveOfficial(_linesmanSouth, new Vector3(southTarget.X, 0f, southTarget.Y), dt, LinesmanSpeed, null,
+            MoveOfficial(_linesmanSouth, new Vector3(southTarget.X, 0f, southTarget.Y), dt, southSpeed, null,
                 skip: flagLinesman == _linesmanSouth);
+        }
+
+        private int _lastHandledFoulCount;
+        private float _lastHandledFoulTime = -1f;
+
+        /// <summary>X of the offside line on a half: the second-last defender of
+        /// the team defending that half (falls back to ball X without defenders).</summary>
+        private static float GetOffsideLineX(MatchEngine engine, bool leftHalf)
+        {
+            var defending = leftHalf ? engine.LeftDefendingTeam : engine.RightDefendingTeam;
+            if (defending == null) return 0f;
+            float goalLineWorldX = (leftHalf ? -1f : 1f) * WorldUnits.PitchLengthMeters / 2f;
+
+            // Two closest defenders to their goal line, in world X
+            float d1 = float.MaxValue, d2 = float.MaxValue;
+            float closestX = 0f, secondX = 0f;
+            foreach (var p in defending.Players)
+            {
+                if (!p.IsStarting) continue;
+                float wx = WorldUnits.ToWorld(p.FieldPosition).X;
+                float d = Math.Abs(wx - goalLineWorldX);
+                if (d < d1) { d2 = d1; d1 = d; secondX = closestX; closestX = wx; }
+                else if (d < d2) { d2 = d; secondX = wx; }
+            }
+            return secondX;
         }
         
         // Diagonal patrol lane (center circle to both corners-ish), real refs

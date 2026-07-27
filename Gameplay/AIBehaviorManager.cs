@@ -124,6 +124,12 @@ namespace NoPasaranFC.Gameplay
                 if (teammate == _engine.PreviousToucher)
                     passScore -= 500f;
 
+                // Offside awareness: a pass to an offside teammate is a turnover
+                // waiting to happen - near-veto when offsides are enforced
+                if (GameSettings.Instance.OffsidesEnabled &&
+                    _engine.WouldBeOffside(player, teammate))
+                    passScore -= 1500f;
+
                 // Distance scoring: value all useful distances, prefer medium but don't punish long
                 if (dist > AIConstants.MinPassDistance && dist < 800f)
                     passScore += 200f;     // Short-medium: safe option
@@ -225,6 +231,7 @@ namespace NoPasaranFC.Gameplay
                 BallPosition = _engine.BallPosition,
                 BallVelocity = _engine.BallVelocity,
                 BallHeight = _engine.BallHeight,
+                BallVerticalVelocity = _engine.BallVerticalVelocity,
                 BallCarrier = GetBallCarrier(),
                 NearestOpponent = nearestOpponent,
                 NearestTeammate = nearestTeammate,
@@ -237,6 +244,7 @@ namespace NoPasaranFC.Gameplay
                 IsPlayerTeam = player.Team != null && player.Team.IsPlayerControlled,
                 IsHomeTeam = isHomeTeam,
                 AttackSign = _engine.AttackSign(player.Team),
+                ForcedPounce = _engine.IsForcedPouncer(player),
                 Random = _engine.SharedRandom,
                 ClosestToBall = GetPlayerClosestToBall(),
                 ShouldChaseBall = shouldChaseBall,

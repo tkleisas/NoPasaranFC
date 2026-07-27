@@ -42,6 +42,7 @@ namespace NoPasaranFC.Harness
             string outPrefix = null;
             string paramsPath = null;
             bool noLog = false;
+            string homeTeamName = null, awayTeamName = null;
 
             for (int i = 1; i < args.Length; i++)
             {
@@ -53,6 +54,7 @@ namespace NoPasaranFC.Harness
                     case "--params": paramsPath = args[++i]; break;
                     case "--nolog": noLog = true; break;
                     case "--ballcontrol": GameSettings.Instance.BallControl = args[++i]; break;
+                    case "--teams": homeTeamName = args[++i]; awayTeamName = args[++i]; break;
                     default:
                         Console.Error.WriteLine($"unknown argument: {args[i]}");
                         return 1;
@@ -75,9 +77,21 @@ namespace NoPasaranFC.Harness
             // Build two full-roster teams straight from the JSON seeder (no database).
             TeamSeeder.DeterministicRosterSeed = seed;
             var teams = TeamSeeder.LoadTeamsFromJson(FindSeedJsonPath());
-            var homeTeam = teams.FirstOrDefault(t => t.Name.Contains("NO PASARAN"))
-                ?? throw new InvalidOperationException("NO PASARAN! team not found in teams_seed.json");
-            var awayTeam = teams.First(t => t != homeTeam);
+            Team homeTeam, awayTeam;
+            if (homeTeamName != null)
+            {
+                // Explicit pair for side/roster experiments (--teams "A" "B"; exact names)
+                homeTeam = teams.FirstOrDefault(t => t.Name == homeTeamName)
+                    ?? throw new InvalidOperationException($"team not found: {homeTeamName}");
+                awayTeam = teams.FirstOrDefault(t => t.Name == awayTeamName)
+                    ?? throw new InvalidOperationException($"team not found: {awayTeamName}");
+            }
+            else
+            {
+                homeTeam = teams.FirstOrDefault(t => t.Name.Contains("NO PASARAN"))
+                    ?? throw new InvalidOperationException("NO PASARAN! team not found in teams_seed.json");
+                awayTeam = teams.First(t => t != homeTeam);
+            }
 
             // Deterministic per-player AI randoms must be set BEFORE the engine
             // constructor creates the AIControllers.

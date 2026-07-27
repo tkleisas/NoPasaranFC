@@ -117,7 +117,20 @@ dotnet build NoPasaranFC.Android/NoPasaranFC.Android.csproj  # Android (needs an
 - Halves: teams switch sides at halftime, second-half kickoff goes to the other team,
   halftime substitution screen
 - AI: utility-scoring brain (`UtilityAI/UtilityBrain`, the live path; legacy role FSM kept as fallback),
-  passing/shooting/dribbling decisions, real GKs (shot dives, angle play, distribution), sideline avoidance
+  passing/shooting/dribbling decisions, sideline avoidance.
+  v2.18 additions: **ball-stall watchdog** (`MatchEngine.UpdateStallWatchdog` — a loose ball stationary
+  2.5s+ forces the nearest players of BOTH teams to pounce via `AIContext.ForcedPounce`; kills idle
+  dead zones), dribble dead-end detection + dribble-failure decay (no ball-hogging), offside awareness
+  when enabled (`MatchEngine.WouldBeOffside` pass penalty + hold-the-line clamp in GetTacticalPoint),
+  shot aim at far post with distance-scaled power, far-post cross runs.
+  **GK**: near-post discipline (seal ball-side post by flankness), sweeper-keeper rushes through-balls
+  in the box, cross claiming on descending aerials, forward distribution (`DecideGkDistribution` —
+  open teammate first, punt to emptier flank when covered).
+  **Officials**: single referee authority is renderer-side `MatchOfficials` (engine patrol deleted;
+  engine keeps only the card-cutscene walk). Ref goes to foul spots, stands ~9m behind free kicks,
+  behind the taker for penalties, sprints on breakaways. Linesmen track the offside line (second-last
+  defender per half) with sprint + Wave on offside. Coaches react: Cheer/Hit_Reaction on goals,
+  anger on cards against, pacing when losing late, directing when the ball is in their third
 - 3D mode: skinned players (male + female bodies) with appearance variety (face expressions
   neutral/smile/sad/wow, facial hair, hair colors), per-team kits with back numbers, GK distinct kits,
   five venues selectable in Settings (+Random): Bahramis (fence, yellow-seat stand, scoreboard,
