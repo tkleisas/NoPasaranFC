@@ -65,6 +65,7 @@ Broadcast / High / TopDown cameras in 3D, plus the original 2D sprite mode:
 
 ### 🎮 Core Gameplay
 - **Championship Mode**: Full round-robin league season with all 8 teams, standings, round results, seasons
+- **Match Statistics**: Detailed per-player and per-team stats (goals, assists, shots, on target, passes and accuracy, tackles, fouls, saves, cards, possession, corners, offsides) with a post-match screen; season-long top scorers with assists and cards (TAB in Standings) — simulated matches attribute goals too
 - **Two view modes**: full 3D (default) and classic top-down 2D, selectable in Settings
 - **Ball Physics**: Velocity, friction, bouncing, and aerial trajectories (height simulated separately)
 - **Tackle System**: Stat-based success probability with knockdowns

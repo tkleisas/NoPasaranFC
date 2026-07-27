@@ -47,14 +47,65 @@ namespace NoPasaranFC.Gameplay
             // Simulate goals based on team strength
             int homeGoals = SimulateGoals(homeStrength, awayStrength);
             int awayGoals = SimulateGoals(awayStrength, homeStrength);
-            
+
             // Update match result
             match.HomeScore = homeGoals;
             match.AwayScore = awayGoals;
             match.IsPlayed = true;
-            
+
             // Update team statistics
             UpdateTeamStats(homeTeam, awayTeam, homeGoals, awayGoals);
+
+            // Distribute goals/assists to roster players (top-scorer tables)
+            AttributeSimulatedGoals(homeTeam, homeGoals);
+            AttributeSimulatedGoals(awayTeam, awayGoals);
+        }
+
+        /// <summary>
+        /// Distributes simulated goals to roster players: forwards score most,
+        /// half the goals come with an assist (passers favored).
+        /// </summary>
+        private static void AttributeSimulatedGoals(Team team, int goals)
+        {
+            var roster = team.Players?.Where(p => p.IsStarting).ToList();
+            if (roster == null || roster.Count == 0)
+                roster = team.Players;
+            if (roster == null || roster.Count == 0) return;
+
+            for (int i = 0; i < goals; i++)
+            {
+                var scorer = PickWeighted(roster, p => p.Shooting * PositionFactor(p));
+                if (scorer == null) return;
+                scorer.SeasonGoals++;
+
+                if (_random.NextDouble() < 0.5)
+                {
+                    var mates = roster.Where(p => p != scorer).ToList();
+                    var assist = PickWeighted(mates, p => p.Passing * PositionFactor(p));
+                    if (assist != null) assist.SeasonAssists++;
+                }
+            }
+        }
+
+        private static double PositionFactor(Player player) => player.Position switch
+        {
+            PlayerPosition.Forward => 3.0,
+            PlayerPosition.Midfielder => 2.0,
+            PlayerPosition.Defender => 1.0,
+            _ => 0.3, // Goalkeeper
+        };
+
+        private static Player PickWeighted(List<Player> roster, Func<Player, double> weight)
+        {
+            double total = roster.Sum(weight);
+            if (total <= 0) return roster.Count > 0 ? roster[_random.Next(roster.Count)] : null;
+            double roll = _random.NextDouble() * total;
+            foreach (var p in roster)
+            {
+                roll -= weight(p);
+                if (roll <= 0) return p;
+            }
+            return roster[roster.Count - 1];
         }
         
         private static double CalculateTeamStrength(Team team)

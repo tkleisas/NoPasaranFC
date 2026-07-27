@@ -729,7 +729,18 @@ namespace NoPasaranFC.Screens
             _homeTeam.GoalsAgainst += _matchEngine.AwayScore;
             _awayTeam.GoalsFor += _matchEngine.AwayScore;
             _awayTeam.GoalsAgainst += _matchEngine.HomeScore;
-            
+
+            // Season accumulation: this match's per-player stats into the season
+            foreach (var kv in _matchEngine.Stats.Players)
+            {
+                var player = kv.Key;
+                var s = kv.Value;
+                player.SeasonGoals += s.Goals;
+                player.SeasonAssists += s.Assists;
+                player.SeasonYellowCards += s.YellowCards;
+                player.SeasonRedCards += s.RedCards;
+            }
+
             // Save to database
             _database.SaveChampionship(_championship);
             
@@ -745,10 +756,13 @@ namespace NoPasaranFC.Screens
             Gameplay.AudioManager.Instance.PlayMusic("menu_music");
             
             // Show round results screen before returning to menu
-            var roundResultsScreen = new RoundResultsScreen(_championship, currentMatchweek, 
+            var roundResultsScreen = new RoundResultsScreen(_championship, currentMatchweek,
                 _database, _screenManager, _content, _graphicsDevice);
             _screenManager.PopToScreen<MenuScreen>(); // Clear to menu
             _screenManager.PushScreen(roundResultsScreen); // Show results
+            // Match statistics on top (ESC/Enter returns to the round results)
+            _screenManager.PushScreen(new MatchStatsScreen(_matchEngine,
+                _screenManager, _content, _graphicsDevice));
         }
         
         public override void Draw(SpriteBatch spriteBatch, SpriteFont font)

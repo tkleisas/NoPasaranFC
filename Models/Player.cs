@@ -104,6 +104,12 @@ namespace NoPasaranFC.Models
         // Player picture (base64 encoded PNG, 128x128 pixels)
         public string PlayerPicture { get; set; }
 
+        // ---- Season statistics (accumulated per played + simulated match) ----
+        public int SeasonGoals { get; set; }
+        public int SeasonAssists { get; set; }
+        public int SeasonYellowCards { get; set; }
+        public int SeasonRedCards { get; set; }
+
         // ---- Appearance overrides (editor + seed catalog; -1 = auto from name/number hash) ----
         /// <summary>0 = auto (name hash), 1 = male body, 2 = female body.</summary>
         public int GenderOverride { get; set; } = -1;

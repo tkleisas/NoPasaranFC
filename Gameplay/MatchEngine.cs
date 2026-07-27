@@ -59,23 +59,32 @@ namespace NoPasaranFC.Gameplay
         internal Player LastPlayerTouchedBall
         {
             get => _lastPlayerTouchedBall;
-            set => _lastPlayerTouchedBall = value;
+            set => SetLastPlayerTouchedBall(value);
         }
         
+        /// <summary>Match statistics collector (per-player + per-team counters).</summary>
+        public MatchStats Stats { get; } = new MatchStats();
+
         /// <summary>
         /// Last player to deliberately kick the ball (shot, pass, clearance, set
         /// piece, dribble tap). Used for goal attribution and celebrations -
         /// unlike "last touch", a defender blocking a shot doesn't steal the credit.
         /// </summary>
         public Player LastKicker => _lastKicker ?? _lastPlayerTouchedBall;
-        
+
+        private Player _prevKicker; // kicker before _lastKicker (assist attribution)
+
         /// <summary>Registers a deliberate kick for goal attribution (also a touch).</summary>
         internal void RegisterKick(Player player)
         {
             if (player == null) return;
-            _lastKicker = player;
+            if (player != _lastKicker)
+            {
+                _prevKicker = _lastKicker;
+                _lastKicker = player;
+            }
             SetLastPlayerTouchedBall(player);
-            
+
             // Offside snapshot: which of the kicker's teammates are offside NOW
             if (GameSettings.Instance.OffsidesEnabled && CurrentState == MatchState.Playing)
                 SnapshotOffsideCandidates(player);
@@ -150,6 +159,8 @@ namespace NoPasaranFC.Gameplay
             // OFFSIDE: flag, banner, free kick for the defending team
             AudioManager.Instance.PlaySoundEffect("whistle_start", 0.8f); // single blow
             ShowEventBanner("match.offside");
+            Stats.For(toucher).Offsides++;
+            Stats.For(toucher.Team).Offsides++;
             OffsideFlagRaised = true;
             _offsideFlagTimer = 2.5f;
             _offsideCandidates.Clear();
@@ -197,7 +208,75 @@ namespace NoPasaranFC.Gameplay
             if (player != _lastPlayerTouchedBall)
                 _previousToucher = _lastPlayerTouchedBall;
             _lastPlayerTouchedBall = player;
-            KickoffTaken = true; // ball has been played
+            if (player != null)
+                KickoffTaken = true; // ball has been played
+
+            // Stats: pass completion (the toucher is a teammate of the pending passer)
+            if (player != null && _pendingPasser != null && player != _pendingPasser)
+            {
+                if (player.TeamId == _pendingPasser.TeamId)
+                    Stats.For(_pendingPasser).PassesCompleted++;
+                _pendingPasser = null;
+            }
+
+            // Stats: GK save - fast ball heading for their goal, stopped in their box
+            if (player != null && player.Position == PlayerPosition.Goalkeeper &&
+                CurrentState == MatchState.Playing &&
+                IsInPenaltyArea(BallPosition, player.Team))
+            {
+                float towardGoal = AttackSign(player.Team) > 0 ? -BallVelocity.X : BallVelocity.X;
+                if (towardGoal > 600f)
+                {
+                    Stats.For(player).Saves++;
+                    MarkLastShotOnTarget(player.Team);
+                }
+            }
+        }
+
+        // Stats: pass being delivered (completed when a teammate gets the next touch)
+        private Player _pendingPasser;
+        private float _pendingPassTimer;
+
+        // Stats: last shot taken, waiting for an on-target outcome
+        private Player _lastShotPlayer;
+
+        /// <summary>Marks a shot taken (on-target resolved at goal/save/woodwork).</summary>
+        internal void MarkShot(Player shooter)
+        {
+            Stats.For(shooter).Shots++;
+            _lastShotPlayer = shooter;
+        }
+
+        /// <summary>Marks a pass attempt (completion resolved on the next touch).</summary>
+        internal void MarkPass(Player passer)
+        {
+            Stats.For(passer).Passes++;
+            _pendingPasser = passer;
+            _pendingPassTimer = 3f;
+        }
+
+        /// <summary>Counts the last shot as on target (once, when it troubled the goal).</summary>
+        private void MarkLastShotOnTarget(Team defendingTeam)
+        {
+            if (_lastShotPlayer != null && _lastShotPlayer.Team != defendingTeam)
+            {
+                Stats.For(_lastShotPlayer).ShotsOnTarget++;
+                _lastShotPlayer = null;
+            }
+        }
+
+        /// <summary>Goal/assist/on-target bookkeeping at goal detection.</summary>
+        private void RecordGoalStats()
+        {
+            // Scorer: the last kicker, only when on the benefiting team (an own
+            // goal counts for nobody - it isn't a scorer's goal)
+            if (_lastKicker != null && _lastKicker.Team == _scoringTeam)
+            {
+                Stats.For(_lastKicker).Goals++;
+                if (_prevKicker != null && _prevKicker.Team == _scoringTeam && _prevKicker != _lastKicker)
+                    Stats.For(_prevKicker).Assists++;
+            }
+            MarkLastShotOnTarget(_scoringTeam == _homeTeam ? _awayTeam : _homeTeam);
         }
         
         /// <summary>The player who touched the ball before the current toucher.</summary>
@@ -1084,6 +1163,22 @@ namespace NoPasaranFC.Gameplay
             
             // Update ball physics
             UpdateBall(deltaTime);
+
+            // Stats: pass-offer expiry + possession (nearest player within 250px)
+            _pendingPassTimer -= deltaTime;
+            if (_pendingPassTimer <= 0f) _pendingPasser = null;
+            if (CurrentState == MatchState.Playing)
+            {
+                Player nearestToBall = null;
+                float nearestSq = 250f * 250f;
+                foreach (var p in GetAllPlayers())
+                {
+                    float dSq = Vector2.DistanceSquared(p.FieldPosition, BallPosition);
+                    if (dSq < nearestSq) { nearestSq = dSq; nearestToBall = p; }
+                }
+                if (nearestToBall != null)
+                    Stats.For(nearestToBall.Team).PossessionSeconds += deltaTime;
+            }
             
             // GK penalty dive (guessed side at burst speed)
             if (_penaltyDiveTimer > 0f && _penaltyDiveGk != null)
@@ -1331,6 +1426,8 @@ namespace NoPasaranFC.Gameplay
             
             severity = Math.Clamp(severity, 0f, 1f);
             Fouls.Add(new FoulRecord(offender, victim, BallPosition, severity));
+            Stats.For(offender).FoulsCommitted++;
+            Stats.For(victim).FoulsSuffered++;
             AudioManager.Instance.PlaySoundEffect("whistle_start", 0.7f); // single blow
             
             // Carding: harsh fouls book the offender; second yellow = red
@@ -1394,6 +1491,7 @@ namespace NoPasaranFC.Gameplay
             _cornerKickRunUp = false;
             RestartDirection = new Vector2(attackSign, 0f);
             CurrentState = MatchState.PenaltyKick;
+            Stats.For(victim.Team).Penalties++;
             ShowEventBanner("match.penalty");
         }
         
@@ -1446,12 +1544,15 @@ namespace NoPasaranFC.Gameplay
             if (!straightRed)
             {
                 offender.YellowCards++;
+                Stats.For(offender).YellowCards++;
                 if (offender.YellowCards >= 2)
                 {
                     isRed = true;
                     secondYellow = true;
                 }
             }
+            if (isRed)
+                Stats.For(offender).RedCards++;
             
             if (isRed)
             {
@@ -1503,6 +1604,7 @@ namespace NoPasaranFC.Gameplay
         private void PlaceBallForFreeKick(Vector2 spot, Player victim)
         {
             bool forHome = victim.Team == _homeTeam;
+            Stats.For(victim.Team).FreeKicks++;
             PlaceBallForRestart(spot, forHome, MatchState.FreeKick);
             ShowEventBanner("match.freeKick");
             
@@ -2347,6 +2449,8 @@ namespace NoPasaranFC.Gameplay
         
         private void PerformShoot(Player player, Vector2 moveDirection, float shootButtonHoldTime)
         {
+            MarkShot(player);
+
             // Calculate power based on hold time (0 to 1)
             float power = shootButtonHoldTime / MaxShootHoldTime;
 
@@ -2388,6 +2492,8 @@ namespace NoPasaranFC.Gameplay
         
         private void PerformPass(Player player, Vector2 moveDirection)
         {
+            MarkPass(player);
+
             // Find best pass target in the direction the player is facing
             var teammates = (player.Team == _homeTeam ? _homeTeam : _awayTeam)
                 .Players.Where(p => p.IsStarting && !p.IsKnockedDown && p != player).ToList();
@@ -2596,6 +2702,8 @@ namespace NoPasaranFC.Gameplay
                 // Ball hit crossbar - bounce back down and reverse horizontal direction
                 BallVerticalVelocity = -BallVerticalVelocity * 0.6f; // Bounce down with energy loss
                 BallVelocity = new Vector2(-BallVelocity.X * 0.7f, BallVelocity.Y * 0.7f); // Bounce back
+                MarkLastShotOnTarget(BallPosition.X < StadiumMargin + FieldWidth / 2f
+                    ? LeftDefendingTeam : RightDefendingTeam);
                 AudioManager.Instance.PlaySoundEffect("kick_ball", 0.4f, allowRetrigger: false);
                 return;
             }
@@ -2613,6 +2721,7 @@ namespace NoPasaranFC.Gameplay
                 // Ball hit side post - bounce sideways and reverse horizontal direction
                 BallVelocity = new Vector2(-BallVelocity.X * 0.7f, -BallVelocity.Y * 0.7f); // Bounce both directions
                 BallVerticalVelocity *= 0.6f; // Reduce vertical velocity
+                MarkLastShotOnTarget(nearLeftGoalLine ? LeftDefendingTeam : RightDefendingTeam);
                 AudioManager.Instance.PlaySoundEffect("kick_ball", 0.4f, allowRetrigger: false);
                 return;
             }
@@ -2627,6 +2736,7 @@ namespace NoPasaranFC.Gameplay
                 // kicker was a defender (own goal), the attacking side celebrates
                 _scoringTeam = RightDefendingTeam;
                 if (_scoringTeam == _homeTeam) HomeScore++; else AwayScore++;
+                RecordGoalStats();
                 _goalScored = true;
                 _goalCelebrationDelay = 0f;
 
@@ -2641,6 +2751,7 @@ namespace NoPasaranFC.Gameplay
             {
                 _scoringTeam = LeftDefendingTeam;
                 if (_scoringTeam == _homeTeam) HomeScore++; else AwayScore++;
+                RecordGoalStats();
                 _goalScored = true;
                 _goalCelebrationDelay = 0f;
 
@@ -2718,6 +2829,8 @@ namespace NoPasaranFC.Gameplay
                     ? (defendingTeam == _homeTeam ? _awayTeam : _homeTeam) // corner: attackers
                     : defendingTeam;                                        // goal kick: defenders
                 giveToHomeTeam = restartTeam == _homeTeam;
+                if (isCornerKick)
+                    Stats.For(restartTeam).Corners++;
             }
             
             float xPos, yPos;
@@ -2754,7 +2867,8 @@ namespace NoPasaranFC.Gameplay
                 // Give to opposite team
                 giveToHomeTeam = !lastTouchWasHomeTeam;
             }
-            
+
+            Stats.For(giveToHomeTeam ? _homeTeam : _awayTeam).ThrowIns++;
             PlaceBallForRestart(new Vector2(xPos, yPos), giveToHomeTeam, MatchState.ThrowIn);
         }
         
@@ -3361,6 +3475,7 @@ namespace NoPasaranFC.Gameplay
         public void Tackle(Player player)
         {
             if (player == null) return;
+            Stats.For(player).Tackles++;
 
             // Don't tackle if the player has the ball
             if (_lastPlayerTouchedBall == player)

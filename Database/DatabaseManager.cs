@@ -228,6 +228,24 @@ namespace NoPasaranFC.Database
                 SetSchemaVersion(connection, 11);
                 currentVersion = 11;
             }
+
+            if (currentVersion < 12)
+            {
+                // Migration 12: Add season statistics columns to Players table
+                ApplyMigration12_AddSeasonStats(connection);
+                SetSchemaVersion(connection, 12);
+                currentVersion = 12;
+            }
+        }
+
+        private void ApplyMigration12_AddSeasonStats(SqliteConnection connection)
+        {
+            foreach (var col in new[]
+            {
+                "SeasonGoals INTEGER DEFAULT 0", "SeasonAssists INTEGER DEFAULT 0",
+                "SeasonYellowCards INTEGER DEFAULT 0", "SeasonRedCards INTEGER DEFAULT 0"
+            })
+                AddColumnIfMissing(connection, "Players", col);
         }
 
         /// <summary>Adds a column to a table if it doesn't exist (PRAGMA-checked).</summary>
@@ -622,9 +640,11 @@ namespace NoPasaranFC.Database
         }
         
         private static readonly string PlayerAppearanceColumns =
-            "GenderOverride, SkinToneOverride, HairColorOverride, ExpressionOverride, FeatureOverride";
+            "GenderOverride, SkinToneOverride, HairColorOverride, ExpressionOverride, FeatureOverride, " +
+            "SeasonGoals, SeasonAssists, SeasonYellowCards, SeasonRedCards";
         private static readonly string PlayerAppearanceParams =
-            "@genderOv, @skinToneOv, @hairColorOv, @expressionOv, @featureOv";
+            "@genderOv, @skinToneOv, @hairColorOv, @expressionOv, @featureOv, " +
+            "@seasonGoals, @seasonAssists, @seasonYellows, @seasonReds";
 
         private static void AddPlayerAppearanceParams(SqliteCommand command, Player player)
         {
@@ -633,6 +653,10 @@ namespace NoPasaranFC.Database
             command.Parameters.AddWithValue("@hairColorOv", player.HairColorOverride);
             command.Parameters.AddWithValue("@expressionOv", player.ExpressionOverride);
             command.Parameters.AddWithValue("@featureOv", player.FeatureOverride);
+            command.Parameters.AddWithValue("@seasonGoals", player.SeasonGoals);
+            command.Parameters.AddWithValue("@seasonAssists", player.SeasonAssists);
+            command.Parameters.AddWithValue("@seasonYellows", player.SeasonYellowCards);
+            command.Parameters.AddWithValue("@seasonReds", player.SeasonRedCards);
         }
 
         public void SavePlayer(Player player)
@@ -781,7 +805,12 @@ namespace NoPasaranFC.Database
                     SkinToneOverride = reader.FieldCount > 16 && !reader.IsDBNull(16) ? reader.GetInt32(16) : -1,
                     HairColorOverride = reader.FieldCount > 17 && !reader.IsDBNull(17) ? reader.GetInt32(17) : -1,
                     ExpressionOverride = reader.FieldCount > 18 && !reader.IsDBNull(18) ? reader.GetInt32(18) : -1,
-                    FeatureOverride = reader.FieldCount > 19 && !reader.IsDBNull(19) ? reader.GetInt32(19) : -1
+                    FeatureOverride = reader.FieldCount > 19 && !reader.IsDBNull(19) ? reader.GetInt32(19) : -1,
+                    // Season statistics (migration 12)
+                    SeasonGoals = reader.FieldCount > 20 && !reader.IsDBNull(20) ? reader.GetInt32(20) : 0,
+                    SeasonAssists = reader.FieldCount > 21 && !reader.IsDBNull(21) ? reader.GetInt32(21) : 0,
+                    SeasonYellowCards = reader.FieldCount > 22 && !reader.IsDBNull(22) ? reader.GetInt32(22) : 0,
+                    SeasonRedCards = reader.FieldCount > 23 && !reader.IsDBNull(23) ? reader.GetInt32(23) : 0
                 };
                 players.Add(player);
             }

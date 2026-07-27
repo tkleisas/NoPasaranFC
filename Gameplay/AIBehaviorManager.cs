@@ -278,6 +278,7 @@ namespace NoPasaranFC.Gameplay
         public void AIPassBall(Player passer, Vector2 targetPosition, float power)
         {
             if (_engine.BallHeight >= 100f) return;
+            _engine.MarkPass(passer);
 
             Vector2 passDirection = targetPosition - _engine.BallPosition;
             float passDistance = passDirection.Length();
@@ -346,6 +347,7 @@ namespace NoPasaranFC.Gameplay
         public void AIShootBall(Player shooter, Vector2 targetPosition, float power)
         {
             if (_engine.BallHeight >= 100f) return;
+            _engine.MarkShot(shooter);
 
             Vector2 shootDirection = targetPosition - _engine.BallPosition;
             if (shootDirection.LengthSquared() <= 0) return;

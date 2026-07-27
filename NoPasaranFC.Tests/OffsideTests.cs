@@ -11,7 +11,7 @@ public class OffsideTests
 {
     /// <summary>Stage an offside pass: home attacker deep behind the away line,
     /// a home midfielder passes to him.</summary>
-    private static (MatchEngine engine, Player offsideAttacker, Player passer, Player defender) StageOffsidePass()
+    internal static (MatchEngine engine, Player offsideAttacker, Player passer, Player defender) StageOffsidePass()
     {
         var engine = TestHelper.MakeEngine(seed: 42);
         TestHelper.ReachPlaying(engine);

@@ -104,6 +104,11 @@ dotnet build NoPasaranFC.Android/NoPasaranFC.Android.csproj  # Android (needs an
 ## Feature summary
 
 - Championship: round-robin fixtures, match simulation for non-player matches, standings, round results, seasons
+- Match statistics (`Gameplay/MatchStats.cs`, engine hooks): per-player goals/assists/shots/on-target/
+  passes/completion/tackles/fouls/saves/offsides/cards + per-team possession/corners/throw-ins/free kicks/
+  penalties; post-match `MatchStatsScreen` (before round results); season accumulation (migration 12:
+  SeasonGoals/Assists/YellowCards/RedCards), simulated goals distributed by Shooting×position weight;
+  top scorers page in StandingsScreen (TAB)
 - Match gameplay: ball physics (incl. height/aerial), tackling, stamina, set pieces (throw-ins, corners,
   goal kicks, free kicks with a defensive wall, penalties with GK dive), fouls with yellow/red cards
   (ref walk-over cutscene, close-up camera, sad/surprised face), optional offsides (snapshot-on-kick,
