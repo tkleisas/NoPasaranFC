@@ -123,7 +123,9 @@ namespace NoPasaranFC.Graphics3D
             {
                 "Sperchogeia" => Venue.Sperchogeia,
                 "Sfageia" => Venue.Sfageia,
-                "Random" => (Venue)(1 + new Random().Next(3)), // Bahramis/Sperchogeia/Sfageia
+                "Kerasoulia" => Venue.Kerasoulia,
+                "Soulinari" => Venue.Soulinari,
+                "Random" => (Venue)(1 + new Random().Next(5)), // all real grounds
                 _ => Venue.Bahramis,
             };
             _world = new World3D(device, content, _venue);
@@ -179,10 +181,50 @@ namespace NoPasaranFC.Graphics3D
                 _easterEggs = null;
             }
             
-            // Supporters on the stand (reuses the player models/atlases);
-            // grounds without a stand have the fans along the fence
+            // Supporters (reuses the player models/atlases): on the Bahramis
+            // stand, on raised platforms at Soulinari/Kerasoulia, or along the
+            // fence elsewhere
             if (_playerModel != null)
-                _fans = new FanSection(device, _playerModel, _playerModelF, _venue != Venue.Bahramis);
+            {
+                FanSection.FanPlacement placement;
+                FanSection.PlatformMetrics? platform = null;
+                switch (_venue)
+                {
+                    case Venue.Bahramis:
+                        placement = FanSection.FanPlacement.Stand;
+                        break;
+                    case Venue.Soulinari:
+                        placement = FanSection.FanPlacement.Bleacher;
+                        platform = new FanSection.PlatformMetrics
+                        {
+                            FrontZ = World3D.SoulinariBleacherFrontZ,
+                            FirstRowY = World3D.SoulinariBleacherFirstRowY,
+                            RowRise = World3D.SoulinariBleacherRowRise,
+                            RowDepth = World3D.SoulinariBleacherRowDepth,
+                            CenterX = World3D.SoulinariBleacherCenterX,
+                            HalfWidth = World3D.SoulinariBleacherHalfWidth,
+                            Rows = World3D.SoulinariBleacherRows,
+                        };
+                        break;
+                    case Venue.Kerasoulia:
+                        placement = FanSection.FanPlacement.Bleacher;
+                        platform = new FanSection.PlatformMetrics
+                        {
+                            FrontZ = World3D.KerasouliaTerraceFrontZ,
+                            FirstRowY = World3D.KerasouliaTerraceFirstRowY,
+                            RowRise = World3D.KerasouliaTerraceRowRise,
+                            RowDepth = World3D.KerasouliaTerraceRowDepth,
+                            CenterX = World3D.KerasouliaTerraceCenterX,
+                            HalfWidth = World3D.KerasouliaTerraceHalfWidth,
+                            Rows = World3D.KerasouliaTerraceRows,
+                        };
+                        break;
+                    default:
+                        placement = FanSection.FanPlacement.Fence;
+                        break;
+                }
+                _fans = new FanSection(device, _playerModel, _playerModelF, placement, platform);
+            }
         }
         
         /// <summary>Debug console: force an easter egg (fox|dog|crows|seagulls|tornado).</summary>

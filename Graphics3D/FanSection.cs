@@ -46,39 +46,62 @@ namespace NoPasaranFC.Graphics3D
         private const float StandStepDepth = 0.85f;
         private const float StandStepHeight = 0.4f;
         private const int Rows = 3;
-        
+
+        public enum FanPlacement { Stand, Fence, Bleacher }
+
+        /// <summary>Raised-platform layout (Soulinari bleacher, Kerasoulia terrace).</summary>
+        public struct PlatformMetrics
+        {
+            public float FrontZ, FirstRowY, RowRise, RowDepth, CenterX, HalfWidth;
+            public int Rows;
+        }
+
         public FanSection(GraphicsDevice device, SkinnedModel playerModel, SkinnedModel femaleModel = null,
-            bool alongFence = false)
+            FanPlacement placement = FanPlacement.Stand, PlatformMetrics? platform = null)
         {
             var rng = new Random(4242);
-            
+            bool alongFence = placement == FanPlacement.Fence;
+            bool onBleacher = placement == FanPlacement.Bleacher && platform.HasValue;
+            var pm = platform.GetValueOrDefault();
+            int rowCount = onBleacher ? pm.Rows : Rows;
+
             // NO PASARAN supporters: mostly red shirts, some white/black, kids too
             Color[] shirtColors =
             {
                 new Color(224, 0, 0), new Color(224, 0, 0), new Color(200, 20, 20),
                 new Color(240, 240, 240), new Color(35, 35, 40),
             };
-            
+
             // Two seated rows + a standing row in front of the stand
-            // (alongFence: everybody stands at ground level by the fence, wider spread)
+            // (Fence: everybody stands at ground level by the fence, wider spread;
+            //  Bleacher: standing on the metal bleacher planks, Soulinari metrics)
             int fanCount = 0;
-            for (int row = 0; row < Rows; row++)
+            for (int row = 0; row < rowCount; row++)
             {
-                float stepTopY = alongFence ? 0f : (row + 1) * StandStepHeight;
-                float rowZ = alongFence
-                    ? StandFrontZ - 0.4f - row * 0.9f
-                    : StandFrontZ - 0.45f - row * StandStepDepth;
-                
-                int seatsInRow = alongFence ? 8 + rng.Next(3) : 5 + rng.Next(3);
+                float stepTopY = onBleacher
+                    ? pm.FirstRowY + row * pm.RowRise
+                    : alongFence ? 0f : (row + 1) * StandStepHeight;
+                float rowZ = onBleacher
+                    ? pm.FrontZ - row * pm.RowDepth - 0.25f
+                    : alongFence
+                        ? StandFrontZ - 0.4f - row * 0.9f
+                        : StandFrontZ - 0.45f - row * StandStepDepth;
+
+                int seatsInRow = onBleacher ? 7 + rng.Next(3) : alongFence ? 8 + rng.Next(3) : 5 + rng.Next(3);
                 for (int s = 0; s < seatsInRow; s++)
                 {
-                    float x = alongFence
-                        ? -18f + fanCount * 2.1f + (float)rng.NextDouble() * 0.8f
-                        : -12f + fanCount * 2.1f + (float)rng.NextDouble() * 0.8f;
-                    if (x > (alongFence ? 19f : 13f)) continue;
-                    
+                    float x = onBleacher
+                        ? pm.CenterX - pm.HalfWidth + 1f + s * 2.2f + (float)rng.NextDouble() * 0.7f
+                        : alongFence
+                            ? -18f + fanCount * 2.1f + (float)rng.NextDouble() * 0.8f
+                            : -12f + fanCount * 2.1f + (float)rng.NextDouble() * 0.8f;
+                    float maxX = onBleacher
+                        ? pm.CenterX + pm.HalfWidth - 1f
+                        : alongFence ? 19f : 13f;
+                    if (x > maxX) continue;
+
                     bool isChild = rng.NextDouble() < 0.25;
-                    bool seated = !alongFence && row > 0; // front row stands, upper rows sit
+                    bool seated = !alongFence && !onBleacher && row > 0; // stand/bleacher fans stand
                     // ~40% female fans when the female model is available
                     var fanModel = femaleModel != null && rng.NextDouble() < 0.4 ? femaleModel : playerModel;
                     var atlas = fanModel.Parts[0].Texture;

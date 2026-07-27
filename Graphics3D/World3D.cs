@@ -8,7 +8,7 @@ using NoPasaranFC.Gameplay;
 namespace NoPasaranFC.Graphics3D
 {
     /// <summary>Match venue: the generic bowl stadium, the Bahramis municipal ground, the Sperchogeia ground, or the seaside Sfageia ground.</summary>
-    public enum Venue { Bowl, Bahramis, Sperchogeia, Sfageia }
+    public enum Venue { Bowl, Bahramis, Sperchogeia, Sfageia, Kerasoulia, Soulinari }
     
     /// <summary>
     /// Static 3D world geometry for the match view: pitch, field markings,
@@ -96,6 +96,11 @@ namespace NoPasaranFC.Graphics3D
         public World3D(GraphicsDevice device, ContentManager content = null, Venue venue = Venue.Bahramis)
         {
             _venue = venue;
+            if (venue == Venue.Kerasoulia)
+            {
+                _fenceHeight = 3.4f;
+                _goalFrameColor = new Color(30, 60, 200);
+            }
 
             _colorEffect = new BasicEffect(device)
             {
@@ -139,6 +144,8 @@ namespace NoPasaranFC.Graphics3D
                 {
                     Venue.Sperchogeia => "ΓΗΠΕΔΟ ΣΠΕΡΧΟΓΕΙΑΣ",
                     Venue.Sfageia => "ΓΗΠΕΔΟ ΣΦΑΓΕΙΩΝ",
+                    Venue.Kerasoulia => "ΣΤΑΔΙΟ ΚΕΡΑΣΟΥΛΙΑΣ",
+                    Venue.Soulinari => "ΓΗΠΕΔΟ ΣΟΥΛΗΝΑΡΙΟΥ",
                     _ => "ΠΑΝΑΓΙΩΤΗΣ ΜΠΑΧΡΑΜΗΣ",
                 };
                 _scoreboardTexture = CachedTexture($"scoreboard:{signText}", () => CreateScoreboardTexture(device, content, signText));
@@ -150,7 +157,8 @@ namespace NoPasaranFC.Graphics3D
                     LightingEnabled = false
                 };
                 
-                if (_venue == Venue.Sperchogeia || _venue == Venue.Sfageia)
+                if (_venue == Venue.Sperchogeia || _venue == Venue.Sfageia ||
+                    _venue == Venue.Kerasoulia || _venue == Venue.Soulinari)
                 {
                     _bannerTexture = CachedTexture($"sponsor:{venue}", () => CreateBannerTexture(device, content));
                     _bannerEffect = new BasicEffect(device)
@@ -398,9 +406,34 @@ namespace NoPasaranFC.Graphics3D
             else if (_venue == Venue.Sperchogeia)
             {
                 // Olive-grove floor out to the mountain feet, dirt road on the west
-                AddGroundQuad(verts, indices, -180f, -160f, 180f, 130f, -0.018f, new Color(96, 100, 58));
-                AddGroundQuad(verts, indices, -100f, -85f, 100f, 85f, -0.015f, new Color(122, 118, 70));
-                AddGroundQuad(verts, indices, -78f, -90f, -70f, 90f, -0.012f, new Color(110, 95, 75)); // West dirt road
+                // (layers spaced >= 5mm apart in Y to avoid z-fighting lines)
+                AddGroundQuad(verts, indices, -180f, -160f, 180f, 130f, -0.014f, new Color(96, 100, 58));
+                AddGroundQuad(verts, indices, -100f, -85f, 100f, 85f, -0.009f, new Color(122, 118, 70));
+                AddGroundQuad(verts, indices, -78f, -90f, -70f, 90f, -0.005f, new Color(110, 95, 75)); // West dirt road
+            }
+            else if (_venue == Venue.Kerasoulia)
+            {
+                // Mountain forest floor (dark green-brown), red running track
+                // strip along the far touchline, then the curved asphalt road
+                // (layers spaced >= 2mm apart in Y to avoid z-fighting lines)
+                AddGroundQuad(verts, indices, -180f, -140f, 180f, 140f, -0.014f, new Color(70, 80, 55));
+                AddGroundQuad(verts, indices, -100f, -85f, 100f, 85f, -0.009f, new Color(95, 100, 62));
+                AddGroundQuad(verts, indices, -70f, -44f, 70f, -39f, -0.005f, new Color(160, 60, 45)); // red track
+                Color kerasouliaAsphalt = new Color(55, 55, 60);
+                AddGroundQuad(verts, indices, -75f, -52f, 75f, -44f, -0.003f, kerasouliaAsphalt);    // road
+                AddGroundQuad(verts, indices, -75f, -44.6f, 75f, -44.2f, -0.001f, new Color(200, 200, 200)); // road edge line
+            }
+            else if (_venue == Venue.Soulinari)
+            {
+                // Dry village ground with a dirt road ring against the fence
+                // (layers spaced >= 4mm apart in Y to avoid z-fighting lines)
+                AddGroundQuad(verts, indices, -120f, -100f, 120f, 100f, -0.014f, new Color(120, 115, 70));
+                AddGroundQuad(verts, indices, -100f, -85f, 100f, 85f, -0.009f, new Color(150, 140, 80));
+                Color dirt = new Color(115, 100, 80);
+                AddGroundQuad(verts, indices, -65f, -46f, 65f, -41f, -0.005f, dirt);  // North (-Z)
+                AddGroundQuad(verts, indices, -65f, 41f, 65f, 46f, -0.005f, dirt);    // South (+Z)
+                AddGroundQuad(verts, indices, -64f, -46f, -59.5f, 46f, -0.005f, dirt); // West (-X)
+                AddGroundQuad(verts, indices, 59.5f, -46f, 64f, 46f, -0.005f, dirt);   // East (+X)
             }
             else if (_venue == Venue.Sfageia)
             {
@@ -446,9 +479,17 @@ namespace NoPasaranFC.Graphics3D
             {
                 BuildSperchogeiaVenue(verts, indices);
             }
-            else
+            else if (_venue == Venue.Sfageia)
             {
                 BuildSfageiaVenue(verts, indices);
+            }
+            else if (_venue == Venue.Kerasoulia)
+            {
+                BuildKerasouliaVenue(verts, indices);
+            }
+            else
+            {
+                BuildSoulinariVenue(verts, indices);
             }
             
             _opaqueVertices = verts.ToArray();
@@ -540,7 +581,7 @@ namespace NoPasaranFC.Graphics3D
             float goalHalfWidth = WorldUnits.PxToM(MatchEngine.GoalWidth) / 2f; // 7.32m / 2
             float goalHeight = WorldUnits.PxToM(MatchEngine.GoalPostHeight);    // 2.44m
             const float postThickness = 0.12f;
-            Color postColor = Color.White;
+            Color postColor = _goalFrameColor;
             
             BuildGoal(verts, indices, -_halfLength, -1f, goalHalfWidth, goalHeight, postThickness, postColor);
             BuildGoal(verts, indices, _halfLength, 1f, goalHalfWidth, goalHeight, postThickness, postColor);
@@ -706,7 +747,11 @@ namespace NoPasaranFC.Graphics3D
         // Fence ring: 5m outside the pitch lines
         private float FenceX => _halfLength + 5f;  // 57.5
         private float FenceZ => _halfWidth + 5f;   // 39
-        private const float FenceHeight = 2.1f;
+        // Fence height and goal frame color are venue-aware (Kerasoulia has a
+        // taller chain-link fence and blue goal frames; everything else keeps
+        // the original 2.1m fence and white frames).
+        private readonly float _fenceHeight = 2.1f;
+        private readonly Color _goalFrameColor = Color.White;
         
         // Main stand on the -Z long side (outside the fence, centered on x=0)
         public const float StandHalfWidth = 15f;    // 30m wide: x -15..15
@@ -1298,6 +1343,435 @@ namespace NoPasaranFC.Graphics3D
         
         #endregion
         
+        #region Kerasoulia venue (mountain forest ground, Taygetos)
+        
+        /// <summary>
+        /// ΣΤΑΔΙΟ ΚΕΡΑΣΟΥΛΙΑΣ: a small mountain ground on Taygetos near
+        /// Alagonia. Dense conifer forest rings the whole venue, the Taygetos
+        /// ridge towers behind, a red running-track strip and a curved asphalt
+        /// road hug the far touchline (ground quads, built with the apron).
+        /// Tall chain-link fence (set in the constructor), blue goal frames,
+        /// floodlights, a basketball hoop behind the east goal, wooden benches
+        /// and a small covered stone grandstand with blue pillars on the near side.
+        /// </summary>
+        private void BuildKerasouliaVenue(List<VertexPositionColor> verts, List<int> indices)
+        {
+            var random = new Random(1962);
+            
+            BuildFence(verts, indices);
+            BuildScoreboard(verts, indices);
+            BuildSponsorBanners();
+            BuildFloodlights(verts, indices);
+            BuildMountains(verts, indices, random);
+            BuildForestRing(verts, indices, random);
+            BuildCoveredStoneStand(verts, indices);
+            BuildStandingTerrace(verts, indices);
+            
+            // Basketball hoop behind the east goal (multi-use court), rim toward the pitch
+            AddBasketballHoop(verts, indices, FenceX + 3.5f, 0f, -1f);
+            
+            // Simple wooden benches along the near touchline, flanking the stand
+            Color wood = new Color(120, 88, 55);
+            foreach (float bx in new[] { -20f, 20f })
+            {
+                AddBox(verts, indices,
+                    new Vector3(bx - 1.0f, 0.42f, 37.3f), new Vector3(bx + 1.0f, 0.5f, 37.7f), wood);
+                AddBox(verts, indices,
+                    new Vector3(bx - 0.8f, 0f, 37.4f), new Vector3(bx - 0.6f, 0.42f, 37.6f), wood);
+                AddBox(verts, indices,
+                    new Vector3(bx + 0.6f, 0f, 37.4f), new Vector3(bx + 0.8f, 0.42f, 37.6f), wood);
+            }
+            
+            BuildFanBanners();
+        }
+
+        // Kerasoulia standing-terrace metrics - shared with FanSection (fans on the steps).
+        // Tall enough that heads and waving flags clear the 3.4m fence + banners.
+        public const float KerasouliaTerraceFrontZ = -40.5f;  // just behind the far fence
+        public const float KerasouliaTerraceFirstRowY = 1.6f;
+        public const float KerasouliaTerraceRowRise = 0.9f;
+        public const float KerasouliaTerraceRowDepth = 0.8f;
+        public const float KerasouliaTerraceCenterX = -8f;
+        public const float KerasouliaTerraceHalfWidth = 12f;
+        public const int KerasouliaTerraceRows = 2;
+
+        /// <summary>
+        /// A small raised standing terrace behind the far fence (the fence here is
+        /// 3.4m tall and covered in banners - ground-level fans were invisible).
+        /// Two concrete steps the supporters stand on.
+        /// </summary>
+        private void BuildStandingTerrace(List<VertexPositionColor> verts, List<int> indices)
+        {
+            Color concrete = new Color(110, 110, 112);
+            Color concreteDark = new Color(85, 85, 88);
+            float cx = KerasouliaTerraceCenterX, hw = KerasouliaTerraceHalfWidth;
+
+            for (int row = 0; row < KerasouliaTerraceRows; row++)
+            {
+                float topY = KerasouliaTerraceFirstRowY + row * KerasouliaTerraceRowRise;
+                float zFront = KerasouliaTerraceFrontZ - row * KerasouliaTerraceRowDepth;
+                // Step block (riser + tread)
+                AddBox(verts, indices,
+                    new Vector3(cx - hw, row * KerasouliaTerraceRowRise * 0.5f, zFront - KerasouliaTerraceRowDepth),
+                    new Vector3(cx + hw, topY, zFront), row % 2 == 0 ? concrete : concreteDark);
+            }
+            // Side walls
+            foreach (float sx in new[] { cx - hw, cx + hw })
+            {
+                AddBox(verts, indices,
+                    new Vector3(sx - 0.15f, 0f, KerasouliaTerraceFrontZ - KerasouliaTerraceRows * KerasouliaTerraceRowDepth),
+                    new Vector3(sx + 0.15f, KerasouliaTerraceFirstRowY + KerasouliaTerraceRowRise, KerasouliaTerraceFrontZ),
+                    concreteDark);
+            }
+        }
+
+        /// <summary>
+        /// Dense conifer forest ring all around the ground (the venue sits in a
+        /// forest clearing on the mountain). Several depth rows on every side;
+        /// the north rows start beyond the road that hugs the far touchline.
+        /// </summary>
+        private void BuildForestRing(List<VertexPositionColor> verts, List<int> indices, Random random)
+        {
+            for (int row = 0; row < 4; row++)
+            {
+                float offset = 7f + row * 6.5f;
+                for (float t = -110f; t <= 110f; t += 5.5f)
+                {
+                    float jx = t + (float)(random.NextDouble() * 2.0 - 1.0) * 2.0f;
+                    float jz = offset + (float)(random.NextDouble() * 2.0 - 1.0) * 2.0f;
+                    
+                    // North rows start past track + road (road at z -52..-44)
+                    TryAddConifer(verts, indices, random, jx, -(FenceZ + 14f + jz));
+                    // South rows
+                    TryAddConifer(verts, indices, random, jx, FenceZ + jz);
+                    // East and West rows (within the pitch's z span)
+                    if (Math.Abs(t) <= 55f)
+                    {
+                        TryAddConifer(verts, indices, random, FenceX + jz, jx);
+                        TryAddConifer(verts, indices, random, -(FenceX + jz), jx);
+                    }
+                }
+            }
+        }
+        
+        private void TryAddConifer(List<VertexPositionColor> verts, List<int> indices, Random random, float x, float z)
+        {
+            // Keep the scoreboard surroundings clear
+            if (x < -FenceX - 1f && x > -FenceX - 14f && Math.Abs(z) < 10f) return;
+            // Keep the floodlight footprints clear
+            if (Math.Abs(Math.Abs(x) - (FenceX + 3f)) < 2.5f && Math.Abs(Math.Abs(z) - (FenceZ + 3f)) < 2.5f) return;
+            // Keep the covered stand clear
+            if (Math.Abs(x) < 19f && z > FenceZ - 1f && z < FenceZ + 13f) return;
+            // Keep the basketball hoop surroundings clear
+            if (x > FenceX + 0.5f && x < FenceX + 8f && Math.Abs(z) < 5f) return;
+            AddConiferTree(verts, indices, random, x, z);
+        }
+        
+        /// <summary>Tall conifer for the mountain forest: slim trunk + 4 stacked dark-green tiers.</summary>
+        private static void AddConiferTree(List<VertexPositionColor> verts, List<int> indices, Random random, float x, float z)
+        {
+            float scale = 0.9f + 0.7f * (float)random.NextDouble();
+            Color trunk = new Color(80, 60, 45);
+            AddBox(verts, indices,
+                new Vector3(x - 0.14f, 0f, z - 0.14f), new Vector3(x + 0.14f, 1.6f * scale, z + 0.14f), trunk);
+            
+            Color foliage = new Color(28, 62, 38);
+            int jitter = random.Next(-10, 11);
+            Color c = new Color(
+                Math.Clamp(foliage.R + jitter, 0, 255),
+                Math.Clamp(foliage.G + jitter, 0, 255),
+                Math.Clamp(foliage.B + jitter, 0, 255));
+            float y = 0.9f * scale;
+            float w = 1.5f * scale;
+            for (int i = 0; i < 4; i++)
+            {
+                float h = (2.0f - i * 0.25f) * scale;
+                AddBox(verts, indices,
+                    new Vector3(x - w, y, z - w), new Vector3(x + w, y + h, z + w), c);
+                y += h * 0.8f;
+                w *= 0.62f;
+            }
+        }
+        
+        /// <summary>
+        /// The small covered grandstand on the near (+Z) side: 4 stone-gray
+        /// stepped rows under a flat roof slab carried on six blue pillars
+        /// (the same blue as the goal frames).
+        /// </summary>
+        private void BuildCoveredStoneStand(List<VertexPositionColor> verts, List<int> indices)
+        {
+            Color stone = new Color(150, 145, 135);
+            Color pillar = new Color(30, 60, 200);
+            Color roof = new Color(90, 90, 95);
+            
+            const float hw = 13f;             // 26m wide, centered on x=0
+            const float frontZ = 40f;         // 1m outside the near fence
+            const int steps = 4;
+            const float stepDepth = 0.8f;
+            const float stepHeight = 0.4f;
+            
+            // Stone steps rising away from the pitch
+            for (int step = 0; step < steps; step++)
+            {
+                float zFront = frontZ + step * stepDepth;
+                float zBack = zFront + stepDepth;
+                float top = (step + 1) * stepHeight;
+                AddBox(verts, indices,
+                    new Vector3(-hw, 0f, zFront), new Vector3(hw, top, zBack), stone);
+            }
+            
+            // Flat roof slab over the steps (cantilevered from the back pillars)
+            float backZ = frontZ + steps * stepDepth;
+            float roofY = steps * stepHeight + 2.4f;
+            AddBox(verts, indices,
+                new Vector3(-hw - 0.5f, roofY, frontZ - 0.8f),
+                new Vector3(hw + 0.5f, roofY + 0.25f, backZ + 0.6f), roof);
+            
+            // Blue pillars along the back edge of the steps
+            const int pillarCount = 6;
+            for (int i = 0; i < pillarCount; i++)
+            {
+                float px = -hw + 2f * hw * i / (pillarCount - 1);
+                AddBox(verts, indices,
+                    new Vector3(px - 0.12f, 0f, backZ - 0.35f),
+                    new Vector3(px + 0.12f, roofY, backZ - 0.11f), pillar);
+            }
+        }
+        
+        /// <summary>
+        /// A basketball hoop: gray post, white backboard and an orange square
+        /// rim. `facing` is the X direction the backboard/rim extend toward
+        /// (+1 = toward +X, -1 = toward -X).
+        /// </summary>
+        private static void AddBasketballHoop(List<VertexPositionColor> verts, List<int> indices,
+            float x, float z, float facing)
+        {
+            Color post = new Color(70, 70, 78);
+            Color board = new Color(235, 235, 230);
+            Color rim = new Color(220, 90, 30);
+            
+            const float rimHeight = 3.05f;
+            
+            // Post behind the backboard
+            AddBox(verts, indices,
+                new Vector3(x - 0.09f, 0f, z - 0.09f), new Vector3(x + 0.09f, 3.9f, z + 0.09f), post);
+            // Backboard (1.8m wide, 1.05m tall) on the `facing` side of the post
+            float boardX = x + facing * 0.25f;
+            AddBox(verts, indices,
+                new Vector3(boardX - 0.04f, rimHeight + 0.15f, z - 0.9f),
+                new Vector3(boardX + 0.04f, rimHeight + 1.2f, z + 0.9f), board);
+            // Rim: four thin orange boxes forming a square ring in front of the board
+            float rimFar = boardX + facing * 0.45f;
+            float rx0 = Math.Min(boardX + facing * 0.05f, rimFar);
+            float rx1 = Math.Max(boardX + facing * 0.05f, rimFar);
+            const float rw = 0.23f, rt = 0.04f;
+            AddBox(verts, indices,
+                new Vector3(rx0, rimHeight - rt, z - rw - rt), new Vector3(rx1, rimHeight + rt, z - rw + rt), rim);
+            AddBox(verts, indices,
+                new Vector3(rx0, rimHeight - rt, z + rw - rt), new Vector3(rx1, rimHeight + rt, z + rw + rt), rim);
+            AddBox(verts, indices,
+                new Vector3(rx0, rimHeight - rt, z - rw - rt), new Vector3(rx0 + rt * 2f, rimHeight + rt, z + rw + rt), rim);
+            AddBox(verts, indices,
+                new Vector3(rx1 - rt * 2f, rimHeight - rt, z - rw - rt), new Vector3(rx1, rimHeight + rt, z + rw + rt), rim);
+        }
+        
+        #endregion
+        
+        #region Soulinari venue (village ground near Pylos)
+        
+        /// <summary>
+        /// ΓΗΠΕΔΟ ΣΟΥΛΗΝΑΡΙΟΥ: a village ground near Pylos. Small uncovered
+        /// metal bleacher with side stairs on the far touchline, a green metal
+        /// container next to it, a flat-roof changing-rooms building at the SE
+        /// corner, an olive grove on the west side, red-roofed village houses
+        /// on the east side, a basketball court at the NE corner and a dirt
+        /// road ring (ground quads, built with the apron).
+        /// </summary>
+        private void BuildSoulinariVenue(List<VertexPositionColor> verts, List<int> indices)
+        {
+            var random = new Random(1975);
+            
+            BuildFence(verts, indices);
+            BuildScoreboard(verts, indices);
+            BuildSponsorBanners();
+            BuildMetalBleacher(verts, indices);
+            BuildContainer(verts, indices);
+            BuildChangingRooms(verts, indices);
+            
+            // Olive grove on the west side only
+            for (int row = 0; row < 6; row++)
+            {
+                float offset = 8f + row * 7.5f;
+                for (float t = -38f; t <= 38f; t += 8.5f)
+                {
+                    float jz = t + (float)(random.NextDouble() * 2.0 - 1.0) * 2.5f;
+                    float jx = offset + (float)(random.NextDouble() * 2.0 - 1.0) * 2.5f;
+                    TryAddOlive(verts, indices, random, -(FenceX + jx), jz);
+                }
+            }
+            
+            // Village houses with red roofs on the east side
+            for (int i = 0; i < 6; i++)
+                AddHouse(verts, indices, random,
+                    68f + 22f * (float)random.NextDouble(),
+                    -35f + 70f * (float)random.NextDouble());
+            
+            BuildBasketballCourt(verts, indices);
+            
+            // A few scattered trees on the east and south sides
+            AddTree(verts, indices, random, 66f, 26f);
+            AddTree(verts, indices, random, 67f, -18f);
+            AddTree(verts, indices, random, 20f, 50f);
+            AddTree(verts, indices, random, -28f, 49f);
+            
+            BuildFanBanners();
+        }
+        
+        /// <summary>
+        /// The small uncovered metal bleacher on the far (-Z) touchline: four
+        /// light-gray seat planks on a darker metal frame, a thin railing along
+        /// the back and stepped stairs at the east end.
+        /// </summary>
+        // Soulinari bleacher metrics - shared with FanSection (fans stand on the planks)
+        public const float SoulinariBleacherFrontZ = -40.3f;  // just outside the far fence
+        public const float SoulinariBleacherFirstRowY = 1.2f; // elevated frame, rises over the fence
+        public const float SoulinariBleacherRowRise = 0.7f;
+        public const float SoulinariBleacherRowDepth = 0.75f;
+        public const float SoulinariBleacherCenterX = 8f;     // offset east of center
+        public const float SoulinariBleacherHalfWidth = 11f;  // 22m wide
+        public const int SoulinariBleacherRows = 4;
+
+        private void BuildMetalBleacher(List<VertexPositionColor> verts, List<int> indices)
+        {
+            Color frame = new Color(120, 124, 130);
+            Color plank = new Color(170, 174, 180);
+            Color rail = new Color(90, 94, 100);
+
+            const float hw = SoulinariBleacherHalfWidth;
+            const float cx = SoulinariBleacherCenterX;
+            const int rows = SoulinariBleacherRows;
+            const float rowDepth = SoulinariBleacherRowDepth;
+            const float frontZ = SoulinariBleacherFrontZ;
+            const float firstRowY = SoulinariBleacherFirstRowY;
+            const float rowRise = SoulinariBleacherRowRise;
+            
+            // Seat planks on support legs
+            for (int row = 0; row < rows; row++)
+            {
+                float y = firstRowY + row * rowRise;
+                float z = frontZ - row * rowDepth;
+                AddBox(verts, indices,
+                    new Vector3(cx - hw, y, z - rowDepth * 0.8f),
+                    new Vector3(cx + hw, y + 0.07f, z), plank);
+                for (float lx = cx - hw; lx <= cx + hw + 0.01f; lx += 3.7f)
+                {
+                    float px = Math.Min(lx, cx + hw);
+                    AddBox(verts, indices,
+                        new Vector3(px - 0.05f, 0f, z - 0.35f),
+                        new Vector3(px + 0.05f, y, z - 0.25f), frame);
+                }
+            }
+            
+            // Thin railing along the back of the top row
+            float topY = firstRowY + (rows - 1) * rowRise;
+            float railZ = frontZ - (rows - 1) * rowDepth - 0.8f;
+            for (float lx = cx - hw; lx <= cx + hw + 0.01f; lx += 2.2f)
+            {
+                float px = Math.Min(lx, cx + hw);
+                AddBox(verts, indices,
+                    new Vector3(px - 0.03f, topY, railZ - 0.03f),
+                    new Vector3(px + 0.03f, topY + 1.1f, railZ + 0.03f), rail);
+            }
+            foreach (float y0 in new[] { topY + 0.55f, topY + 1.05f })
+            {
+                AddBox(verts, indices,
+                    new Vector3(cx - hw, y0, railZ - 0.03f),
+                    new Vector3(cx + hw, y0 + 0.05f, railZ + 0.03f), rail);
+            }
+            
+            // Stepped side stairs at the east end
+            for (int s = 0; s < rows; s++)
+            {
+                float sy = firstRowY - 0.3f + s * rowRise;
+                AddBox(verts, indices,
+                    new Vector3(cx + hw + 0.15f, 0f, frontZ - s * rowDepth - rowDepth),
+                    new Vector3(cx + hw + 1.0f, sy, frontZ - s * rowDepth), frame);
+            }
+        }
+        
+        /// <summary>The dark green metal container/shed next to the bleacher.</summary>
+        private void BuildContainer(List<VertexPositionColor> verts, List<int> indices)
+        {
+            Color green = new Color(35, 80, 50);
+            Color dark = new Color(25, 60, 38);
+            const float cx = -17f, cz = -42.5f, w = 6f, d = 2.5f, h = 2.6f;
+            
+            AddBox(verts, indices,
+                new Vector3(cx - w / 2f, 0f, cz - d / 2f),
+                new Vector3(cx + w / 2f, h, cz + d / 2f), green);
+            // Darker top rim, suggesting the corrugated edge
+            AddBox(verts, indices,
+                new Vector3(cx - w / 2f - 0.03f, h - 0.15f, cz - d / 2f - 0.03f),
+                new Vector3(cx + w / 2f + 0.03f, h + 0.06f, cz + d / 2f + 0.03f), dark);
+        }
+        
+        /// <summary>
+        /// The flat-roof changing-rooms building at the SE corner: beige walls,
+        /// a gray roof slab with a small overhang, door and windows facing the pitch.
+        /// </summary>
+        private void BuildChangingRooms(List<VertexPositionColor> verts, List<int> indices)
+        {
+            Color body = new Color(225, 218, 200);
+            Color roof = new Color(105, 105, 110);
+            Color dark = new Color(70, 80, 90);
+            const float cx = 42f, cz = 49f, w = 12f, d = 6f, h = 3.2f;
+            
+            AddBox(verts, indices,
+                new Vector3(cx - w / 2f, 0f, cz - d / 2f),
+                new Vector3(cx + w / 2f, h, cz + d / 2f), body);
+            // Flat roof slab with a small overhang
+            AddBox(verts, indices,
+                new Vector3(cx - w / 2f - 0.3f, h, cz - d / 2f - 0.3f),
+                new Vector3(cx + w / 2f + 0.3f, h + 0.25f, cz + d / 2f + 0.3f), roof);
+            // Door + two windows on the pitch-facing (-Z) wall
+            float faceZ = cz - d / 2f - 0.02f;
+            AddQuad(verts, indices,
+                new Vector3(cx - 1.6f, 0f, faceZ), new Vector3(cx - 0.6f, 0f, faceZ),
+                new Vector3(cx - 0.6f, 2.1f, faceZ), new Vector3(cx - 1.6f, 2.1f, faceZ), dark);
+            foreach (float wx in new[] { cx + 1.2f, cx + 3.6f })
+            {
+                AddQuad(verts, indices,
+                    new Vector3(wx, 1.3f, faceZ), new Vector3(wx + 1.2f, 1.3f, faceZ),
+                    new Vector3(wx + 1.2f, 2.3f, faceZ), new Vector3(wx, 2.3f, faceZ), dark);
+            }
+        }
+        
+        /// <summary>
+        /// The basketball court at the NE corner (adapted from the tennis-court
+        /// pattern): green surface with white markings on a dark surround and
+        /// a hoop at each end.
+        /// </summary>
+        private void BuildBasketballCourt(List<VertexPositionColor> verts, List<int> indices)
+        {
+            Color surround = new Color(70, 70, 72);
+            Color surface = new Color(55, 120, 75);
+            Color lineColor = new Color(230, 230, 225);
+            const float cx = 76f, cz = -51f;
+            const float hw = 12f, hd = 7f;   // 24m x 14m playing surface
+            
+            AddGroundQuad(verts, indices, cx - hw - 2f, cz - hd - 2f, cx + hw + 2f, cz + hd + 2f, -0.005f, surround);
+            AddGroundQuad(verts, indices, cx - hw, cz - hd, cx + hw, cz + hd, 0f, surface);
+            // Boundary, halfway line and center circle
+            AddRectOutline(verts, indices, cx - hw, cz - hd, cx + hw, cz + hd, 0.1f, lineColor);
+            AddLineQuad(verts, indices, new Vector2(cx, cz - hd), new Vector2(cx, cz + hd), 0.1f, lineColor);
+            AddRing(verts, indices, new Vector2(cx, cz), 1.8f, 0.1f, 16, lineColor);
+            // Hoops at the two ends, rims facing into the court
+            AddBasketballHoop(verts, indices, cx - hw - 0.9f, cz, 1f);
+            AddBasketballHoop(verts, indices, cx + hw + 0.9f, cz, -1f);
+        }
+        
+        #endregion
+        
         #region Fence
         
         private void BuildFence(List<VertexPositionColor> verts, List<int> indices)
@@ -1323,7 +1797,7 @@ namespace NoPasaranFC.Graphics3D
             }
             
             // Blue top rail (y ~2.02-2.1) and mid rail (y ~0.95-1.03) per side
-            foreach (float y0 in new[] { FenceHeight - railSize, 0.95f })
+            foreach (float y0 in new[] { _fenceHeight - railSize, 0.95f })
             {
                 AddBox(verts, indices,
                     new Vector3(-fx, y0, -fz - railSize / 2f), new Vector3(fx, y0 + railSize, -fz + railSize / 2f), railColor);
@@ -1340,7 +1814,8 @@ namespace NoPasaranFC.Graphics3D
             const float tileMeters = 1.5f;
             float uX = fx * 2f / tileMeters;
             float uZ = fz * 2f / tileMeters;
-            const float y0p = 0.02f, y1p = FenceHeight - 0.1f;
+            const float y0p = 0.02f;
+            float y1p = _fenceHeight - 0.1f;
             
             AddTexturedQuad(_fenceVertList, _fenceIndexList,
                 new Vector3(-fx, y0p, -fz), new Vector2(0f, 1f),
@@ -1370,7 +1845,7 @@ namespace NoPasaranFC.Graphics3D
             float h = size / 2f;
             AddBox(verts, indices,
                 new Vector3(basePos.X - h, 0f, basePos.Z - h),
-                new Vector3(basePos.X + h, FenceHeight, basePos.Z + h), color);
+                new Vector3(basePos.X + h, _fenceHeight, basePos.Z + h), color);
         }
         
         /// <summary>

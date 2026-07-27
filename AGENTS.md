@@ -120,11 +120,16 @@ dotnet build NoPasaranFC.Android/NoPasaranFC.Android.csproj  # Android (needs an
   passing/shooting/dribbling decisions, real GKs (shot dives, angle play, distribution), sideline avoidance
 - 3D mode: skinned players (male + female bodies) with appearance variety (face expressions
   neutral/smile/sad/wow, facial hair, hair colors), per-team kits with back numbers, GK distinct kits,
-  three venues selectable in Settings (+Random): Bahramis (fence, yellow-seat stand, scoreboard,
+  five venues selectable in Settings (+Random): Bahramis (fence, yellow-seat stand, scoreboard,
   trees, houses), Sperchogeia (olive grove ring, Taygetos backdrop, fence sponsor banners,
-  floodlight pylons) and seaside Sfageia (beach + sea with foam lines, rock breakwaters, palms,
-  tennis courts, clubhouse), fan banners on the fence (FREE PALESTINE etc.), animated fans
-  (+ children, Palestinian flags), corner flags, rain, day/sunset/night,
+  floodlight pylons), seaside Sfageia (beach + sea with foam lines, rock breakwaters, palms,
+  tennis courts, clubhouse), mountain Kerasoulia (dense conifer ring, Taygetos backdrop, tall fence,
+  blue goal frames, covered stone stand, red running track + road, basketball hoop, standing
+  terrace for the ultras) and village Soulinari (raised metal bleacher with standing fans,
+  green container, changing-rooms building, olive grove west, red-roof village houses east,
+  basketball court), fan banners on the fence (FREE PALESTINE etc.), animated fans
+  (+ children, Palestinian flags; placement per venue via FanSection.FanPlacement), corner flags,
+  rain, day/sunset/night,
   easter eggs (`EasterEggManager`, per-match rolls): fox (10%), ball-chasing dog (5% —
   `Dog.glb`, fox mesh with a repainted atlas; faster than players, dribbles the ball
   toward NO PASARAN's goal until one is scored, bark sample), crow flock (10%, craw.wav),

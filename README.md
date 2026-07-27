@@ -87,10 +87,12 @@ Broadcast / High / TopDown cameras in 3D, plus the original 2D sprite mode:
 - **Rigged, animated players**: skinned GLB models (male + female bodies) with the KayKit clip library — running, walking, tackling, celebrations, knockdowns
 - **Per-team kits**: shirt/shorts/socks recolored from the player atlas (luminance-normalized), back numbers, distinct goalkeeper kits
 - **Appearance variety**: face expressions (neutral/smile/sad/wow — the booked player looks the part), facial hair, hair colors, male + female bodies
-- **Three venues + Random**, selectable in Settings:
+- **Five venues + Random**, selectable in Settings:
   - **Παναγιώτης Μπαχράμης** — municipal ground with chain-link fence, yellow bucket-seat stand, scoreboard arch, trees and houses
   - **ΓΗΠΕΔΟ ΣΠΕΡΧΟΓΕΙΑΣ** — rural ground in an olive grove with the Taygetos ridge behind, sponsor banners on the fence, floodlight pylons, dirt road
   - **Γήπεδο Σφαγείων** — seaside ground: beach and sea with foam lines, rock breakwaters, palms, tennis courts, clubhouse
+  - **Στάδιο Κερασούλιας** — mountain ground on Taygetos: dense conifer ring, tall fence, blue goal frames, covered stone stand, red running track, basketball hoop, standing terrace for the ultras
+  - **Γήπεδο Σουληναρίου** — village ground near Pylos: raised metal bleacher with standing fans, green container, changing-rooms building, olive grove, red-roof village houses, basketball court
 - **Animated fans**: adults and children in team colors, seated and standing, waving Palestinian flags; they celebrate goals; NO PASARAN! supporters' banners on the fence (FREE PALESTINE, ΛΕΥΤΕΡΙΑ ΣΤΗ ΠΑΛΑΙΣΤΙΝΗ, ΤΕΜΠΗ - ΠΥΛΟΣ - ΠΑΛΑΙΣΤΙΝΗ, ΔΙΚΑΙΩΣΗ ΓΙΑ ΤΟ ΘΟΔΩΡΗ)
 - **Match atmosphere**: team benches with substitutes and animated coaches directing play, referee and linesmen, corner flags
 - **Easter eggs** (rolled per match): a wandering fox (10%), a ball-chasing dog that's faster than the players and dribbles the ball toward NO PASARAN's goal until it scores (5%, with barking), crow flocks (10%), seagulls at Sfageia (50%), and a giant whirlwind in the rain (5%) that roams the pitch all match and shoves players around
