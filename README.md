@@ -107,6 +107,7 @@ Broadcast / High / TopDown cameras in 3D, plus the original 2D sprite mode:
 - **Tuneable decision interval** (0.1-0.5s) in Settings
 
 ### 👥 Team & Player Management
+- **Player & Kit Editor** (desktop): launch with `--editor` to open the editor for **both championships** — edit player stats, gender, skin tone, hair color, face expression and features; design kits (shirt/shorts/socks + goalkeeper colors), pick shirt patterns (stripes, hoops, halves, sash), and **paint directly on the shirt** on a 32×32 grid. Edits write through to `teams_seed.custom.json` (auto-merged as the new defaults) and the live database
 - **Flexible Rosters**: Full squads (minimum 11, no upper limit)
 - **Lineup Selection**: Pre-match screen with formation preview and stat display
 - **Player Attributes**: Speed, Shooting, Passing, Defending, Agility, Technique, Stamina

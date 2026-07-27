@@ -203,7 +203,7 @@ namespace NoPasaranFC.Graphics3D
             {
                 GetKitColors(team.Players[0], homeTeamId, out Color shirt, out Color shorts, out Color socks);
                 var bench = new TeamBench(device, team, new Vector2(offset, benchZ),
-                    _playerModel, _playerModelF, atlas, shirt, shorts, socks);
+                    _playerModel, _playerModelF, atlas, shirt, homeTeamId);
                 if (team == engine.HomeTeam) _homeBench = bench;
                 else _awayBench = bench;
             }
@@ -625,33 +625,10 @@ namespace NoPasaranFC.Graphics3D
                 // skin tone, hair color. Also the base for the kit bakes.
                 Texture2D composed = FaceComposer.Compose(device, baseTexture,
                     FaceComposer.AppearanceFor(player));
-                
-                // player_atlas.png layout (quadrants shirt / shorts / socks / skin+extras),
-                // scaled to the composed atlas resolution
-                int q = 256 * FaceComposer.AtlasScale;
-                Texture2D shirtTexture = KitTextureFactory.GetKitTexture(device, composed, shirt,
-                    new Rectangle(0, 0, q, q));
-                Texture2D shortsTexture = KitTextureFactory.GetKitTexture(device, composed, shorts,
-                    new Rectangle(q, 0, q, q));
-                Texture2D socksTexture = KitTextureFactory.GetKitTexture(device, composed, socks,
-                    new Rectangle(0, q, q, q));
-                
-                // Per-player: shirt number stamped on the back
-                Texture2D numberedShirt = KitTextureFactory.GetNumberedShirtTexture(device, shirtTexture,
-                    player.ShirtNumber, KitTextureFactory.ContrastFor(shirt));
-                
-                foreach (var part in model.Parts)
-                {
-                    string name = part.Name ?? "";
-                    if (name == "Soccer_Shirt")
-                        animator.Instance.SetPartTexture(part.Name, numberedShirt);
-                    else if (name == "Soccer_Shorts")
-                        animator.Instance.SetPartTexture(part.Name, shortsTexture);
-                    else if (name.StartsWith("Soccer_Sock"))
-                        animator.Instance.SetPartTexture(part.Name, socksTexture);
-                    else if (name == "Soccer_Skin" || name == "Soccer_Hair")
-                        animator.Instance.SetPartTexture(part.Name, composed);
-                }
+
+                // Shared bake pipeline: kit colors (+pattern/paint), number stamp
+                KitBake.ApplyKitTextures(device, animator.Instance, model, composed,
+                    player.Team, player, homeTeamId);
             }
             else
             {
@@ -738,11 +715,26 @@ namespace NoPasaranFC.Graphics3D
         
         /// <summary>Shirt/shorts/socks colors per team, sampled from the 2D kit sprite sheets.
         /// Also used by the lineup screen for portraits and team-color accents.</summary>
-        internal static void GetKitColors(Player player, int homeTeamId, out Color shirt, out Color shorts, out Color socks)
+        private static Color FromPacked(int rgb) =>
+            new Color((rgb >> 16) & 0xFF, (rgb >> 8) & 0xFF, rgb & 0xFF);
+
+        internal static void GetKitColors(Player player, int homeTeamId, out Color shirt, out Color shorts, out Color socks) =>
+            GetKitColors(player?.Team, player, homeTeamId, out shirt, out shorts, out socks);
+
+        internal static void GetKitColors(Team team, Player player, int homeTeamId, out Color shirt, out Color shorts, out Color socks)
         {
-            // Goalkeepers wear a distinct kit (yellow home / lime green away)
+
+            // Goalkeepers wear a distinct kit: per-team stored colors when set,
+            // else the legacy yellow home / lime green away
             if (player.Position == PlayerPosition.Goalkeeper)
             {
+                if (team != null && team.GkShirtColor != 0)
+                {
+                    shirt = FromPacked(team.GkShirtColor);
+                    shorts = FromPacked(team.GkShortsColor);
+                    socks = FromPacked(team.GkSocksColor);
+                    return;
+                }
                 if (player.TeamId == homeTeamId)
                 {
                     shirt = new Color(240, 200, 30); shorts = new Color(35, 35, 40); socks = new Color(240, 200, 30);
@@ -753,7 +745,16 @@ namespace NoPasaranFC.Graphics3D
                 }
                 return;
             }
-            
+
+            // Per-team stored colors (editor / seed catalog) win over the legacy map
+            if (team != null && team.ShirtColor != 0)
+            {
+                shirt = FromPacked(team.ShirtColor);
+                shorts = FromPacked(team.ShortsColor);
+                socks = FromPacked(team.SocksColor);
+                return;
+            }
+
             switch (player.Team?.KitName)
             {
                 case "no_pasaran_kit":

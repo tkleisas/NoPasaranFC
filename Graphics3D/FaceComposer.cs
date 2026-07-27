@@ -84,15 +84,21 @@ namespace NoPasaranFC.Graphics3D
             return h & 0x7FFFFFFF;
         }
         
-        /// <summary>Same hash rule as MatchRenderer3D.GetModelForPlayer (~1 in 4 female).</summary>
-        public static bool IsFemalePlayer(Player player) =>
-            (StableHash(player.Name) & 3) == 0;
-        
-        /// <summary>Stable per-player appearance (hash of name + shirt number).</summary>
+        /// <summary>Gender: explicit override wins (1=male, 2=female), else the
+        /// name hash (~1 in 4 female, same rule as MatchRenderer3D.GetModelForPlayer).</summary>
+        public static bool IsFemalePlayer(Player player)
+        {
+            if (player.GenderOverride == 1) return false;
+            if (player.GenderOverride == 2) return true;
+            return (StableHash(player.Name) & 3) == 0;
+        }
+
+        /// <summary>Per-player appearance: editor overrides win per field,
+        /// the rest comes from the stable hash of name + shirt number.</summary>
         public static Appearance AppearanceFor(Player player)
         {
             int h = StableHash((player.Name ?? "x") + "#" + player.ShirtNumber);
-            
+
             var expr = (Expression)(h % 4);
             bool isFemale = IsFemalePlayer(player);
             Feature feat;
@@ -101,11 +107,12 @@ namespace NoPasaranFC.Graphics3D
                 feat = f < 4 ? Feature.Eyelashes : Feature.None;
             else
                 feat = f < 2 ? Feature.Beard : f < 4 ? Feature.Goatee : f < 6 ? Feature.Sideburns : Feature.None;
-            
+
             return new Appearance(
-                (h >> 8) % SkinTones.Length,
-                (h >> 12) % HairColors.Length,
-                expr, feat);
+                player.SkinToneOverride >= 0 ? player.SkinToneOverride % SkinTones.Length : (h >> 8) % SkinTones.Length,
+                player.HairColorOverride >= 0 ? player.HairColorOverride % HairColors.Length : (h >> 12) % HairColors.Length,
+                player.ExpressionOverride >= 0 ? (Expression)(player.ExpressionOverride % 4) : expr,
+                player.FeatureOverride >= 0 ? (Feature)(player.FeatureOverride % 5) : feat);
         }
         
         /// <summary>Composed atlas for the given appearance (cached). Output is

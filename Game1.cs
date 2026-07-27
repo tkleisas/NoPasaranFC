@@ -15,6 +15,9 @@ namespace NoPasaranFC;
 
 public class Game1 : Game
 {
+    /// <summary>When true (--editor CLI flag), the player/kit editor opens on startup.</summary>
+    public static bool StartInEditor { get; set; }
+
     private GraphicsDeviceManager _graphics;
     private SpriteBatch _spriteBatch;
     private SpriteFont _font;
@@ -181,6 +184,10 @@ public class Game1 : Game
         // Start with menu screen
         var menuScreen = new MenuScreen(_championship, _database, _screenManager, _contentManager, GraphicsDevice);
         _screenManager.PushScreen(menuScreen);
+
+        // --editor: open the player/kit editor on top of the menu (desktop tool)
+        if (StartInEditor)
+            _screenManager.PushScreen(new Screens.PlayerEditorScreen(_database, _contentManager, GraphicsDevice));
     }
 
     protected override void Update(GameTime gameTime)

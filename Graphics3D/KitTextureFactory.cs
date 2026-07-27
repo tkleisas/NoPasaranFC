@@ -28,19 +28,25 @@ namespace NoPasaranFC.Graphics3D
 
         /// <summary>
         /// Returns a texture where the given region is recolored to kitColor
-        /// (luminance-preserving). Cached per (source texture, region, color).
+        /// (luminance-preserving), with optional shirt pattern + paint grid
+        /// stamped on top. Cached per (source texture, region, color, pattern, paint).
         /// </summary>
         public static Texture2D GetKitTexture(GraphicsDevice device, Texture2D baseTexture, Color kitColor,
-            Rectangle? region = null)
+            Rectangle? region = null, int pattern = 0, Color? patternColor = null, string paintHex = null)
         {
             Rectangle r = region ?? new Rectangle(RegionX, RegionY, RegionW, RegionH);
-            string key = $"{baseTexture.GetHashCode()}:{kitColor.PackedValue:X8}:{r.X},{r.Y},{r.Width},{r.Height}";
+            string key = $"{baseTexture.GetHashCode()}:{kitColor.PackedValue:X8}:{r.X},{r.Y},{r.Width},{r.Height}" +
+                $":{pattern}:{patternColor?.PackedValue ?? 0:X8}:{paintHex?.GetHashCode() ?? 0}";
             if (_cache.TryGetValue(key, out var cached))
                 return cached;
 
             var pixels = new Color[baseTexture.Width * baseTexture.Height];
             baseTexture.GetData(pixels);
             RecolorPixels(pixels, baseTexture.Width, r, kitColor);
+            if (pattern != 0 && patternColor.HasValue)
+                StampPatternPixels(pixels, baseTexture.Width, r, pattern, patternColor.Value);
+            if (!string.IsNullOrEmpty(paintHex))
+                ApplyPaintPixels(pixels, baseTexture.Width, r, paintHex);
 
             var texture = new Texture2D(device, baseTexture.Width, baseTexture.Height);
             texture.SetData(pixels);
@@ -87,6 +93,104 @@ namespace NoPasaranFC.Graphics3D
                 }
             }
         }
+
+        #region Shirt patterns & freehand paint
+
+        /// <summary>Shirt patterns (Team.ShirtPattern).</summary>
+        public enum ShirtPattern { Solid = 0, StripesV = 1, Hoops = 2, Halves = 3, Sash = 4 }
+
+        /// <summary>The 16-color palette for kit colors and shirt painting.</summary>
+        public static readonly Color[] PaintPalette =
+        {
+            new Color(245, 245, 245), // 1 white
+            new Color(25, 25, 30),    // 2 black
+            new Color(224, 0, 0),     // 3 red
+            new Color(0, 64, 160),    // 4 blue
+            new Color(0, 140, 60),    // 5 green
+            new Color(240, 200, 30),  // 6 yellow
+            new Color(240, 130, 20),  // 7 orange
+            new Color(128, 60, 160),  // 8 purple
+            new Color(140, 140, 150), // 9 gray
+            new Color(0, 30, 80),     // 10 navy
+            new Color(90, 180, 240),  // 11 sky
+            new Color(240, 120, 170), // 12 pink
+            new Color(120, 70, 30),   // 13 brown
+            new Color(120, 200, 80),  // 14 lime
+            new Color(220, 170, 60),  // 15 gold
+            new Color(0, 110, 110),   // 16 teal
+        };
+
+        /// <summary>
+        /// Stamps a shirt pattern over `region` with the secondary color.
+        /// Pure pixel pipeline (headless-testable).
+        /// </summary>
+        public static void StampPatternPixels(Color[] pixels, int width, Rectangle r, int pattern, Color patternColor)
+        {
+            if (pattern == (int)ShirtPattern.Solid) return;
+            int stripeW = System.Math.Max(2, r.Width / 8);
+            int stripeH = System.Math.Max(2, r.Height / 8);
+            int sashBand = System.Math.Max(2, r.Width / 6);
+
+            for (int y = r.Y; y < r.Y + r.Height; y++)
+            {
+                for (int x = r.X; x < r.X + r.Width; x++)
+                {
+                    int i = y * width + x;
+                    if (pixels[i].A < 10) continue; // keep transparent background
+
+                    int lx = x - r.X, ly = y - r.Y;
+                    bool paint = pattern switch
+                    {
+                        (int)ShirtPattern.StripesV => (lx / stripeW) % 2 == 1,
+                        (int)ShirtPattern.Hoops => (ly / stripeH) % 2 == 1,
+                        (int)ShirtPattern.Halves => lx >= r.Width / 2,
+                        (int)ShirtPattern.Sash =>
+                            System.Math.Abs(lx - (r.Width - 1 - ly * r.Width / System.Math.Max(1, r.Height))) < sashBand / 2,
+                        _ => false,
+                    };
+                    if (paint)
+                        pixels[i] = new Color(patternColor.R, patternColor.G, patternColor.B, pixels[i].A);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Applies the freehand paint grid over `region`. The grid is 32x32
+        /// cells of 4-bit palette indices (1024 hex chars; '0' = empty).
+        /// Pure pixel pipeline (headless-testable).
+        /// </summary>
+        public static void ApplyPaintPixels(Color[] pixels, int width, Rectangle r, string paintHex)
+        {
+            if (string.IsNullOrEmpty(paintHex) || paintHex.Length < 1024) return;
+            float cellW = r.Width / 32f, cellH = r.Height / 32f;
+
+            for (int cy = 0; cy < 32; cy++)
+            {
+                for (int cx = 0; cx < 32; cx++)
+                {
+                    int v = HexValue(paintHex[cy * 32 + cx]);
+                    if (v <= 0 || v > PaintPalette.Length) continue;
+                    var color = PaintPalette[v - 1];
+
+                    int x0 = r.X + (int)(cx * cellW), x1 = r.X + (int)((cx + 1) * cellW);
+                    int y0 = r.Y + (int)(cy * cellH), y1 = r.Y + (int)((cy + 1) * cellH);
+                    for (int y = y0; y < y1; y++)
+                        for (int x = x0; x < x1; x++)
+                        {
+                            int i = y * width + x;
+                            if (pixels[i].A >= 10)
+                                pixels[i] = new Color(color.R, color.G, color.B, pixels[i].A);
+                        }
+                }
+            }
+        }
+
+        private static int HexValue(char c) =>
+            c >= '0' && c <= '9' ? c - '0' :
+            c >= 'a' && c <= 'f' ? c - 'a' + 10 :
+            c >= 'A' && c <= 'F' ? c - 'A' + 10 : 0;
+
+        #endregion
 
         /// <summary>Darker variant of a kit color, used for shorts/socks.</summary>
         public static Color Darken(Color color, float factor = 0.55f)

@@ -30,16 +30,16 @@ namespace NoPasaranFC.Graphics3D
         private bool _coachMoving;
         
         public TeamBench(GraphicsDevice device, Team team, Vector2 center, SkinnedModel playerModel,
-            SkinnedModel femaleModel, Texture2D baseAtlas, Color shirt, Color shorts, Color socks)
+            SkinnedModel femaleModel, Texture2D baseAtlas, Color shirt, int homeTeamId)
         {
             _shelterEffect = new BasicEffect(device)
             {
                 VertexColorEnabled = true,
                 LightingEnabled = false
             };
-            
+
             BuildShelter(center, shirt, out _shelterVertices, out _shelterIndices);
-            
+
             // Seated substitutes on the bench
             var subs = team.Players.FindAll(p => !p.IsStarting);
             int seated = Math.Min(6, subs.Count);
@@ -47,7 +47,7 @@ namespace NoPasaranFC.Graphics3D
             {
                 var model = PickModel(subs[i], playerModel, femaleModel, i);
                 var instance = new SkinnedModelInstance(model);
-                ApplyKitToInstance(device, instance, baseAtlas, shirt, shorts, socks, subs[i]);
+                ApplyKitToInstance(device, instance, model, team, subs[i], homeTeamId);
                 instance.Play("Sit_Chair_Idle");
                 instance.Update((float)_random.NextDouble() * 3f); // desync
                 _members.Add(new BenchMember
@@ -81,23 +81,12 @@ namespace NoPasaranFC.Graphics3D
         }
         
         private static void ApplyKitToInstance(GraphicsDevice device, SkinnedModelInstance instance,
-            Texture2D baseAtlas, Color shirt, Color shorts, Color socks, Player player)
+            SkinnedModel model, Team team, Player player, int homeTeamId)
         {
-            // Composed face/skin/hair for this player, then kit bakes on top
-            Texture2D composed = FaceComposer.Compose(device, baseAtlas, FaceComposer.AppearanceFor(player));
-            
-            int q = 256 * FaceComposer.AtlasScale;
-            var shirtTex = KitTextureFactory.GetKitTexture(device, composed, shirt, new Rectangle(0, 0, q, q));
-            var numbered = KitTextureFactory.GetNumberedShirtTexture(device, shirtTex, player.ShirtNumber,
-                KitTextureFactory.ContrastFor(shirt));
-            var shortsTex = KitTextureFactory.GetKitTexture(device, composed, shorts, new Rectangle(q, 0, q, q));
-            var socksTex = KitTextureFactory.GetKitTexture(device, composed, socks, new Rectangle(0, q, q, q));
-            instance.SetPartTexture("Soccer_Shirt", numbered);
-            instance.SetPartTexture("Soccer_Shorts", shortsTex);
-            instance.SetPartTexture("Soccer_SockLeft", socksTex);
-            instance.SetPartTexture("Soccer_SockRight", socksTex);
-            instance.SetPartTexture("Soccer_Skin", composed);
-            instance.SetPartTexture("Soccer_Hair", composed);
+            // Composed face/skin/hair for this player, then the shared kit bake
+            Texture2D composed = FaceComposer.Compose(device, model.Parts[0].Texture,
+                FaceComposer.AppearanceFor(player));
+            KitBake.ApplyKitTextures(device, instance, model, composed, team, player, homeTeamId);
         }
         
         /// <summary>Coach wears a dark suit (all kit regions dark).</summary>

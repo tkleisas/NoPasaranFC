@@ -44,9 +44,12 @@ namespace NoPasaranFC.Screens
         private static readonly FaceComposer.Feature[] Features =
             (FaceComposer.Feature[])Enum.GetValues(typeof(FaceComposer.Feature));
         
+        private readonly Team _team;
+
         public ConstructScreen(Team team, ContentManager content, GraphicsDevice graphicsDevice)
             : base(content, graphicsDevice)
         {
+            _team = team;
             _players = team.Players
                 .OrderBy(p => p.Position)
                 .ThenBy(p => p.ShirtNumber)
@@ -110,24 +113,8 @@ namespace NoPasaranFC.Screens
         {
             Texture2D baseTexture = model.Parts[0].Texture;
             Texture2D composed = FaceComposer.Compose(GraphicsDevice, baseTexture, appearance);
-            
-            Color shirt = new Color(200, 30, 30), shorts = new Color(30, 30, 35), socks = new Color(200, 30, 30);
-            int q = 256 * FaceComposer.AtlasScale;
-            var shirtTex = KitTextureFactory.GetKitTexture(GraphicsDevice, composed, shirt, new Rectangle(0, 0, q, q));
-            var shortsTex = KitTextureFactory.GetKitTexture(GraphicsDevice, composed, shorts, new Rectangle(q, 0, q, q));
-            var socksTex = KitTextureFactory.GetKitTexture(GraphicsDevice, composed, socks, new Rectangle(0, q, q, q));
-            var numbered = KitTextureFactory.GetNumberedShirtTexture(GraphicsDevice, shirtTex,
-                player.ShirtNumber, KitTextureFactory.ContrastFor(shirt));
-            
-            foreach (var part in model.Parts)
-            {
-                string name = part.Name ?? "";
-                if (name == "Soccer_Shirt") instance.SetPartTexture(part.Name, numbered);
-                else if (name == "Soccer_Shorts") instance.SetPartTexture(part.Name, shortsTex);
-                else if (name.StartsWith("Soccer_Sock")) instance.SetPartTexture(part.Name, socksTex);
-                else if (name == "Soccer_Skin" || name == "Soccer_Hair")
-                    instance.SetPartTexture(part.Name, composed);
-            }
+            KitBake.ApplyKitTextures(GraphicsDevice, instance, model, composed,
+                player.Team ?? _team, player, _team?.Id ?? 0);
         }
         
         /// <summary>Cycle one aspect of the selected player's appearance and re-apply it.</summary>

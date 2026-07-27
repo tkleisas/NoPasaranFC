@@ -167,43 +167,14 @@ namespace NoPasaranFC.Screens
         }
 
         /// <summary>Kit-colored per-part textures (numbered shirt / shorts / socks /
-        /// composed face+hair), mirroring MatchRenderer3D.ApplyKit for the soccer
-        /// player atlas layout.</summary>
+        /// composed face+hair) via the shared KitBake pipeline.</summary>
         private Dictionary<string, Texture2D> BuildKitOverrides(Player player, SkinnedModel model)
         {
-            MatchRenderer3D.GetKitColors(player, _match.HomeTeamId, out Color shirt, out Color shorts, out Color socks);
             Texture2D baseTexture = model.Parts[0].Texture;
-            
-            // Composed per-player face/skin/hair, then kit bakes on top
             Texture2D composed = FaceComposer.Compose(GraphicsDevice, baseTexture,
                 FaceComposer.AppearanceFor(player));
-
-            // player_atlas layout (quadrants shirt / shorts / socks / skin+extras),
-            // scaled to the composed atlas resolution
-            int q = 256 * FaceComposer.AtlasScale;
-            Texture2D shirtTexture = KitTextureFactory.GetKitTexture(GraphicsDevice, composed, shirt,
-                new Rectangle(0, 0, q, q));
-            Texture2D shortsTexture = KitTextureFactory.GetKitTexture(GraphicsDevice, composed, shorts,
-                new Rectangle(q, 0, q, q));
-            Texture2D socksTexture = KitTextureFactory.GetKitTexture(GraphicsDevice, composed, socks,
-                new Rectangle(0, q, q, q));
-            Texture2D numberedShirt = KitTextureFactory.GetNumberedShirtTexture(GraphicsDevice, shirtTexture,
-                player.ShirtNumber, KitTextureFactory.ContrastFor(shirt));
-
-            var overrides = new Dictionary<string, Texture2D>();
-            foreach (var part in model.Parts)
-            {
-                string name = part.Name ?? "";
-                if (name == "Soccer_Shirt")
-                    overrides[part.Name] = numberedShirt;
-                else if (name == "Soccer_Shorts")
-                    overrides[part.Name] = shortsTexture;
-                else if (name.StartsWith("Soccer_Sock"))
-                    overrides[part.Name] = socksTexture;
-                else if (name == "Soccer_Skin" || name == "Soccer_Hair")
-                    overrides[part.Name] = composed;
-            }
-            return overrides;
+            return KitBake.BakePartTextures(GraphicsDevice, model, composed,
+                player.Team, player, _match.HomeTeamId);
         }
 
         /// <summary>Team-color accent: the outfield shirt color of the player team.</summary>

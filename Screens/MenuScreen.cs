@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using NoPasaranFC.Debugging;
 using System.Linq;
 using Microsoft.Xna.Framework;
@@ -268,7 +268,8 @@ namespace NoPasaranFC.Screens
         
         private void HandleSelection()
         {
-            switch (_selectedOption)
+            int option = _selectedOption;
+            switch (option)
             {
                 case 0: // View Standings
                     _screenManager.PushScreen(new StandingsScreen(_championship, _screenManager));

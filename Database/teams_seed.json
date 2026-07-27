@@ -5,7 +5,10 @@
       "isPlayerControlled": true,
       "kitName": "no_pasaran_kit",
       "logo": "no_pasaran_logo.png",
-      "celebrationIds": ["run_around_pitch", "slide_celebration"],
+      "celebrationIds": [
+        "run_around_pitch",
+        "slide_celebration"
+      ],
       "players": [
         {
           "name": "Wacaby",
@@ -33,7 +36,6 @@
           "technique": 55,
           "stamina": 95
         },
-
         {
           "name": "petropoulost",
           "position": "Forward",
@@ -59,7 +61,9 @@
           "agility": 60,
           "technique": 60,
           "stamina": 85,
-          "celebrationIds": ["slide_celebration"]
+          "celebrationIds": [
+            "slide_celebration"
+          ]
         },
         {
           "name": "Dablo",
@@ -151,7 +155,9 @@
           "agility": 80,
           "technique": 82,
           "stamina": 75,
-          "celebrationIds": ["run_around_pitch"]
+          "celebrationIds": [
+            "run_around_pitch"
+          ]
         },
         {
           "name": "Αντώνης",
@@ -452,7 +458,12 @@
           "technique": 58,
           "stamina": 82
         }
-      ]
+      ],
+      "kit": {
+        "shirtColor": 14680064,
+        "shortsColor": 15790320,
+        "socksColor": 14680064
+      }
     },
     {
       "name": "ΜΠΑΡΤΣΕΛΙΩΜΑ",
@@ -474,28 +485,48 @@
       "isPlayerControlled": false,
       "kitName": "chandrinaikos_kit",
       "logo": "chandrinaikos_logo.png",
-      "players": []
+      "players": [],
+      "kit": {
+        "shirtColor": 16544,
+        "shortsColor": 15790320,
+        "socksColor": 16544
+      }
     },
     {
       "name": "ΑΣΑΛΑΓΗΤΟΣ",
       "isPlayerControlled": false,
       "kitName": "asalagitos_kit",
       "logo": "asalagitos_logo.png",
-      "players": []
+      "players": [],
+      "kit": {
+        "shirtColor": 8413344,
+        "shortsColor": 3287110,
+        "socksColor": 8413344
+      }
     },
     {
       "name": "ΑΣΤΕΡΑΣ ΕΞΑΡΧΕΙΩΝ",
       "isPlayerControlled": false,
       "kitName": "asteras_exarcheion_kit",
       "logo": "asteras_exarcheion_logo.png",
-      "players": []
+      "players": [],
+      "kit": {
+        "shirtColor": 2302760,
+        "shortsColor": 2302760,
+        "socksColor": 2302760
+      }
     },
     {
       "name": "ΤΗΓΑΝΗΤΗΣ",
       "isPlayerControlled": false,
       "kitName": "tiganitis_kit",
       "logo": "tiganitis_logo.png",
-      "players": []
+      "players": [],
+      "kit": {
+        "shirtColor": 15790320,
+        "shortsColor": 2302760,
+        "socksColor": 14721024
+      }
     }
   ]
 }

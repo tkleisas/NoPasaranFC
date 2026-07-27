@@ -187,7 +187,10 @@ namespace NoPasaranFC.Gameplay
             string jsonPath = PlatformHelper.GetAssetPath(Path.Combine("Database", "teams_seed.json"));
             if (File.Exists(jsonPath))
             {
-                return TeamSeeder.LoadTeamsFromJson(jsonPath);
+                // Editor customizations live in an optional overlay next to the seed
+                string overlayPath = Path.Combine(
+                    Path.GetDirectoryName(jsonPath), "teams_seed.custom.json");
+                return TeamSeeder.LoadCatalog(jsonPath, overlayPath);
             }
             return null;
 #endif

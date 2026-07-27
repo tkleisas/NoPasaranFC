@@ -21,8 +21,23 @@ namespace NoPasaranFC.Database
             public string kitName { get; set; }
             public string logo { get; set; }
             public List<string> celebrationIds { get; set; }
+            public KitData kit { get; set; }
         }
-        
+
+        /// <summary>Optional editable kit block (packed RGB ints; null = unset).</summary>
+        private class KitData
+        {
+            public int? shirtColor { get; set; }
+            public int? shortsColor { get; set; }
+            public int? socksColor { get; set; }
+            public int? gkShirtColor { get; set; }
+            public int? gkShortsColor { get; set; }
+            public int? gkSocksColor { get; set; }
+            public int? shirtPattern { get; set; }
+            public int? patternColor { get; set; }
+            public string shirtPaint { get; set; }
+        }
+
         private class PlayerData
         {
             public string name { get; set; }
@@ -37,6 +52,12 @@ namespace NoPasaranFC.Database
             public int technique { get; set; }
             public int stamina { get; set; }
             public List<string> celebrationIds { get; set; }
+            // Appearance overrides (null = auto from hash)
+            public int? gender { get; set; }
+            public int? skinTone { get; set; }
+            public int? hairColor { get; set; }
+            public int? expression { get; set; }
+            public int? feature { get; set; }
         }
         
         public static List<Team> LoadTeamsFromJson(string jsonPath)
@@ -60,6 +81,19 @@ namespace NoPasaranFC.Database
                     team.Logo = teamData.logo;
                     team.CelebrationIds = teamData.celebrationIds;
 
+                    if (teamData.kit != null)
+                    {
+                        team.ShirtColor = teamData.kit.shirtColor ?? 0;
+                        team.ShortsColor = teamData.kit.shortsColor ?? 0;
+                        team.SocksColor = teamData.kit.socksColor ?? 0;
+                        team.GkShirtColor = teamData.kit.gkShirtColor ?? 0;
+                        team.GkShortsColor = teamData.kit.gkShortsColor ?? 0;
+                        team.GkSocksColor = teamData.kit.gkSocksColor ?? 0;
+                        team.ShirtPattern = teamData.kit.shirtPattern ?? 0;
+                        team.PatternColor = teamData.kit.patternColor ?? 0;
+                        team.ShirtPaint = teamData.kit.shirtPaint;
+                    }
+
                     // If no players specified, generate default roster
                     if (teamData.players == null || teamData.players.Count == 0)
                     {
@@ -82,7 +116,12 @@ namespace NoPasaranFC.Database
                                 Agility = playerData.agility,
                                 Technique = playerData.technique,
                                 Stamina = playerData.stamina,
-                                CelebrationIds = playerData.celebrationIds
+                                CelebrationIds = playerData.celebrationIds,
+                                GenderOverride = playerData.gender ?? -1,
+                                SkinToneOverride = playerData.skinTone ?? -1,
+                                HairColorOverride = playerData.hairColor ?? -1,
+                                ExpressionOverride = playerData.expression ?? -1,
+                                FeatureOverride = playerData.feature ?? -1
                             };
                             team.AddPlayer(player);
                         }
@@ -99,6 +138,97 @@ namespace NoPasaranFC.Database
             return teams;
         }
         
+        /// <summary>
+        /// Loads the shared team catalog: the base seed plus an optional overlay
+        /// (teams_seed.custom.json) merged by team name - the overlay wins, so
+        /// editor customizations become the defaults for new seasons.
+        /// </summary>
+        public static List<Team> LoadCatalog(string basePath, string overlayPath = null)
+        {
+            var teams = LoadTeamsFromJson(basePath);
+            if (overlayPath != null && File.Exists(overlayPath))
+            {
+                var overlay = LoadTeamsFromJson(overlayPath);
+                foreach (var overlayTeam in overlay)
+                {
+                    int idx = teams.FindIndex(t =>
+                        string.Equals(t.Name, overlayTeam.Name, StringComparison.OrdinalIgnoreCase));
+                    if (idx >= 0) teams[idx] = overlayTeam;
+                    else teams.Add(overlayTeam);
+                }
+            }
+            return teams;
+        }
+
+        /// <summary>
+        /// Serializes teams back to the teams_seed.json schema (UTF-8, Greek names
+        /// intact, indented). Used for the editor's write-through overlay and EXPORT.
+        /// </summary>
+        public static void SaveCatalog(List<Team> teams, string path)
+        {
+            var data = new TeamSeedData { teams = new List<TeamData>() };
+            foreach (var team in teams)
+            {
+                var td = new TeamData
+                {
+                    name = team.Name,
+                    isPlayerControlled = team.IsPlayerControlled,
+                    kitName = team.KitName,
+                    logo = team.Logo,
+                    celebrationIds = team.CelebrationIds,
+                    players = new List<PlayerData>()
+                };
+                if (team.ShirtColor != 0 || team.ShirtPattern != 0 || !string.IsNullOrEmpty(team.ShirtPaint))
+                {
+                    td.kit = new KitData
+                    {
+                        shirtColor = team.ShirtColor,
+                        shortsColor = team.ShortsColor,
+                        socksColor = team.SocksColor,
+                        gkShirtColor = team.GkShirtColor,
+                        gkShortsColor = team.GkShortsColor,
+                        gkSocksColor = team.GkSocksColor,
+                        shirtPattern = team.ShirtPattern,
+                        patternColor = team.PatternColor,
+                        shirtPaint = team.ShirtPaint
+                    };
+                }
+                foreach (var p in team.Players)
+                {
+                    td.players.Add(new PlayerData
+                    {
+                        name = p.Name,
+                        position = p.Position.ToString(),
+                        shirtNumber = p.ShirtNumber,
+                        isStarting = p.IsStarting,
+                        speed = p.Speed,
+                        shooting = p.Shooting,
+                        passing = p.Passing,
+                        defending = p.Defending,
+                        agility = p.Agility,
+                        technique = p.Technique,
+                        stamina = (int)p.Stamina,
+                        celebrationIds = p.CelebrationIds,
+                        gender = p.GenderOverride >= 0 ? p.GenderOverride : null,
+                        skinTone = p.SkinToneOverride >= 0 ? p.SkinToneOverride : null,
+                        hairColor = p.HairColorOverride >= 0 ? p.HairColorOverride : null,
+                        expression = p.ExpressionOverride >= 0 ? p.ExpressionOverride : null,
+                        feature = p.FeatureOverride >= 0 ? p.FeatureOverride : null
+                    });
+                }
+                data.teams.Add(td);
+            }
+
+            var options = new JsonSerializerOptions
+            {
+                WriteIndented = true,
+                Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+                DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
+            };
+            File.WriteAllText(path, JsonSerializer.Serialize(data, options),
+                new System.Text.UTF8Encoding(false));
+        }
+
         private static PlayerPosition ParsePosition(string position)
         {
             return position switch

@@ -212,6 +212,81 @@ namespace NoPasaranFC.Database
                 SetSchemaVersion(connection, 9);
                 currentVersion = 9;
             }
+
+            if (currentVersion < 10)
+            {
+                // Migration 10: Add editable kit columns to Teams table
+                ApplyMigration10_AddTeamKit(connection);
+                SetSchemaVersion(connection, 10);
+                currentVersion = 10;
+            }
+
+            if (currentVersion < 11)
+            {
+                // Migration 11: Add appearance override columns to Players table
+                ApplyMigration11_AddPlayerAppearance(connection);
+                SetSchemaVersion(connection, 11);
+                currentVersion = 11;
+            }
+        }
+
+        /// <summary>Adds a column to a table if it doesn't exist (PRAGMA-checked).</summary>
+        private static void AddColumnIfMissing(SqliteConnection connection, string table, string columnDef)
+        {
+            string columnName = columnDef.Split(' ')[0];
+            var check = connection.CreateCommand();
+            check.CommandText = $"PRAGMA table_info({table})";
+            using (var reader = check.ExecuteReader())
+            {
+                while (reader.Read())
+                    if (reader.GetString(1) == columnName)
+                        return; // already there
+            }
+            var alter = connection.CreateCommand();
+            alter.CommandText = $"ALTER TABLE {table} ADD COLUMN {columnDef}";
+            alter.ExecuteNonQuery();
+        }
+
+        private void ApplyMigration10_AddTeamKit(SqliteConnection connection)
+        {
+            foreach (var col in new[]
+            {
+                "ShirtColor INTEGER DEFAULT 0", "ShortsColor INTEGER DEFAULT 0",
+                "SocksColor INTEGER DEFAULT 0", "GkShirtColor INTEGER DEFAULT 0",
+                "GkShortsColor INTEGER DEFAULT 0", "GkSocksColor INTEGER DEFAULT 0",
+                "ShirtPattern INTEGER DEFAULT 0", "PatternColor INTEGER DEFAULT 0",
+                "ShirtPaint TEXT"
+            })
+                AddColumnIfMissing(connection, "Teams", col);
+
+            // Backfill named kits with the legacy hardcoded colors (zero visual
+            // change on upgrade). Unnamed kits and GK sets stay 0 = dynamic
+            // home/away fallback in the renderer.
+            foreach (var kitName in new[] { "no_pasaran_kit", "asalagitos_kit",
+                "asteras_exarcheion_kit", "chandrinaikos_kit", "tiganitis_kit" })
+            {
+                Models.KitDefaults.ForKitName(kitName, out int shirt, out int shorts, out int socks);
+                if (shirt == 0) continue;
+                var update = connection.CreateCommand();
+                update.CommandText = @"UPDATE Teams SET ShirtColor = @shirt, ShortsColor = @shorts,
+                    SocksColor = @socks WHERE KitName = @kitName AND ShirtColor = 0";
+                update.Parameters.AddWithValue("@shirt", shirt);
+                update.Parameters.AddWithValue("@shorts", shorts);
+                update.Parameters.AddWithValue("@socks", socks);
+                update.Parameters.AddWithValue("@kitName", kitName);
+                update.ExecuteNonQuery();
+            }
+        }
+
+        private void ApplyMigration11_AddPlayerAppearance(SqliteConnection connection)
+        {
+            foreach (var col in new[]
+            {
+                "GenderOverride INTEGER DEFAULT -1", "SkinToneOverride INTEGER DEFAULT -1",
+                "HairColorOverride INTEGER DEFAULT -1", "ExpressionOverride INTEGER DEFAULT -1",
+                "FeatureOverride INTEGER DEFAULT -1"
+            })
+                AddColumnIfMissing(connection, "Players", col);
         }
         
         private void ApplyMigration9_AddOffsidesEnabled(SqliteConnection connection)
@@ -473,19 +548,38 @@ namespace NoPasaranFC.Database
             }
         }
         
+        private static readonly string TeamKitColumns =
+            "ShirtColor, ShortsColor, SocksColor, GkShirtColor, GkShortsColor, GkSocksColor, ShirtPattern, PatternColor, ShirtPaint";
+        private static readonly string TeamKitParams =
+            "@shirtColor, @shortsColor, @socksColor, @gkShirtColor, @gkShortsColor, @gkSocksColor, @shirtPattern, @patternColor, @shirtPaint";
+
+        private static void AddTeamKitParams(SqliteCommand command, Team team)
+        {
+            command.Parameters.AddWithValue("@shirtColor", team.ShirtColor);
+            command.Parameters.AddWithValue("@shortsColor", team.ShortsColor);
+            command.Parameters.AddWithValue("@socksColor", team.SocksColor);
+            command.Parameters.AddWithValue("@gkShirtColor", team.GkShirtColor);
+            command.Parameters.AddWithValue("@gkShortsColor", team.GkShortsColor);
+            command.Parameters.AddWithValue("@gkSocksColor", team.GkSocksColor);
+            command.Parameters.AddWithValue("@shirtPattern", team.ShirtPattern);
+            command.Parameters.AddWithValue("@patternColor", team.PatternColor);
+            command.Parameters.AddWithValue("@shirtPaint",
+                string.IsNullOrEmpty(team.ShirtPaint) ? (object)DBNull.Value : team.ShirtPaint);
+        }
+
         public void SaveTeam(Team team)
         {
             using var connection = new SqliteConnection(ConnectionString);
             connection.Open();
-            
+
             var command = connection.CreateCommand();
-            
+
             if (team.Id == 0)
             {
                 // New team without ID - let database assign one
-                command.CommandText = @"
-                    INSERT INTO Teams (Name, IsPlayerControlled, Wins, Draws, Losses, GoalsFor, GoalsAgainst, KitName, Logo, CelebrationIds)
-                    VALUES (@name, @isPlayerControlled, @wins, @draws, @losses, @goalsFor, @goalsAgainst, @kitName, @logo, @celebrationIds);
+                command.CommandText = $@"
+                    INSERT INTO Teams (Name, IsPlayerControlled, Wins, Draws, Losses, GoalsFor, GoalsAgainst, KitName, Logo, CelebrationIds, {TeamKitColumns})
+                    VALUES (@name, @isPlayerControlled, @wins, @draws, @losses, @goalsFor, @goalsAgainst, @kitName, @logo, @celebrationIds, {TeamKitParams});
                     SELECT last_insert_rowid();
                 ";
                 command.Parameters.AddWithValue("@name", team.Name);
@@ -499,15 +593,16 @@ namespace NoPasaranFC.Database
                 command.Parameters.AddWithValue("@goalsAgainst", team.GoalsAgainst);
                 command.Parameters.AddWithValue("@celebrationIds",
                     team.CelebrationIds != null ? JsonSerializer.Serialize(team.CelebrationIds) : (object)DBNull.Value);
+                AddTeamKitParams(command, team);
 
                 team.Id = Convert.ToInt32(command.ExecuteScalar());
             }
             else
             {
                 // Team with ID - use INSERT OR REPLACE to handle both new and existing
-                command.CommandText = @"
-                    INSERT OR REPLACE INTO Teams (Id, Name, IsPlayerControlled, Wins, Draws, Losses, GoalsFor, GoalsAgainst, KitName, Logo, CelebrationIds)
-                    VALUES (@id, @name, @isPlayerControlled, @wins, @draws, @losses, @goalsFor, @goalsAgainst, @kitName, @logo, @celebrationIds);
+                command.CommandText = $@"
+                    INSERT OR REPLACE INTO Teams (Id, Name, IsPlayerControlled, Wins, Draws, Losses, GoalsFor, GoalsAgainst, KitName, Logo, CelebrationIds, {TeamKitColumns})
+                    VALUES (@id, @name, @isPlayerControlled, @wins, @draws, @losses, @goalsFor, @goalsAgainst, @kitName, @logo, @celebrationIds, {TeamKitParams});
                 ";
                 command.Parameters.AddWithValue("@id", team.Id);
                 command.Parameters.AddWithValue("@name", team.Name);
@@ -521,23 +616,38 @@ namespace NoPasaranFC.Database
                 command.Parameters.AddWithValue("@logo", team.Logo ?? string.Empty);
                 command.Parameters.AddWithValue("@celebrationIds",
                     team.CelebrationIds != null ? JsonSerializer.Serialize(team.CelebrationIds) : (object)DBNull.Value);
+                AddTeamKitParams(command, team);
                 command.ExecuteNonQuery();
             }
         }
         
+        private static readonly string PlayerAppearanceColumns =
+            "GenderOverride, SkinToneOverride, HairColorOverride, ExpressionOverride, FeatureOverride";
+        private static readonly string PlayerAppearanceParams =
+            "@genderOv, @skinToneOv, @hairColorOv, @expressionOv, @featureOv";
+
+        private static void AddPlayerAppearanceParams(SqliteCommand command, Player player)
+        {
+            command.Parameters.AddWithValue("@genderOv", player.GenderOverride);
+            command.Parameters.AddWithValue("@skinToneOv", player.SkinToneOverride);
+            command.Parameters.AddWithValue("@hairColorOv", player.HairColorOverride);
+            command.Parameters.AddWithValue("@expressionOv", player.ExpressionOverride);
+            command.Parameters.AddWithValue("@featureOv", player.FeatureOverride);
+        }
+
         public void SavePlayer(Player player)
         {
             using var connection = new SqliteConnection(ConnectionString);
             connection.Open();
-            
+
             var command = connection.CreateCommand();
-            
+
             if (player.Id == 0)
             {
                 // New player without ID
-                command.CommandText = @"
-                    INSERT INTO Players (TeamId, Name, Position, Speed, Shooting, Passing, Defending, Agility, Technique, Stamina, IsStarting, ShirtNumber, CelebrationIds, PlayerPicture)
-                    VALUES (@teamId, @name, @position, @speed, @shooting, @passing, @defending, @agility, @technique, @stamina, @isStarting, @shirtNumber, @celebrationIds, @playerPicture);
+                command.CommandText = $@"
+                    INSERT INTO Players (TeamId, Name, Position, Speed, Shooting, Passing, Defending, Agility, Technique, Stamina, IsStarting, ShirtNumber, CelebrationIds, PlayerPicture, {PlayerAppearanceColumns})
+                    VALUES (@teamId, @name, @position, @speed, @shooting, @passing, @defending, @agility, @technique, @stamina, @isStarting, @shirtNumber, @celebrationIds, @playerPicture, {PlayerAppearanceParams});
                     SELECT last_insert_rowid();
                 ";
                 command.Parameters.AddWithValue("@teamId", player.TeamId);
@@ -554,17 +664,18 @@ namespace NoPasaranFC.Database
                 command.Parameters.AddWithValue("@shirtNumber", player.ShirtNumber);
                 command.Parameters.AddWithValue("@celebrationIds",
                     player.CelebrationIds != null ? JsonSerializer.Serialize(player.CelebrationIds) : (object)DBNull.Value);
-                command.Parameters.AddWithValue("@playerPicture", 
+                command.Parameters.AddWithValue("@playerPicture",
                     string.IsNullOrEmpty(player.PlayerPicture) ? (object)DBNull.Value : player.PlayerPicture);
+                AddPlayerAppearanceParams(command, player);
 
                 player.Id = Convert.ToInt32(command.ExecuteScalar());
             }
             else
             {
                 // Player with ID - use INSERT OR REPLACE
-                command.CommandText = @"
-                    INSERT OR REPLACE INTO Players (Id, TeamId, Name, Position, Speed, Shooting, Passing, Defending, Agility, Technique, Stamina, IsStarting, ShirtNumber, CelebrationIds, PlayerPicture)
-                    VALUES (@id, @teamId, @name, @position, @speed, @shooting, @passing, @defending, @agility, @technique, @stamina, @isStarting, @shirtNumber, @celebrationIds, @playerPicture);
+                command.CommandText = $@"
+                    INSERT OR REPLACE INTO Players (Id, TeamId, Name, Position, Speed, Shooting, Passing, Defending, Agility, Technique, Stamina, IsStarting, ShirtNumber, CelebrationIds, PlayerPicture, {PlayerAppearanceColumns})
+                    VALUES (@id, @teamId, @name, @position, @speed, @shooting, @passing, @defending, @agility, @technique, @stamina, @isStarting, @shirtNumber, @celebrationIds, @playerPicture, {PlayerAppearanceParams});
                 ";
                 command.Parameters.AddWithValue("@id", player.Id);
                 command.Parameters.AddWithValue("@teamId", player.TeamId);
@@ -581,8 +692,9 @@ namespace NoPasaranFC.Database
                 command.Parameters.AddWithValue("@shirtNumber", player.ShirtNumber);
                 command.Parameters.AddWithValue("@celebrationIds",
                     player.CelebrationIds != null ? JsonSerializer.Serialize(player.CelebrationIds) : (object)DBNull.Value);
-                command.Parameters.AddWithValue("@playerPicture", 
+                command.Parameters.AddWithValue("@playerPicture",
                     string.IsNullOrEmpty(player.PlayerPicture) ? (object)DBNull.Value : player.PlayerPicture);
+                AddPlayerAppearanceParams(command, player);
 
                 command.ExecuteNonQuery();
             }
@@ -612,7 +724,17 @@ namespace NoPasaranFC.Database
                     KitName = reader.IsDBNull(8) ? string.Empty : reader.GetString(8),
                     Logo = reader.IsDBNull(9) ? string.Empty : reader.GetString(9),
                     CelebrationIds = reader.IsDBNull(10) ? null :
-                        JsonSerializer.Deserialize<List<string>>(reader.GetString(10))
+                        JsonSerializer.Deserialize<List<string>>(reader.GetString(10)),
+                    // Kit columns (migration 10) - FieldCount guard for ancient DBs
+                    ShirtColor = reader.FieldCount > 11 && !reader.IsDBNull(11) ? reader.GetInt32(11) : 0,
+                    ShortsColor = reader.FieldCount > 12 && !reader.IsDBNull(12) ? reader.GetInt32(12) : 0,
+                    SocksColor = reader.FieldCount > 13 && !reader.IsDBNull(13) ? reader.GetInt32(13) : 0,
+                    GkShirtColor = reader.FieldCount > 14 && !reader.IsDBNull(14) ? reader.GetInt32(14) : 0,
+                    GkShortsColor = reader.FieldCount > 15 && !reader.IsDBNull(15) ? reader.GetInt32(15) : 0,
+                    GkSocksColor = reader.FieldCount > 16 && !reader.IsDBNull(16) ? reader.GetInt32(16) : 0,
+                    ShirtPattern = reader.FieldCount > 17 && !reader.IsDBNull(17) ? reader.GetInt32(17) : 0,
+                    PatternColor = reader.FieldCount > 18 && !reader.IsDBNull(18) ? reader.GetInt32(18) : 0,
+                    ShirtPaint = reader.FieldCount > 19 && !reader.IsDBNull(19) ? reader.GetString(19) : null
                 };
 
                 team.Players = LoadPlayersForTeam(team.Id);
@@ -653,7 +775,13 @@ namespace NoPasaranFC.Database
                     ShirtNumber = reader.IsDBNull(12) ? 0 : reader.GetInt32(12),
                     CelebrationIds = reader.IsDBNull(13) ? null :
                         JsonSerializer.Deserialize<List<string>>(reader.GetString(13)),
-                    PlayerPicture = reader.FieldCount > 14 && !reader.IsDBNull(14) ? reader.GetString(14) : null
+                    PlayerPicture = reader.FieldCount > 14 && !reader.IsDBNull(14) ? reader.GetString(14) : null,
+                    // Appearance overrides (migration 11) - FieldCount guards
+                    GenderOverride = reader.FieldCount > 15 && !reader.IsDBNull(15) ? reader.GetInt32(15) : -1,
+                    SkinToneOverride = reader.FieldCount > 16 && !reader.IsDBNull(16) ? reader.GetInt32(16) : -1,
+                    HairColorOverride = reader.FieldCount > 17 && !reader.IsDBNull(17) ? reader.GetInt32(17) : -1,
+                    ExpressionOverride = reader.FieldCount > 18 && !reader.IsDBNull(18) ? reader.GetInt32(18) : -1,
+                    FeatureOverride = reader.FieldCount > 19 && !reader.IsDBNull(19) ? reader.GetInt32(19) : -1
                 };
                 players.Add(player);
             }

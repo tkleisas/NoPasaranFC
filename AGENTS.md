@@ -91,6 +91,16 @@ dotnet build NoPasaranFC.Android/NoPasaranFC.Android.csproj  # Android (needs an
 - **Anti-oscillation**: AI uses target inertia + start/stop hysteresis (`AIConstants`), animations use
   hysteresis (`PlayerAnimator`). Don't reintroduce raw per-frame target/state flipping.
 
+- **Player/kit editor** (desktop only): `dotnet run --project NoPasaranFC.csproj -- --editor` opens
+  straight into the editor (both championships → teams → roster/kit). Edits players (stats, gender,
+  skin, hair, expression, feature) and kits (shirt/shorts/socks + GK colors, pattern, pattern color,
+  freehand 32×32 shirt paint). Everything writes through to `teams_seed.custom.json` (overlay merged
+  over `teams_seed.json` by name at catalog load — edits become the defaults for new seasons) and to
+  the SQLite DB for teams in the active championship. Teams missing from the catalog are synthesized
+  on the fly (same rule as championship creation). Kit colors/patterns live on `Team` (packed RGB ints,
+  ShirtPaint = 1024 hex chars), appearance overrides on `Player` (-1 = hash auto); bake pipeline is
+  shared via `Graphics3D/KitBake.cs`.
+
 ## Feature summary
 
 - Championship: round-robin fixtures, match simulation for non-player matches, standings, round results, seasons

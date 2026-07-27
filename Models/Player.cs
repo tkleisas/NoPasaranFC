@@ -103,7 +103,19 @@ namespace NoPasaranFC.Models
         
         // Player picture (base64 encoded PNG, 128x128 pixels)
         public string PlayerPicture { get; set; }
-        
+
+        // ---- Appearance overrides (editor + seed catalog; -1 = auto from name/number hash) ----
+        /// <summary>0 = auto (name hash), 1 = male body, 2 = female body.</summary>
+        public int GenderOverride { get; set; } = -1;
+        /// <summary>Skin tone index (0-4), -1 = auto.</summary>
+        public int SkinToneOverride { get; set; } = -1;
+        /// <summary>Hair color index (0-5), -1 = auto.</summary>
+        public int HairColorOverride { get; set; } = -1;
+        /// <summary>Face expression (0=Smile, 1=Neutral, 2=Sad, 3=Wow), -1 = auto.</summary>
+        public int ExpressionOverride { get; set; } = -1;
+        /// <summary>Facial feature (0=None, 1=Beard, 2=Goatee, 3=Sideburns, 4=Eyelashes), -1 = auto.</summary>
+        public int FeatureOverride { get; set; } = -1;
+
         // AI Controller (not serialized to database)
         [System.Text.Json.Serialization.JsonIgnore]
         public object AIController { get; set; } // Using object to avoid circular dependency
