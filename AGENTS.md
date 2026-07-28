@@ -147,7 +147,15 @@ dotnet build NoPasaranFC.Android/NoPasaranFC.Android.csproj  # Android (needs an
   `Dog.glb`, fox mesh with a repainted atlas; faster than players, dribbles the ball
   toward NO PASARAN's goal until one is scored, bark sample), crow flock (10%, craw.wav),
   seagull flock (50% at Sfageia, seagulls.wav), giant whirlwind (5% in rain — approaches
-  from afar, roams the pitch all match, shoves players, whirlwind.wav),
+  from afar, roams the pitch all match, shoves players, whirlwind.wav), bees (5% — swarm
+  harasses players, sting = 30s confusion wobble), fog (2% — Carpenter "The Fog" gray
+  soup via BasicEffect fog), snow (5% in Dec/Jan/Feb — frosted pitch overlay, snowflakes,
+  slippery `engine.IsSnowing` friction), Santa (5% in December — sleigh crossing the sky
+  dropping gifts, gift hit = knockdown), piano (1% of penalties — falls on the taker,
+  Looney Tunes flattening), thunder (1% in rain — lightning strikes a random outfield
+  player: jagged bolt, knockdown, victim renders as charcoal (`Player.CharcoalRemaining`)
+  and crumbles charcoal dust), beach ball (4% — drifts in, nudged around), sprinklers (3% —
+  sweeping water jets ~15s),
   celebration camera, goal replays (build-up at 1.4x from a high sideline camera, then the last 2s of
   footage in 0.5x slow motion from a goal-side camera with live cloth-net deformation, over the
   extended post-goal countdown, hold X to skip;

@@ -4,6 +4,7 @@ using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using NoPasaranFC.Gameplay;
 using NoPasaranFC.Graphics3D.Skinning;
+using NoPasaranFC.Models;
 
 namespace NoPasaranFC.Graphics3D
 {
@@ -18,7 +19,7 @@ namespace NoPasaranFC.Graphics3D
     /// </summary>
     public class EasterEggManager
     {
-        private enum Kind { Fox, Dog, Crows, Seagulls, Tornado }
+        private enum Kind { Fox, Dog, Crows, Seagulls, Tornado, Bees, Santa, BeachBall, Sprinklers, Thunder }
 
         private class Scheduled
         {
@@ -33,6 +34,7 @@ namespace NoPasaranFC.Graphics3D
         private readonly SkinnedModel _foxModel;
         private readonly Venue _venue;
         private readonly bool _isRaining;
+        private readonly MatchEnvironment _environment;
 
         private readonly List<FoxWalker> _walkers = new List<FoxWalker>();
         private FoxWalker _dog;
@@ -40,7 +42,22 @@ namespace NoPasaranFC.Graphics3D
         private int _lastScore = -1;  // score when the dog arrived (leaves when it changes)
         private BirdFlock _flock;
         private TornadoFx _tornado;
+        private BeeSwarm _bees;
+        private SantaSleigh _santa;
+        private PianoFx _piano;
+        private BeachBallFx _beachBall;
+        private SprinklersFx _sprinklers;
+        private ThunderFx _thunder;
+        private SnowSystem _snow;
+        private MatchEngine _engine; // set on first Update (bees/piano need it)
+        private bool _foggy;
+        private bool _snowing;
         private float _time;
+
+        /// <summary>Fog easter egg active for the whole match (2%).</summary>
+        public bool Foggy => _foggy;
+        /// <summary>Snow easter egg active for the whole match (winter months, 5%).</summary>
+        public bool Snowing => _snowing;
 
         /// <summary>Which events were rolled this match (debug state).</summary>
         public string RolledSummary
@@ -55,19 +72,39 @@ namespace NoPasaranFC.Graphics3D
             }
         }
 
-        public EasterEggManager(GraphicsDevice device, SkinnedModel foxModel, Venue venue, bool isRaining, int? seed = null)
+        public EasterEggManager(GraphicsDevice device, SkinnedModel foxModel, Venue venue,
+            bool isRaining, MatchEnvironment environment = null, int? seed = null)
         {
             _random = seed.HasValue ? new Random(seed.Value) : new Random();
             _device = device;
             _foxModel = foxModel;
             _venue = venue;
             _isRaining = isRaining;
+            _environment = environment;
 
             if (Roll(0.10)) Schedule(Kind.Fox);
             if (Roll(0.05)) Schedule(Kind.Dog);
             if (Roll(0.10)) Schedule(Kind.Crows);
             if (venue == Venue.Sfageia && Roll(0.50)) Schedule(Kind.Seagulls);
             if (isRaining && Roll(0.05)) Schedule(Kind.Tornado);
+            if (isRaining && Roll(0.01)) Schedule(Kind.Thunder); // lightning strikes only in the rain
+
+            // New eggs: bees harass players, santa in December, beach ball, sprinklers
+            if (Roll(0.05)) Schedule(Kind.Bees);
+            if (DateTime.Now.Month == 12 && Roll(0.05)) Schedule(Kind.Santa);
+            if (Roll(0.04)) Schedule(Kind.BeachBall);
+            if (Roll(0.03)) Schedule(Kind.Sprinklers);
+
+            // Match-long atmospheres
+            _foggy = Roll(0.02); // "The Fog" (Carpenter vibe)
+            int month = DateTime.Now.Month;
+            _snowing = (month == 12 || month == 1 || month == 2) && Roll(0.05);
+            if (_foggy) _environment?.SetFog(true);
+            if (_snowing)
+            {
+                _environment?.SetSnow(true);
+                if (_device != null) _snow = new SnowSystem(_device);
+            }
         }
 
         private bool Roll(double probability) => _random.NextDouble() < probability;
@@ -89,7 +126,14 @@ namespace NoPasaranFC.Graphics3D
                 case "crows": StartEvent(Kind.Crows); return "OK crows";
                 case "seagulls": StartEvent(Kind.Seagulls); return "OK seagulls";
                 case "tornado": StartEvent(Kind.Tornado); return "OK tornado";
-                default: return "ERR usage: easter <fox|dog|crows|seagulls|tornado>";
+                case "thunder": StartEvent(Kind.Thunder); return "OK thunder";
+                case "bees": StartEvent(Kind.Bees); return "OK bees";
+                case "santa": StartEvent(Kind.Santa); return "OK santa";
+                case "beachball": StartEvent(Kind.BeachBall); return "OK beachball";
+                case "sprinklers": StartEvent(Kind.Sprinklers); return "OK sprinklers";
+                case "fog": if (_environment != null) { _foggy = true; _environment.SetFog(true); return "OK fog"; } return "ERR no environment";
+                case "snow": if (_environment != null) { _snowing = true; _environment.SetSnow(true); if (_snow == null && _device != null) _snow = new SnowSystem(_device); return "OK snow"; } return "ERR no environment";
+                default: return "ERR usage: easter <fox|dog|crows|seagulls|tornado|bees|santa|beachball|sprinklers|fog|snow>";
             }
         }
 
@@ -140,12 +184,60 @@ namespace NoPasaranFC.Graphics3D
                     _tornado = new TornadoFx(_random);
                     AudioManager.Instance.PlaySoundEffect("whirlwind");
                     break;
+                case Kind.Bees:
+                    if (_engine != null)
+                    {
+                        _bees = new BeeSwarm(_random, _engine);
+                        AudioManager.Instance.PlaySoundEffect("bees");
+                    }
+                    break;
+                case Kind.Thunder:
+                    if (_engine != null)
+                    {
+                        Player victim = null;
+                        int best = int.MaxValue;
+                        foreach (var p in _engine.GetAllPlayers())
+                        {
+                            if (p.Position == Models.PlayerPosition.Goalkeeper) continue;
+                            int roll = _random.Next();
+                            if (roll < best) { best = roll; victim = p; }
+                        }
+                        if (victim != null)
+                        {
+                            _thunder = new ThunderFx(victim, _random);
+                            AudioManager.Instance.PlaySoundEffect("thunder");
+                        }
+                    }
+                    break;
+                case Kind.Santa:
+                    _santa = new SantaSleigh(_random);
+                    AudioManager.Instance.PlaySoundEffect("santa_bells");
+                    break;
+                case Kind.BeachBall:
+                    _beachBall = new BeachBallFx(_random);
+                    break;
+                case Kind.Sprinklers:
+                    _sprinklers = new SprinklersFx(_random);
+                    AudioManager.Instance.PlaySoundEffect("sprinklers");
+                    break;
             }
         }
 
         public void Update(float dt, MatchEngine engine)
         {
             _time += dt;
+            _engine = engine;
+
+            // Snow easter egg: slippery pitch for the whole match
+            if (_snowing && engine != null && !engine.IsSnowing)
+                engine.IsSnowing = true;
+
+            // Piano easter egg: 1% of penalties set the hook in the engine
+            if (engine?.PianoDropTarget != null)
+            {
+                _piano = new PianoFx(engine.PianoDropTarget);
+                engine.PianoDropTarget = null;
+            }
 
             foreach (var s in _schedule)
             {
@@ -191,7 +283,48 @@ namespace NoPasaranFC.Graphics3D
                 _tornado.Update(dt, engine);
                 if (_tornado.IsDone) _tornado = null;
             }
+
+            if (_bees != null)
+            {
+                _bees.Update(dt, engine);
+                if (_bees.IsDone) _bees = null;
+            }
+
+            if (_santa != null)
+            {
+                _santa.Update(dt, engine);
+                if (_santa.IsDone) _santa = null;
+            }
+
+            if (_piano != null)
+            {
+                _piano.Update(dt, engine);
+                if (_piano.IsDone) _piano = null;
+            }
+
+            if (_beachBall != null)
+            {
+                _beachBall.Update(dt, engine);
+                if (_beachBall.IsDone) _beachBall = null;
+            }
+
+            if (_sprinklers != null)
+            {
+                _sprinklers.Update(dt);
+                if (_sprinklers.IsDone) _sprinklers = null;
+            }
+
+            if (_thunder != null)
+            {
+                _thunder.Update(dt, engine);
+                if (_thunder.IsDone) _thunder = null;
+            }
+
+            _snow?.Update(dt, _cameraTarget(engine));
         }
+
+        private static Vector3 _cameraTarget(MatchEngine engine) =>
+            engine != null ? WorldUnits.ToWorld(engine.BallPosition) : Vector3.Zero;
 
         public void Draw(GraphicsDevice device, Matrix view, Matrix projection, MatchEnvironment environment)
         {
@@ -199,6 +332,13 @@ namespace NoPasaranFC.Graphics3D
                 walker.Draw(device, view, projection, environment);
             _flock?.Draw(device, view, projection, environment);
             _tornado?.Draw(device, view, projection, environment);
+            _bees?.Draw(device, view, projection, environment);
+            _santa?.Draw(device, view, projection, environment);
+            _piano?.Draw(device, view, projection, environment);
+            _beachBall?.Draw(device, view, projection, environment);
+            _sprinklers?.Draw(device, view, projection, environment);
+            _thunder?.Draw(device, view, projection, environment);
+            _snow?.Draw(device, view, projection);
         }
     }
 }

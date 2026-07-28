@@ -1221,6 +1221,22 @@ namespace NoPasaranFC.Gameplay
             
             // Update all players
             UpdatePlayers(deltaTime, moveDirection, isShootKeyDown, isPassKeyDown);
+
+            // Bee-sting confusion: drunk wobble for 30s (stop-and-stare moments too)
+            foreach (var player in GetAllPlayers())
+            {
+                if (player.CharcoalRemaining > 0f)
+                    player.CharcoalRemaining -= deltaTime;
+                if (player.ConfusedRemaining > 0f)
+                {
+                    player.ConfusedRemaining -= deltaTime;
+                    player.FieldPosition += new Vector2(
+                        (float)(_random.NextDouble() - 0.5f) * 160f * deltaTime,
+                        (float)(_random.NextDouble() - 0.5f) * 160f * deltaTime);
+                    if (_random.NextDouble() < 0.06f)
+                        player.Velocity = Vector2.Zero;
+                }
+            }
             
             // Ensure only the controlled player(s) have IsControlled = true (safeguard)
             foreach (var player in _homeTeam.Players.Concat(_awayTeam.Players))
@@ -2151,9 +2167,10 @@ namespace NoPasaranFC.Gameplay
             }
             
             // Apply friction only when ball is on ground
+            // (the snow easter egg makes everything slippery: less friction)
             if (BallHeight <= 0f)
             {
-                BallVelocity *= BallFriction;
+                BallVelocity *= IsSnowing ? 0.985f : BallFriction;
                 
                 // Stop ball if moving very slowly
                 if (BallVelocity.Length() < 1f)
@@ -2441,20 +2458,36 @@ namespace NoPasaranFC.Gameplay
         {
             // First-touch grace: receivers can't be knocked down right after a reception
             if (HasFirstTouchGrace(player)) return;
-            
+
             player.IsKnockedDown = true;
             KnockdownEvents++; // harness metric
             player.KnockdownTimer = 0.5f + (float)_random.NextDouble() * 1.0f; // 0.5 to 1.5 seconds
-            
+
             // Apply impact velocity (player slides in direction of impact)
             player.Velocity = impactVelocity * 0.5f;
-            
+
             // Play tackle sound
             AudioManager.Instance.PlaySoundEffect("tackle", 0.7f);
-            
+
             // Note: Don't auto-switch here - let the player choose when to switch with Space
             // This makes the gameplay more realistic and gives player control
         }
+
+        // ---- Easter egg hooks ----
+
+        /// <summary>Knocks a player down from an easter egg event (gift, piano...).</summary>
+        internal void EasterEggKnockdown(Player player)
+        {
+            if (player == null || player.IsKnockedDown) return;
+            KnockDownPlayer(player, new Vector2(0f, 100f));
+        }
+
+        /// <summary>Penalty taker about to be flattened by a falling piano
+        /// (1% of penalties). The easter egg manager consumes and clears this.</summary>
+        public Player PianoDropTarget { get; internal set; }
+
+        /// <summary>Snow easter egg: everything is slippery this match.</summary>
+        public bool IsSnowing { get; set; }
         
         internal bool IsBallInHalf(string teamName)
         {
@@ -3059,7 +3092,11 @@ namespace NoPasaranFC.Gameplay
                 height = 30f + 120f * chargeAmount;
                 
                 AudioManager.Instance.PlaySoundEffect("kick_ball", 0.9f);
-                
+
+                // Easter egg: 1% of penalties end with a piano falling on the taker
+                if (_random.NextDouble() < 0.01)
+                    PianoDropTarget = RestartPlayer;
+
                 // GK dive: random side at burst speed for ~0.6s
                 var gk = (RestartPlayer.Team == _homeTeam ? _awayTeam : _homeTeam).Players
                     .FirstOrDefault(p => p.IsStarting && p.Position == PlayerPosition.Goalkeeper);

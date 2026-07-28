@@ -476,10 +476,17 @@ public class Game1 : Game
             }
             case "easter":
             {
-                // Force an easter egg: fox|dog|crows|seagulls|tornado
-                if (parts.Length < 2) return "ERR usage: easter <fox|dog|crows|seagulls|tornado>";
+                // Force an easter egg: fox|dog|crows|seagulls|tornado|bees|santa|beachball|sprinklers|fog|snow|piano
+                if (parts.Length < 2) return "ERR usage: easter <fox|dog|crows|seagulls|tornado|bees|santa|beachball|sprinklers|fog|snow|piano>";
                 if (_screenManager.CurrentScreen is not MatchScreen ems || ems.Engine == null)
                     return "ERR no active match";
+                if (parts[1].Equals("piano", StringComparison.OrdinalIgnoreCase))
+                {
+                    // The piano hook lives in the engine; the manager consumes it
+                    ems.Engine.PianoDropTarget = ems.Engine.ControlledPlayer
+                        ?? ems.Engine.GetAllPlayers().FirstOrDefault(p => p.IsStarting);
+                    return ems.Engine.PianoDropTarget != null ? "OK piano" : "ERR no target";
+                }
                 return ems.DebugTriggerEasterEgg(parts[1]);
             }
             case "halftime":

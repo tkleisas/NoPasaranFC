@@ -27,6 +27,39 @@ namespace NoPasaranFC.Graphics3D
         
         public bool IsNight => TimeOfDay == "Night";
         public bool IsRaining => Weather == "Rain";
+
+        // Easter egg atmosphere: fog ("The Fog" vibe) and snow (white slippery winter)
+        public bool IsFoggy { get; private set; }
+        public bool IsSnowing { get; private set; }
+        private Color _preEggSkyColor;
+        private Vector3 _preEggUnlitTint;
+
+        /// <summary>Fog easter egg: dense gray soup, Carpenter's "The Fog".</summary>
+        public void SetFog(bool foggy)
+        {
+            if (foggy && !IsFoggy)
+            {
+                _preEggSkyColor = SkyColor;
+                _preEggUnlitTint = UnlitTint;
+                IsFoggy = true;
+                SkyColor = new Color(140, 145, 150);
+                AmbientColor *= 0.9f;
+                UnlitTint *= 0.92f;
+            }
+        }
+
+        /// <summary>Snow easter egg: bright overcast sky, everything whitened.</summary>
+        public void SetSnow(bool snowing)
+        {
+            if (snowing && !IsSnowing)
+            {
+                _preEggSkyColor = SkyColor;
+                _preEggUnlitTint = UnlitTint;
+                IsSnowing = true;
+                SkyColor = new Color(200, 205, 212);
+                UnlitTint = new Color(232, 238, 245).ToVector3(); // white pitch
+            }
+        }
         
         // Floodlight pylons (night only)
         private BasicEffect _floodlightEffect;
@@ -108,6 +141,19 @@ namespace NoPasaranFC.Graphics3D
             {
                 effect.LightingEnabled = false;
                 effect.DiffuseColor = UnlitTint;
+            }
+
+            // Fog easter egg (BasicEffect fog pipeline)
+            if (IsFoggy)
+            {
+                effect.FogEnabled = true;
+                effect.FogColor = SkyColor.ToVector3();
+                effect.FogStart = 15f;
+                effect.FogEnd = 70f;
+            }
+            else
+            {
+                effect.FogEnabled = false;
             }
         }
         

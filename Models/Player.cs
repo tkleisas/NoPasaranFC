@@ -67,6 +67,10 @@ namespace NoPasaranFC.Models
         
         // Collision and knockdown state
         public bool IsKnockedDown { get; set; }
+        /// <summary>Seconds left of bee-sting confusion (drunk, wobbly movement).</summary>
+        public float ConfusedRemaining { get; set; }
+        /// <summary>Seconds left as lightning-struck charcoal (rendered black, dusting off).</summary>
+        public float CharcoalRemaining { get; set; }
         
         /// <summary>Yellow cards this match (2 = automatic red).</summary>
         public int YellowCards { get; set; }

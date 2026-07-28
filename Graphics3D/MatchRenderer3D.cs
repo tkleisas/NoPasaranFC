@@ -173,7 +173,7 @@ namespace NoPasaranFC.Graphics3D
             try
             {
                 _easterEggs = new EasterEggManager(device,
-                    ModelCache.TryGet(device, "Fox.glb"), _venue, _environment.IsRaining);
+                    ModelCache.TryGet(device, "Fox.glb"), _venue, _environment.IsRaining, _environment);
             }
             catch (Exception ex)
             {
@@ -334,8 +334,68 @@ namespace NoPasaranFC.Graphics3D
             };
         }
         
+        private bool _eggAtmosphereApplied;
+        private BasicEffect _snowOverlayEffect;
+        private Texture2D _snowOverlayTexture;
+
+        /// <summary>White blanket over the pitch for the snow easter egg.</summary>
+        private void DrawSnowOverlay(GraphicsDevice device)
+        {
+            _snowOverlayEffect ??= new BasicEffect(device)
+            {
+                VertexColorEnabled = false,
+                TextureEnabled = true,
+                LightingEnabled = false
+            };
+            if (_snowOverlayTexture == null)
+            {
+                // Texture alpha does the blending (~43% frost, markings show through)
+                _snowOverlayTexture = new Texture2D(device, 1, 1);
+                _snowOverlayTexture.SetData(new[] { new Color(245, 248, 252, 140) });
+            }
+            _snowOverlayEffect.Texture = _snowOverlayTexture;
+            _snowOverlayEffect.View = _camera.View;
+            _snowOverlayEffect.Projection = _camera.Projection;
+            _snowOverlayEffect.World = Matrix.Identity;
+
+            float halfL = WorldUnits.PitchLengthMeters / 2f + 8f;
+            float halfW = WorldUnits.PitchWidthMeters / 2f + 8f;
+            float y = 0.04f;
+            var verts = new[]
+            {
+                new VertexPositionTexture(new Vector3(-halfL, y, -halfW), Vector2.Zero),
+                new VertexPositionTexture(new Vector3(halfL, y, -halfW), Vector2.UnitX),
+                new VertexPositionTexture(new Vector3(halfL, y, halfW), Vector2.One),
+                new VertexPositionTexture(new Vector3(-halfL, y, -halfW), Vector2.Zero),
+                new VertexPositionTexture(new Vector3(halfL, y, halfW), Vector2.One),
+                new VertexPositionTexture(new Vector3(-halfL, y, halfW), new Vector2(0f, 1f)),
+            };
+
+            device.BlendState = BlendState.NonPremultiplied;
+            device.DepthStencilState = DepthStencilState.DepthRead;
+            device.RasterizerState = RasterizerState.CullNone;
+            foreach (var pass in _snowOverlayEffect.CurrentTechnique.Passes)
+            {
+                pass.Apply();
+                device.DrawUserPrimitives(PrimitiveType.TriangleList, verts, 0, 2);
+            }
+            device.DepthStencilState = DepthStencilState.Default;
+        }
+
         public void Update(GameTime gameTime, MatchEngine engine)
         {
+            // Fog/snow easter eggs change the whole atmosphere mid-match: re-apply
+            // the environment to the pre-lit effects when one of them flips on
+            if (_easterEggs != null && !_eggAtmosphereApplied &&
+                (_easterEggs.Foggy || _easterEggs.Snowing))
+            {
+                _eggAtmosphereApplied = true;
+                _world.ApplyEnvironment(_environment);
+                _ball.ApplyEnvironment(_environment);
+                foreach (var net in _nets)
+                    net.ApplyEnvironment(_environment);
+            }
+
             float dt = (float)gameTime.ElapsedGameTime.TotalSeconds;
             
             // While a goal replay overlays the post-goal countdown, DrawReplay
@@ -423,6 +483,8 @@ namespace NoPasaranFC.Graphics3D
             device.RasterizerState = RasterizerState.CullNone;
             
             _world.Draw(device, _camera.View, _camera.Projection);
+            if (_easterEggs?.Snowing == true)
+                DrawSnowOverlay(device);
             _environment.Draw(device, _camera.View, _camera.Projection); // Floodlights (night only)
             foreach (var net in _nets)
                 net.Draw(device, _camera.View, _camera.Projection);
@@ -646,8 +708,11 @@ namespace NoPasaranFC.Graphics3D
                     ApplyKit(device, player, homeTeamId, animator);
                 
                 Vector3 pos = WorldUnits.ToWorld(player.FieldPosition);
-                
+
                 animator.Instance.Environment = _environment;
+                // Lightning-struck players render as charcoal while it lasts
+                animator.Instance.SetTint(player.CharcoalRemaining > 0f
+                    ? new Color(20, 18, 16) : (Color?)null);
                 
                 Matrix world = Matrix.CreateScale(PlayerModelScale)
                     * Matrix.CreateRotationY(animator.Yaw)
