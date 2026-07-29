@@ -70,7 +70,8 @@ namespace NoPasaranFC.Gameplay
         /// the same sites as the stats counters. Args: kind, team, player, velocity
         /// (deliberate kicks), payload float (power/severity/red flag; 0 otherwise).
         /// Kinds: kick|shot|pass|tackle|foul|card|offside|goal|corner|throw_in|
-        /// goal_kick|free_kick|penalty. Purely additive - the sim never reads it.
+        /// goal_kick|free_kick|penalty|kickoff (payload = half number for kickoff).
+        /// Purely additive - the sim never reads it.
         /// </summary>
         public event Action<string, Team, Player, Vector2, float> MatchEvent;
 
@@ -3429,6 +3430,12 @@ namespace NoPasaranFC.Gameplay
                 KickoffTeamId = _scoringTeam == _homeTeam ? _awayTeam.Id : _homeTeam.Id;
                 _scoringTeam = null;
             }
+
+            // Recorder: mark the reposition so the ball/players jumping to
+            // kickoff formation is explained in the event stream (covers both
+            // post-goal kickoffs and the second half via StartSecondHalf)
+            EmitMatchEvent("kickoff", KickoffTeamId == _awayTeam.Id ? _awayTeam : _homeTeam,
+                null, Vector2.Zero, Half);
         }
         
         /// <summary>

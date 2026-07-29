@@ -52,8 +52,9 @@ dotnet build NoPasaranFC.Android/NoPasaranFC.Android.csproj  # Android (needs an
   under the current working directory (project root via `dotnet run`). Same JSONL schema as
   the harness log (`scenario:"live"`, frames sampled at 10 Hz — `fps:10`/`sampleHz:10` in the
   meta line), so `Scripts/trajectory_plot.py` renders it unchanged. Adds `{"t":..,"ev":...}`
-  event lines (kicks, tackles, fouls, cards, offsides, goals, restarts — sourced from the
-  engine's `MatchEvent` hook at the stats sites) and, with `RecordVerbose`, a per-player
+  event lines (kicks, tackles, fouls, cards, offsides, goals, restarts, kickoffs —
+  the `kickoff` event marks the post-goal/halftime reposition, payload = half number;
+  sourced from the engine's `MatchEvent` hook at the stats sites) and, with `RecordVerbose`, a per-player
   `"dec"` block (chosen utility action + score + top-2 rejected alternatives, from
   `UtilityBrain.LastDecision`). Driven from `MatchScreen.Update`; the engine stays unaware.
 - **Anomaly analyzer**: `python3 Scripts/analyze_recording.py <log.jsonl> <outdir>

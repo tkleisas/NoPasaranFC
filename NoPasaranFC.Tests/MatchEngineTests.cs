@@ -55,6 +55,45 @@ public class MatchEngineTests
     }
 
     [Fact]
+    public void Goal_EmitsKickoffEvent_ForConcedingTeam()
+    {
+        var engine = TestHelper.MakeEngine();
+        TestHelper.ReachPlaying(engine);
+
+        var events = new List<(string kind, Team team, float payload)>();
+        engine.MatchEvent += (kind, team, player, velocity, payload) =>
+            events.Add((kind, team, payload));
+
+        // Home scores at the right goal
+        engine.BallPosition = new Vector2(MatchEngine.StadiumMargin + MatchEngine.FieldWidth + 30,
+            MatchEngine.StadiumMargin + MatchEngine.FieldHeight / 2f);
+        engine.BallVelocity = Vector2.Zero;
+        TestHelper.Step(engine, 1.5f); // goal + instant headless handoff to Countdown
+
+        int goalIdx = events.FindIndex(e => e.kind == "goal");
+        int kickoffIdx = events.FindIndex(e => e.kind == "kickoff");
+        Assert.True(goalIdx >= 0, "goal event should fire");
+        Assert.True(kickoffIdx > goalIdx, "kickoff event should follow the goal (marks the reposition)");
+        Assert.Equal(engine.AwayTeam, events[kickoffIdx].team); // conceding team takes the kickoff
+        Assert.Equal(1f, events[kickoffIdx].payload); // half number
+    }
+
+    [Fact]
+    public void StartSecondHalf_EmitsKickoffEvent_WithHalfTwo()
+    {
+        var engine = TestHelper.MakeEngine();
+        TestHelper.ReachPlaying(engine);
+
+        var events = new List<(string kind, float payload)>();
+        engine.MatchEvent += (kind, team, player, velocity, payload) => events.Add((kind, payload));
+
+        engine.StartSecondHalf();
+
+        var kickoff = Assert.Single(events, e => e.kind == "kickoff");
+        Assert.Equal(2f, kickoff.payload);
+    }
+
+    [Fact]
     public void SettleAirborneBall_DropsAndSettles()
     {
         // Regression: a ball that crossed the goal line in the air used to keep
