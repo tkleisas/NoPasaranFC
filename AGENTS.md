@@ -30,7 +30,7 @@ dotnet build NoPasaranFC.Android/NoPasaranFC.Android.csproj  # Android (needs an
   `players`, `setstat <name> <stat> <value>`, `ball <x> <y> [vx vy]` (teleport ball),
   `ballopp` (give ball to nearest opponent, stages a tackle), `corner` (force a corner),
   `freekick` / `penalty` / `card` (stage set piece / card), `halftime` (jump to 2nd half, sides switch),
-  `easter <fox|dog|crows|seagulls|tornado>` (force an easter egg),
+  `easter <fox|dog|crows|seagulls|tornado|ufo|blackout|cats>` (force an easter egg),
   `hold [on|off]` (freeze the match clock), `ppos <name> <x> <y>` (teleport player),
   `kick <name> [vx vy]` (force a deliberate kick), `touch <name>` (register a touch), `quit`.
   Client: `python3 Scripts/dbg.py "state" "shot /tmp/x.png 3"`.
@@ -155,7 +155,12 @@ dotnet build NoPasaranFC.Android/NoPasaranFC.Android.csproj  # Android (needs an
   Looney Tunes flattening), thunder (1% in rain — lightning strikes a random outfield
   player: jagged bolt, knockdown, victim renders as charcoal (`Player.CharcoalRemaining`)
   and crumbles charcoal dust), beach ball (4% — drifts in, nudged around), sprinklers (3% —
-  sweeping water jets ~15s),
+  sweeping water jets ~15s), UFO (3% at night — saucer flyover that hovers over midfield
+  with a rotating ring of blinking lights, then accelerates away, ufo.wav), floodlight
+  blackout (2% at night — the lights flicker and die for 5-8s, then flicker back;
+  `MatchEnvironment.BlackoutFactor`/`SetBlackout`, driven by `BlackoutFx`), cat invasion
+  (3% — a clowder of 4-6 cats, fox mesh at cat size with repainted gray/black/ginger/cream
+  atlases, mills about for ~a minute then leaves),
   celebration camera, goal replays (build-up at 1.4x from a high sideline camera, then the last 2s of
   footage in 0.5x slow motion from a goal-side camera with live cloth-net deformation, over the
   extended post-goal countdown, hold X to skip;

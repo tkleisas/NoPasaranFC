@@ -227,7 +227,7 @@ namespace NoPasaranFC.Graphics3D
             }
         }
         
-        /// <summary>Debug console: force an easter egg (fox|dog|crows|seagulls|tornado).</summary>
+        /// <summary>Debug console: force an easter egg (fox|dog|crows|seagulls|tornado|ufo|blackout|cats...).</summary>
         public string DebugTriggerEasterEgg(string name) =>
             _easterEggs?.Trigger(name) ?? "ERR no easter egg manager";
 
@@ -477,7 +477,7 @@ namespace NoPasaranFC.Graphics3D
         {
             // Full clear (color + depth) - 3D scene replaces the 2D world entirely
             device.Clear(ClearOptions.Target | ClearOptions.DepthBuffer,
-                _environment.SkyColor, 1f, 0);
+                _environment.EffectiveSkyColor, 1f, 0);
             
             device.DepthStencilState = DepthStencilState.Default;
             device.RasterizerState = RasterizerState.CullNone;
@@ -1236,7 +1236,7 @@ namespace NoPasaranFC.Graphics3D
             
             // Full clear (color + depth) - 3D scene replaces the 2D world entirely
             device.Clear(ClearOptions.Target | ClearOptions.DepthBuffer,
-                _environment.SkyColor, 1f, 0);
+                _environment.EffectiveSkyColor, 1f, 0);
             
             device.DepthStencilState = DepthStencilState.Default;
             device.RasterizerState = RasterizerState.CullNone;

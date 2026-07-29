@@ -20,7 +20,7 @@ namespace NoPasaranFC.Screens
         /// <summary>Debug console access to live match state (read-only usage).</summary>
         public MatchEngine Engine => _matchEngine;
 
-        /// <summary>Debug console: force an easter egg (fox|dog|crows|seagulls|tornado).</summary>
+        /// <summary>Debug console: force an easter egg (fox|dog|crows|seagulls|tornado|ufo|blackout|cats...).</summary>
         public string DebugTriggerEasterEgg(string name) =>
             _renderer3D?.DebugTriggerEasterEgg(name) ?? "ERR 2D mode (easter eggs are 3D-only)";
 

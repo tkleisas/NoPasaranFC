@@ -34,6 +34,18 @@ namespace NoPasaranFC.Graphics3D
         private Color _preEggSkyColor;
         private Vector3 _preEggUnlitTint;
 
+        /// <summary>
+        /// Floodlight blackout easter egg: 1 = normal lighting, 0 = lights out.
+        /// Applied multiplicatively at apply time, so restoring 1 fully restores
+        /// the lighting (the stored fields are never mutated).
+        /// </summary>
+        public float BlackoutFactor { get; private set; } = 1f;
+
+        public void SetBlackout(float factor) => BlackoutFactor = MathHelper.Clamp(factor, 0f, 1f);
+
+        /// <summary>Sky clear color with the blackout factor applied.</summary>
+        public Color EffectiveSkyColor => new Color(SkyColor.ToVector3() * BlackoutFactor);
+
         /// <summary>Fog easter egg: dense gray soup, Carpenter's "The Fog".</summary>
         public void SetFog(bool foggy)
         {
@@ -116,7 +128,7 @@ namespace NoPasaranFC.Graphics3D
                 UnlitTint *= 0.8f;
             }
             
-            if (IsNight)
+            if (IsNight && device != null)
                 BuildFloodlights(device);
         }
         
@@ -129,10 +141,10 @@ namespace NoPasaranFC.Graphics3D
             if (lit)
             {
                 effect.LightingEnabled = true;
-                effect.AmbientLightColor = AmbientColor;
+                effect.AmbientLightColor = AmbientColor * BlackoutFactor;
                 effect.DirectionalLight0.Enabled = true;
                 effect.DirectionalLight0.Direction = SunDirection;
-                effect.DirectionalLight0.DiffuseColor = SunColor;
+                effect.DirectionalLight0.DiffuseColor = SunColor * BlackoutFactor;
                 effect.DirectionalLight0.SpecularColor = Vector3.Zero;
                 effect.DirectionalLight1.Enabled = false;
                 effect.DirectionalLight2.Enabled = false;
@@ -140,14 +152,14 @@ namespace NoPasaranFC.Graphics3D
             else
             {
                 effect.LightingEnabled = false;
-                effect.DiffuseColor = UnlitTint;
+                effect.DiffuseColor = UnlitTint * BlackoutFactor;
             }
 
             // Fog easter egg (BasicEffect fog pipeline)
             if (IsFoggy)
             {
                 effect.FogEnabled = true;
-                effect.FogColor = SkyColor.ToVector3();
+                effect.FogColor = SkyColor.ToVector3() * BlackoutFactor;
                 effect.FogStart = 15f;
                 effect.FogEnd = 70f;
             }
@@ -160,10 +172,10 @@ namespace NoPasaranFC.Graphics3D
         /// <summary>Apply the preset to a SkinnedEffect (3D players).</summary>
         public void ApplyTo(SkinnedEffect effect)
         {
-            effect.AmbientLightColor = AmbientColor;
+            effect.AmbientLightColor = AmbientColor * BlackoutFactor;
             effect.DirectionalLight0.Enabled = true;
             effect.DirectionalLight0.Direction = SunDirection;
-            effect.DirectionalLight0.DiffuseColor = SunColor;
+            effect.DirectionalLight0.DiffuseColor = SunColor * BlackoutFactor;
             effect.DirectionalLight0.SpecularColor = Vector3.Zero;
             effect.DirectionalLight1.Enabled = false;
             effect.DirectionalLight2.Enabled = false;
@@ -172,7 +184,7 @@ namespace NoPasaranFC.Graphics3D
         /// <summary>Tint a color for the current preset (for effects driven per-frame).</summary>
         public Vector3 ApplyTint(Vector3 color)
         {
-            return color * UnlitTint;
+            return color * UnlitTint * BlackoutFactor;
         }
         
         /// <summary>Draws the floodlight pylons (night matches only).</summary>
@@ -183,6 +195,8 @@ namespace NoPasaranFC.Graphics3D
             _floodlightEffect.View = view;
             _floodlightEffect.Projection = projection;
             _floodlightEffect.World = Matrix.Identity;
+            // The bright heads die with the rest of the lights during a blackout
+            _floodlightEffect.DiffuseColor = new Vector3(BlackoutFactor);
             
             device.BlendState = BlendState.Opaque;
             device.DepthStencilState = DepthStencilState.Default;

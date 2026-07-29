@@ -476,8 +476,8 @@ public class Game1 : Game
             }
             case "easter":
             {
-                // Force an easter egg: fox|dog|crows|seagulls|tornado|bees|santa|beachball|sprinklers|fog|snow|piano
-                if (parts.Length < 2) return "ERR usage: easter <fox|dog|crows|seagulls|tornado|bees|santa|beachball|sprinklers|fog|snow|piano>";
+                // Force an easter egg: fox|dog|crows|seagulls|tornado|bees|santa|beachball|sprinklers|ufo|blackout|cats|fog|snow|piano
+                if (parts.Length < 2) return "ERR usage: easter <fox|dog|crows|seagulls|tornado|bees|santa|beachball|sprinklers|ufo|blackout|cats|fog|snow|piano>";
                 if (_screenManager.CurrentScreen is not MatchScreen ems || ems.Engine == null)
                     return "ERR no active match";
                 if (parts[1].Equals("piano", StringComparison.OrdinalIgnoreCase))

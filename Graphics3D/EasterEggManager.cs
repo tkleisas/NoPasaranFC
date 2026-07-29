@@ -15,11 +15,14 @@ namespace NoPasaranFC.Graphics3D
     /// - crows   10%  (any venue)   - dark flock crossing the sky, craw.wav
     /// - seagulls 50% (Sfageia)     - white flock circling, seagulls.wav
     /// - tornado  5%  (rain only)   - whirlwind funnel on the apron, whirlwind.wav
+    /// - ufo      3%  (night only)  - saucer flyover, hovers over midfield, ufo.wav
+    /// - blackout 2%  (night only)  - floodlights flicker out for 5-8s, then come back
+    /// - cats     3%  (any venue)   - a clowder of 4-6 cats mills about, then leaves
     /// Events are scheduled at random times in the first ~2 minutes of play.
     /// </summary>
     public class EasterEggManager
     {
-        private enum Kind { Fox, Dog, Crows, Seagulls, Tornado, Bees, Santa, BeachBall, Sprinklers, Thunder }
+        private enum Kind { Fox, Dog, Crows, Seagulls, Tornado, Bees, Santa, BeachBall, Sprinklers, Thunder, Ufo, Blackout, Cats }
 
         private class Scheduled
         {
@@ -48,6 +51,12 @@ namespace NoPasaranFC.Graphics3D
         private BeachBallFx _beachBall;
         private SprinklersFx _sprinklers;
         private ThunderFx _thunder;
+        private UfoFx _ufo;
+        private BlackoutFx _blackout;
+        private readonly List<FoxWalker> _cats = new List<FoxWalker>();
+        private int _catsPending;      // cats still waiting to wander on
+        private float _catSpawnTimer;  // stagger between cat arrivals
+        private float _catTimer = -1f; // countdown until the clowder leaves
         private SnowSystem _snow;
         private MatchEngine _engine; // set on first Update (bees/piano need it)
         private bool _foggy;
@@ -95,6 +104,14 @@ namespace NoPasaranFC.Graphics3D
             if (Roll(0.04)) Schedule(Kind.BeachBall);
             if (Roll(0.03)) Schedule(Kind.Sprinklers);
 
+            // Night-only eggs: a UFO flyover and a floodlight blackout
+            if (_environment?.IsNight == true)
+            {
+                if (Roll(0.03)) Schedule(Kind.Ufo);
+                if (Roll(0.02)) Schedule(Kind.Blackout);
+            }
+            if (Roll(0.03)) Schedule(Kind.Cats);
+
             // Match-long atmospheres
             _foggy = Roll(0.02); // "The Fog" (Carpenter vibe)
             int month = DateTime.Now.Month;
@@ -131,9 +148,12 @@ namespace NoPasaranFC.Graphics3D
                 case "santa": StartEvent(Kind.Santa); return "OK santa";
                 case "beachball": StartEvent(Kind.BeachBall); return "OK beachball";
                 case "sprinklers": StartEvent(Kind.Sprinklers); return "OK sprinklers";
+                case "ufo": StartEvent(Kind.Ufo); return "OK ufo";
+                case "blackout": StartEvent(Kind.Blackout); return "OK blackout";
+                case "cats": StartEvent(Kind.Cats); return "OK cats";
                 case "fog": if (_environment != null) { _foggy = true; _environment.SetFog(true); return "OK fog"; } return "ERR no environment";
                 case "snow": if (_environment != null) { _snowing = true; _environment.SetSnow(true); if (_snow == null && _device != null) _snow = new SnowSystem(_device); return "OK snow"; } return "ERR no environment";
-                default: return "ERR usage: easter <fox|dog|crows|seagulls|tornado|bees|santa|beachball|sprinklers|fog|snow>";
+                default: return "ERR usage: easter <fox|dog|crows|seagulls|tornado|bees|santa|beachball|sprinklers|ufo|blackout|cats|fog|snow>";
             }
         }
 
@@ -220,7 +240,43 @@ namespace NoPasaranFC.Graphics3D
                     _sprinklers = new SprinklersFx(_random);
                     AudioManager.Instance.PlaySoundEffect("sprinklers");
                     break;
+                case Kind.Ufo:
+                    _ufo = new UfoFx(_random);
+                    AudioManager.Instance.PlaySoundEffect("ufo");
+                    break;
+                case Kind.Blackout:
+                    if (_environment != null)
+                        _blackout = new BlackoutFx(_environment, _random);
+                    break;
+                case Kind.Cats:
+                    if (_device != null && _foxModel != null && _catsPending == 0 && _cats.Count == 0)
+                    {
+                        _catsPending = 4 + _random.Next(3); // a clowder of 4-6
+                        _catSpawnTimer = 0f;
+                        _catTimer = 65f; // they wander off ~a minute after arriving
+                    }
+                    break;
             }
+        }
+
+        /// <summary>
+        /// A cat: the fox model at cat size with a repainted moggy atlas
+        /// (gray, black, ginger or cream), same trick as the dog.
+        /// </summary>
+        private FoxWalker SpawnCat()
+        {
+            var palette = new[]
+            {
+                new Color(115, 115, 122), // gray
+                new Color(45, 45, 50),    // black
+                new Color(198, 128, 58),  // ginger
+                new Color(225, 218, 205), // cream
+            };
+            var baseTexture = _foxModel.Parts[0].Texture;
+            var texture = KitTextureFactory.GetKitTexture(_device, baseTexture,
+                palette[_random.Next(palette.Length)],
+                new Rectangle(0, 0, baseTexture.Width, baseTexture.Height));
+            return new FoxWalker(_foxModel, texture, scale: 0.004f);
         }
 
         public void Update(float dt, MatchEngine engine)
@@ -320,6 +376,40 @@ namespace NoPasaranFC.Graphics3D
                 if (_thunder.IsDone) _thunder = null;
             }
 
+            if (_ufo != null)
+            {
+                _ufo.Update(dt);
+                if (_ufo.IsDone) _ufo = null;
+            }
+
+            if (_blackout != null)
+            {
+                _blackout.Update(dt);
+                if (_blackout.IsDone) _blackout = null;
+            }
+
+            // Cat invasion: the cats trickle in one by one from the sidelines
+            // (staggered so they don't stack), mill about, then all wander off
+            if (_catsPending > 0)
+            {
+                _catSpawnTimer -= dt;
+                if (_catSpawnTimer <= 0f)
+                {
+                    _catsPending--;
+                    _catSpawnTimer = 1.5f + (float)_random.NextDouble() * 2f;
+                    var cat = SpawnCat();
+                    _cats.Add(cat);
+                    _walkers.Add(cat);
+                }
+            }
+            if (_catTimer > 0f)
+            {
+                _catTimer -= dt;
+                if (_catTimer <= 0f)
+                    foreach (var cat in _cats) cat.Leave();
+            }
+            _cats.RemoveAll(c => c.IsGone);
+
             _snow?.Update(dt, _cameraTarget(engine));
         }
 
@@ -338,6 +428,7 @@ namespace NoPasaranFC.Graphics3D
             _beachBall?.Draw(device, view, projection, environment);
             _sprinklers?.Draw(device, view, projection, environment);
             _thunder?.Draw(device, view, projection, environment);
+            _ufo?.Draw(device, view, projection, environment);
             _snow?.Draw(device, view, projection);
         }
     }

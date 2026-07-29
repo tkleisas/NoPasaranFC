@@ -71,6 +71,7 @@ namespace NoPasaranFC.Gameplay
             TryLoadSoundEffect("piano_crash", "Audio/SFX/piano_crash");
             TryLoadSoundEffect("sprinklers", "Audio/SFX/sprinklers");
             TryLoadSoundEffect("thunder", "Audio/SFX/thunder");
+            TryLoadSoundEffect("ufo", "Audio/SFX/ufo");
             
             // Try to load music (gracefully handle missing files)
             TryLoadSong("menu_music", "Audio/Music/empros_no_pasaran");
