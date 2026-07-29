@@ -143,6 +143,10 @@ namespace NoPasaranFC.Gameplay
         /// <summary>Lifetime kick counters from the utility brain (0 for FSM mode).</summary>
         public int ShotsAttempted => _utilityBrain?.ShotsAttempted ?? 0;
         public int PassesAttempted => _utilityBrain?.PassesAttempted ?? 0;
+        
+        /// <summary>The utility brain (null until its first update / in legacy FSM
+        /// mode). The match recorder reads LastDecision for the verbose log.</summary>
+        public UtilityAI.UtilityBrain Brain => _utilityBrain;
 
         public void ForceTransitionTo(AIStateType newState)
         {

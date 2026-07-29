@@ -66,6 +66,22 @@ namespace NoPasaranFC.Gameplay
         public MatchStats Stats { get; } = new MatchStats();
 
         /// <summary>
+        /// Observer hook for the match recorder (Gameplay/MatchRecorder), fired at
+        /// the same sites as the stats counters. Args: kind, team, player, velocity
+        /// (deliberate kicks), payload float (power/severity/red flag; 0 otherwise).
+        /// Kinds: kick|shot|pass|tackle|foul|card|offside|goal|corner|throw_in|
+        /// goal_kick|free_kick|penalty. Purely additive - the sim never reads it.
+        /// </summary>
+        public event Action<string, Team, Player, Vector2, float> MatchEvent;
+
+        private void EmitMatchEvent(string kind, Team team, Player player, Vector2 velocity, float power)
+            => MatchEvent?.Invoke(kind, team, player, velocity, power);
+
+        // Kick-kind labeling for the recorder: MarkShot/MarkPass set it, RegisterKick
+        // consumes it (everything else is a generic "kick" - dribble tap, set piece)
+        private string _pendingKickKind;
+
+        /// <summary>
         /// Last player to deliberately kick the ball (shot, pass, clearance, set
         /// piece, dribble tap). Used for goal attribution and celebrations -
         /// unlike "last touch", a defender blocking a shot doesn't steal the credit.
@@ -84,6 +100,11 @@ namespace NoPasaranFC.Gameplay
                 _lastKicker = player;
             }
             SetLastPlayerTouchedBall(player);
+
+            // Recorder: every deliberate kick funnels through here (shot, pass,
+            // dribble tap, set piece) with the velocity already applied
+            EmitMatchEvent(_pendingKickKind ?? "kick", player.Team, player, BallVelocity, BallVelocity.Length());
+            _pendingKickKind = null;
 
             // Offside snapshot: which of the kicker's teammates are offside NOW
             if (GameSettings.Instance.OffsidesEnabled && CurrentState == MatchState.Playing)
@@ -187,6 +208,7 @@ namespace NoPasaranFC.Gameplay
             ShowEventBanner("match.offside");
             Stats.For(toucher).Offsides++;
             Stats.For(toucher.Team).Offsides++;
+            EmitMatchEvent("offside", toucher.Team, toucher, Vector2.Zero, 0f);
             OffsideFlagRaised = true;
             _offsideFlagTimer = 2.5f;
             _offsideCandidates.Clear();
@@ -316,6 +338,7 @@ namespace NoPasaranFC.Gameplay
         {
             Stats.For(shooter).Shots++;
             _lastShotPlayer = shooter;
+            _pendingKickKind = "shot";
         }
 
         /// <summary>Marks a pass attempt (completion resolved on the next touch).</summary>
@@ -324,6 +347,7 @@ namespace NoPasaranFC.Gameplay
             Stats.For(passer).Passes++;
             _pendingPasser = passer;
             _pendingPassTimer = 3f;
+            _pendingKickKind = "pass";
         }
 
         /// <summary>Counts the last shot as on target (once, when it troubled the goal).</summary>
@@ -842,9 +866,10 @@ namespace NoPasaranFC.Gameplay
                 // Player can't kick the ball (moveDirection = Zero, isShootKeyDown = false)
                 UpdatePlayers(deltaTime, Vector2.Zero, false, false);
                 
-                // Keep ball stationary during countdown
+                // Keep ball stationary during countdown (an airborne ball -
+                // e.g. right after a goal - still settles to the ground)
                 BallVelocity = Vector2.Zero;
-                BallVerticalVelocity = 0f;
+                SettleAirborneBall(deltaTime);
                 
                 // Keep camera following ball
                 Camera.Follow(BallPosition, deltaTime);
@@ -878,6 +903,11 @@ namespace NoPasaranFC.Gameplay
                     GoalCelebration.Stop();
                     CelebrationManager.StopCelebration();
                 }
+
+                // Let the airborne ball settle (gravity + deadened bounce - it's
+                // in the net). Without this the ball keeps its goal-crossing height
+                // and hangs suspended in the live scene and in the replay payoff.
+                SettleAirborneBall(deltaTime);
 
                 GoalCelebration.Update(deltaTime);
                 CelebrationManager.Update(deltaTime);
@@ -1518,6 +1548,7 @@ namespace NoPasaranFC.Gameplay
             Fouls.Add(new FoulRecord(offender, victim, BallPosition, severity));
             Stats.For(offender).FoulsCommitted++;
             Stats.For(victim).FoulsSuffered++;
+            EmitMatchEvent("foul", offender.Team, offender, Vector2.Zero, severity);
             AudioManager.Instance.PlaySoundEffect("whistle_start", 0.7f); // single blow
             
             // Carding: harsh fouls book the offender; second yellow = red
@@ -1582,6 +1613,7 @@ namespace NoPasaranFC.Gameplay
             RestartDirection = new Vector2(attackSign, 0f);
             CurrentState = MatchState.PenaltyKick;
             Stats.For(victim.Team).Penalties++;
+            EmitMatchEvent("penalty", victim.Team, victim, Vector2.Zero, 0f);
             ShowEventBanner("match.penalty");
         }
         
@@ -1677,6 +1709,7 @@ namespace NoPasaranFC.Gameplay
             CardPlayer = offender;
             CardIsRed = isRed;
             CardPhase = RefCardPhase.Going;
+            EmitMatchEvent("card", offender.Team, offender, Vector2.Zero, isRed ? 1f : 0f);
         }
         
         /// <summary>Skip the card cutscene (player pressed the shoot key).</summary>
@@ -1695,6 +1728,7 @@ namespace NoPasaranFC.Gameplay
         {
             bool forHome = victim.Team == _homeTeam;
             Stats.For(victim.Team).FreeKicks++;
+            EmitMatchEvent("free_kick", victim.Team, victim, Vector2.Zero, 0f);
             PlaceBallForRestart(spot, forHome, MatchState.FreeKick);
             ShowEventBanner("match.freeKick");
             
@@ -2817,6 +2851,7 @@ namespace NoPasaranFC.Gameplay
                 _scoringTeam = RightDefendingTeam;
                 if (_scoringTeam == _homeTeam) HomeScore++; else AwayScore++;
                 RecordGoalStats();
+                EmitMatchEvent("goal", _scoringTeam, _lastKicker, Vector2.Zero, 0f);
                 _goalScored = true;
                 _goalCelebrationDelay = 0f;
 
@@ -2832,6 +2867,7 @@ namespace NoPasaranFC.Gameplay
                 _scoringTeam = LeftDefendingTeam;
                 if (_scoringTeam == _homeTeam) HomeScore++; else AwayScore++;
                 RecordGoalStats();
+                EmitMatchEvent("goal", _scoringTeam, _lastKicker, Vector2.Zero, 0f);
                 _goalScored = true;
                 _goalCelebrationDelay = 0f;
 
@@ -2888,6 +2924,7 @@ namespace NoPasaranFC.Gameplay
             float yPos = BallPosition.Y < StadiumMargin + FieldHeight / 2 ? 
                 StadiumMargin + 50 : StadiumMargin + FieldHeight - 50;
             
+            EmitMatchEvent("goal_kick", null, null, Vector2.Zero, 0f);
             PlaceBallForRestart(new Vector2(xPos, yPos), null, MatchState.GoalKick);
         }
         
@@ -2912,6 +2949,9 @@ namespace NoPasaranFC.Gameplay
                 if (isCornerKick)
                     Stats.For(restartTeam).Corners++;
             }
+            
+            EmitMatchEvent(isCornerKick ? "corner" : "goal_kick",
+                giveToHomeTeam ? _homeTeam : _awayTeam, null, Vector2.Zero, 0f);
             
             float xPos, yPos;
             
@@ -2949,6 +2989,7 @@ namespace NoPasaranFC.Gameplay
             }
 
             Stats.For(giveToHomeTeam ? _homeTeam : _awayTeam).ThrowIns++;
+            EmitMatchEvent("throw_in", giveToHomeTeam ? _homeTeam : _awayTeam, null, Vector2.Zero, 0f);
             PlaceBallForRestart(new Vector2(xPos, yPos), giveToHomeTeam, MatchState.ThrowIn);
         }
         
@@ -3246,6 +3287,31 @@ namespace NoPasaranFC.Gameplay
                 Vector2.Distance(p.FieldPosition, position) <= radius);
         }
         
+        /// <summary>
+        /// Gravity + deadened ground bounce for states where normal ball physics
+        /// are paused (goal celebration, countdown). Prevents an airborne ball
+        /// (e.g. a top-corner goal) from hanging suspended mid-air.
+        /// </summary>
+        internal void SettleAirborneBall(float deltaTime)
+        {
+            if (BallHeight <= 0f && BallVerticalVelocity <= 0f)
+            {
+                BallHeight = Math.Max(0f, BallHeight);
+                BallVerticalVelocity = 0f;
+                return;
+            }
+
+            BallVerticalVelocity -= Gravity * deltaTime;
+            BallHeight += BallVerticalVelocity * deltaTime;
+            if (BallHeight <= 0f)
+            {
+                BallHeight = 0f;
+                BallVerticalVelocity = Math.Abs(BallVerticalVelocity) > 50f
+                    ? -BallVerticalVelocity * 0.3f // deadened bounce - the ball is in the net
+                    : 0f;
+            }
+        }
+
         private void TriggerGoalCelebration()
         {
             CurrentState = MatchState.GoalCelebration;
@@ -3253,9 +3319,10 @@ namespace NoPasaranFC.Gameplay
             // Goal sound already played when goal was detected, just play crowd cheer
             AudioManager.Instance.PlaySoundEffect("crowd_cheer", 1.2f, allowRetrigger: false);
 
-            // Stop ball movement
+            // Stop horizontal ball movement (the ball rests in the net). Vertical
+            // physics keep running during the celebration so a ball that crossed
+            // the line in the air settles to the ground instead of hanging there
             BallVelocity = Vector2.Zero;
-            BallVerticalVelocity = 0f;
 
             // Start player celebration using the new CelebrationManager.
             // The team that BENEFITS from the goal celebrates - even for an own
@@ -3629,6 +3696,7 @@ namespace NoPasaranFC.Gameplay
                         BallVelocity = tackleDirection * 150f;
                         _lastPlayerTouchedBall = player;
                     }
+                    EmitMatchEvent("tackle", player.Team, player, Vector2.Zero, 1f);
                 }
                 else
                 {
@@ -3640,6 +3708,7 @@ namespace NoPasaranFC.Gameplay
                         BallVelocity = escapeDirection * 100f;
                         _lastPlayerTouchedBall = nearestOpponent;
                     }
+                    EmitMatchEvent("tackle", player.Team, player, Vector2.Zero, 0f);
                     
                     // ...and maybe a foul for the victim (free kick)
                     MaybeFoul(player, nearestOpponent, 0.3f, TackleFailFoulChance);

@@ -6,6 +6,22 @@ namespace NoPasaranFC.Gameplay.UtilityAI
 {
     public enum UtilityActionType { Idle, ChaseBall, HoldPosition, Dribble, Pass, Shoot, Clear, RunAfterPass }
     
+    /// <summary>
+    /// Last scored decision, written by the brain each evaluation and read by the
+    /// match recorder (verbose log): the chosen action plus up to two rejected
+    /// alternatives. Scores are pre-commitment-bonus (the bonus never flips the
+    /// winner). Allocation-light mutable struct - no strings until read.
+    /// </summary>
+    public struct DecisionSnapshot
+    {
+        public string Action;
+        public float Score;
+        public string Alt1Action;
+        public float Alt1Score;
+        public string Alt2Action;
+        public float Alt2Score;
+    }
+    
     /// <summary>The chosen action for a decision period.</summary>
     public class UtilityAction
     {
@@ -88,6 +104,31 @@ namespace NoPasaranFC.Gameplay.UtilityAI
         
         public string CurrentActionName => _current.Type.ToString();
         
+        // Recorder decision log (verbose setting): the most recent evaluation,
+        // kept until the next one (evals run on EvalInterval, reads may be faster)
+        private DecisionSnapshot _lastDecision;
+        
+        /// <summary>Most recent decision (chosen action + up to 2 runners-up).</summary>
+        public DecisionSnapshot LastDecision => _lastDecision;
+        
+        private void SetDecision(string action, float score,
+            string alt1 = null, float alt1Score = 0f, string alt2 = null, float alt2Score = 0f)
+        {
+            _lastDecision.Action = action;
+            _lastDecision.Score = score;
+            _lastDecision.Alt1Action = alt1;
+            _lastDecision.Alt1Score = alt1Score;
+            _lastDecision.Alt2Action = alt2;
+            _lastDecision.Alt2Score = alt2Score;
+        }
+        
+        /// <summary>Snapshots an unscored (heuristic) decision, then returns it.</summary>
+        private UtilityAction Snap(UtilityAction action)
+        {
+            SetDecision(action.Type.ToString(), action.Score);
+            return action;
+        }
+        
         // Lifetime action counters (harness metrics: kicks are instant actions
         // that never persist for a full frame, so state-name census misses them)
         public int ShotsAttempted { get; private set; }
@@ -151,12 +192,12 @@ namespace NoPasaranFC.Gameplay.UtilityAI
         {
             // Goalkeeper has a specialized, narrow action set
             if (player.Position == PlayerPosition.Goalkeeper)
-                return DecideGoalkeeper(player, ctx);
+                return Snap(DecideGoalkeeper(player, ctx));
 
             // Ball-stall watchdog: a stalled loose ball overrides everything -
             // this player is the nearest and MUST engage (kills idle dead zones)
             if (ctx.ForcedPounce && ctx.BallCarrier != player)
-                return new UtilityAction(UtilityActionType.ChaseBall, GetBallInterceptPoint(ctx), 999f);
+                return Snap(new UtilityAction(UtilityActionType.ChaseBall, GetBallInterceptPoint(ctx), 999f));
 
             UtilityAction best;
             
@@ -178,15 +219,15 @@ namespace NoPasaranFC.Gameplay.UtilityAI
                 // play the ball regardless of the hold/chase score balance
                 if (!ctx.KickoffTaken && player.TeamId == ctx.KickoffTeamId && ctx.ShouldChaseBall)
                 {
-                    return new UtilityAction(UtilityActionType.ChaseBall, GetBallInterceptPoint(ctx), 120f);
+                    return Snap(new UtilityAction(UtilityActionType.ChaseBall, GetBallInterceptPoint(ctx), 120f));
                 }
                 
                 // Kickoff encroachment rule: the non-kickoff team must not move
                 // toward the ball until the kickoff has been played
                 if (!ctx.KickoffTaken && player.TeamId != ctx.KickoffTeamId)
                 {
-                    return new UtilityAction(UtilityActionType.HoldPosition,
-                        GetTacticalPoint(player, ctx), 100f);
+                    return Snap(new UtilityAction(UtilityActionType.HoldPosition,
+                        GetTacticalPoint(player, ctx), 100f));
                 }
                 
                 // A stalled controlled carrier means the ball is effectively loose
@@ -197,7 +238,7 @@ namespace NoPasaranFC.Gameplay.UtilityAI
                 // Beats holding position; cancelled if we get the ball back sooner
                 if (_runAfterPassUntil > ctx.MatchTime && ctx.BallCarrier != player)
                 {
-                    return new UtilityAction(UtilityActionType.RunAfterPass, _runAfterPassTarget, 90f);
+                    return Snap(new UtilityAction(UtilityActionType.RunAfterPass, _runAfterPassTarget, 90f));
                 }
                 if (_runAfterPassUntil <= ctx.MatchTime)
                 {
@@ -239,10 +280,16 @@ namespace NoPasaranFC.Gameplay.UtilityAI
                 best = chaseScore > holdScore
                     ? new UtilityAction(UtilityActionType.ChaseBall, GetBallInterceptPoint(ctx), chaseScore)
                     : new UtilityAction(UtilityActionType.HoldPosition, holdPoint, holdScore);
+                
+                // Recorder snapshot: the loser is the only alternative in this branch
+                SetDecision(best.Type.ToString(), best.Score,
+                    best.Type == UtilityActionType.ChaseBall ? "HoldPosition" : "ChaseBall",
+                    best.Type == UtilityActionType.ChaseBall ? holdScore : chaseScore);
             }
             
             // Commitment bonus: staying with the current action beats switching
-            // to something only marginally better (kills boundary oscillation)
+            // to something only marginally better (kills boundary oscillation).
+            // (Never flips the winner, so the snapshot above stays accurate.)
             if (_current.Type == best.Type && best.Type != UtilityActionType.Idle)
                 best.Score += UtilityTuning.CommitmentBonus;
             
@@ -344,6 +391,21 @@ namespace NoPasaranFC.Gameplay.UtilityAI
             if (dribbleScore > bestScore) { bestScore = dribbleScore; type = UtilityActionType.Dribble; }
             if (clearScore > bestScore) { bestScore = clearScore; type = UtilityActionType.Clear; }
             if (passScore > bestScore) { bestScore = passScore; type = UtilityActionType.Pass; target = ctx.BestPassTarget; }
+            
+            // Recorder snapshot: the winner plus the two best rejected options
+            string n1 = null, n2 = null;
+            float s1 = 0f, s2 = 0f;
+            void Consider(UtilityActionType t, float s)
+            {
+                if (t == type) return;
+                if (n1 == null || s > s1) { n2 = n1; s2 = s1; n1 = t.ToString(); s1 = s; }
+                else if (n2 == null || s > s2) { n2 = t.ToString(); s2 = s; }
+            }
+            Consider(UtilityActionType.Shoot, shootScore);
+            Consider(UtilityActionType.Dribble, dribbleScore);
+            Consider(UtilityActionType.Clear, clearScore);
+            Consider(UtilityActionType.Pass, passScore);
+            SetDecision(type.ToString(), bestScore, n1, s1, n2, s2);
             
             return new UtilityAction(type, point, bestScore, target);
         }

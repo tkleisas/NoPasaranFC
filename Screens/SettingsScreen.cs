@@ -46,6 +46,8 @@ namespace NoPasaranFC.Screens
             BallControl,
             Offsides,
             AIDecisionInterval,
+            RecordMatches,
+            RecordVerbose,
             Language,
             Back
         }
@@ -78,6 +80,8 @@ namespace NoPasaranFC.Screens
             settings.Add(SettingType.BallControl);
             settings.Add(SettingType.Offsides);
             settings.Add(SettingType.AIDecisionInterval);
+            settings.Add(SettingType.RecordMatches);
+            settings.Add(SettingType.RecordVerbose);
             settings.Add(SettingType.Language);
             settings.Add(SettingType.Back);
 #else
@@ -105,6 +109,8 @@ namespace NoPasaranFC.Screens
             settings.Add(SettingType.BallControl);
             settings.Add(SettingType.Offsides);
             settings.Add(SettingType.AIDecisionInterval);
+            settings.Add(SettingType.RecordMatches);
+            settings.Add(SettingType.RecordVerbose);
             settings.Add(SettingType.Language);
             settings.Add(SettingType.Back);
 #endif
@@ -143,6 +149,8 @@ namespace NoPasaranFC.Screens
                     SettingType.BallControl => loc.Get("settings.ballControl"),
                     SettingType.Offsides => loc.Get("settings.offsides"),
                     SettingType.AIDecisionInterval => loc.Get("settings.aiDecisionInterval"),
+                    SettingType.RecordMatches => loc.Get("settings.recordMatches"),
+                    SettingType.RecordVerbose => loc.Get("settings.recordVerbose"),
                     SettingType.Language => loc.Get("settings.languageSelect"),
                     SettingType.Back => loc.Get("menu.back"),
                     _ => ""
@@ -387,6 +395,16 @@ namespace NoPasaranFC.Screens
                     _settings.OffsidesEnabled = !_settings.OffsidesEnabled;
                     _database.SaveSettings(_settings);
                     break;
+
+                case SettingType.RecordMatches:
+                    _settings.RecordMatches = !_settings.RecordMatches;
+                    _database.SaveSettings(_settings);
+                    break;
+
+                case SettingType.RecordVerbose:
+                    _settings.RecordVerbose = !_settings.RecordVerbose;
+                    _database.SaveSettings(_settings);
+                    break;
                     
                 case SettingType.Language:
                     _languageIndex = (_languageIndex + direction + _languages.Length) % _languages.Length;
@@ -469,6 +487,16 @@ namespace NoPasaranFC.Screens
 
                 case SettingType.Offsides:
                     _settings.OffsidesEnabled = !_settings.OffsidesEnabled;
+                    _database.SaveSettings(_settings);
+                    break;
+
+                case SettingType.RecordMatches:
+                    _settings.RecordMatches = !_settings.RecordMatches;
+                    _database.SaveSettings(_settings);
+                    break;
+
+                case SettingType.RecordVerbose:
+                    _settings.RecordVerbose = !_settings.RecordVerbose;
                     _database.SaveSettings(_settings);
                     break;
                     
@@ -584,6 +612,8 @@ namespace NoPasaranFC.Screens
                 SettingType.Venue => loc.Get("settings.venue." + (_settings.Venue ?? "Bahramis").ToLowerInvariant()),
                 SettingType.BallControl => loc.Get("settings.ballControl." + (_settings.BallControl ?? "Easy").ToLowerInvariant()),
                 SettingType.Offsides => _settings.OffsidesEnabled ? on : off,
+                SettingType.RecordMatches => _settings.RecordMatches ? on : off,
+                SettingType.RecordVerbose => _settings.RecordVerbose ? on : off,
                 SettingType.Language => _settings.Language.ToUpper(),
                 SettingType.Back => "",
                 _ => ""

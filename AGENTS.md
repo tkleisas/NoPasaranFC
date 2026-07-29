@@ -47,6 +47,24 @@ dotnet build NoPasaranFC.Android/NoPasaranFC.Android.csproj  # Android (needs an
   `TeamSeeder.DeterministicRosterSeed` (all null = original behavior).
   `--params` overrides `AIConstants`/`UtilityTuning` fields (mutable statics for this reason);
   `--nolog` skips the frame log (metrics only).
+- **Match recorder** (`Gameplay/MatchRecorder.cs`, opt-in via Settings `RecordMatches` /
+  `RecordVerbose`): records real gameplay to `recordings/match_<yyyyMMdd_HHmmss>.log.jsonl`
+  under the current working directory (project root via `dotnet run`). Same JSONL schema as
+  the harness log (`scenario:"live"`, frames sampled at 10 Hz — `fps:10`/`sampleHz:10` in the
+  meta line), so `Scripts/trajectory_plot.py` renders it unchanged. Adds `{"t":..,"ev":...}`
+  event lines (kicks, tackles, fouls, cards, offsides, goals, restarts — sourced from the
+  engine's `MatchEvent` hook at the stats sites) and, with `RecordVerbose`, a per-player
+  `"dec"` block (chosen utility action + score + top-2 rejected alternatives, from
+  `UtilityBrain.LastDecision`). Driven from `MatchScreen.Update`; the engine stays unaware.
+- **Anomaly analyzer**: `python3 Scripts/analyze_recording.py <log.jsonl> <outdir>
+  [--window 8] [--min-severity low|medium|high] [--max-diagrams 20]` — works on recordings
+  and harness logs (same JSONL schema; Playing frames only). Flags AI behavior anomalies:
+  `idle_near_ball` (AI player parked next to a loose ball 2s+), `oscillation` (≥4 AI-state
+  changes or direction reversals in a 2s window), `box_passivity` (attacking-box possession
+  >1.5s ending without a shot), `decision_regret` (chosen utility action tied with a rejected
+  alternative 1.5s+, needs `RecordVerbose` dec blocks). Writes `report.json` (machine-readable,
+  with thresholds) + one annotated trajectory PNG per anomaly (offender ringed at the anomaly
+  moment, box highlighted for box_passivity), reusing `trajectory_plot.py`'s renderer.
 - **AI parameter search**: `python3 Scripts/param_search.py` — (1+λ) evolution strategy over
   `Harness/search_space.json` (UtilityTuning knobs) using the harness as fitness evaluator
   (goals, shots, box entries, territory, oscillation); writes a full CSV log +

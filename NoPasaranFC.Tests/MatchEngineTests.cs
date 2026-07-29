@@ -55,6 +55,31 @@ public class MatchEngineTests
     }
 
     [Fact]
+    public void SettleAirborneBall_DropsAndSettles()
+    {
+        // Regression: a ball that crossed the goal line in the air used to keep
+        // its height through the celebration (velocities were simply zeroed) and
+        // hung suspended mid-air in the live scene and in the replay payoff.
+        var engine = TestHelper.MakeEngine();
+        engine.BallHeight = 150f;
+        engine.BallVerticalVelocity = 0f;
+
+        // Mid-flight: falling but not down yet
+        engine.SettleAirborneBall(0.2f);
+        Assert.InRange(engine.BallHeight, 1f, 149f);
+
+        // 3s total: grounded with no residual bounce (bounce is deadened - the
+        // ball is supposed to be resting in the net)
+        for (int i = 0; i < 168; i++) engine.SettleAirborneBall(1f / 60f);
+        Assert.Equal(0f, engine.BallHeight);
+        Assert.Equal(0f, engine.BallVerticalVelocity);
+
+        // Idempotent once settled
+        engine.SettleAirborneBall(1f / 60f);
+        Assert.Equal(0f, engine.BallHeight);
+    }
+
+    [Fact]
     public void BallOutOffDefender_GivesCornerKick()
     {
         var engine = TestHelper.MakeEngine();

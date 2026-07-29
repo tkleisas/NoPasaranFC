@@ -236,6 +236,23 @@ namespace NoPasaranFC.Database
                 SetSchemaVersion(connection, 12);
                 currentVersion = 12;
             }
+
+            if (currentVersion < 13)
+            {
+                // Migration 13: Add RecordMatches/RecordVerbose columns to Settings table
+                ApplyMigration13_AddMatchRecording(connection);
+                SetSchemaVersion(connection, 13);
+                currentVersion = 13;
+            }
+        }
+
+        private void ApplyMigration13_AddMatchRecording(SqliteConnection connection)
+        {
+            foreach (var col in new[]
+            {
+                "RecordMatches INTEGER DEFAULT 0", "RecordVerbose INTEGER DEFAULT 0"
+            })
+                AddColumnIfMissing(connection, "Settings", col);
         }
 
         private void ApplyMigration12_AddSeasonStats(SqliteConnection connection)
@@ -978,14 +995,16 @@ namespace NoPasaranFC.Database
                     Difficulty, MatchDurationMinutes, PlayerSpeedMultiplier,
                     ShowMinimap, ShowPlayerNames, ShowStamina,
                     CameraZoom, CameraSpeed, Language, MatchViewMode,
-                    CameraMode, TimeOfDay, Weather, AIDecisionInterval, Venue, BallControl, OffsidesEnabled
+                    CameraMode, TimeOfDay, Weather, AIDecisionInterval, Venue, BallControl, OffsidesEnabled,
+                    RecordMatches, RecordVerbose
                 ) VALUES (
                     1, @resWidth, @resHeight, @fullscreen, @vsync,
                     @masterVol, @musicVol, @sfxVol, @muteAll,
                     @difficulty, @matchDuration, @speedMulti,
                     @showMap, @showNames, @showStamina,
                     @camZoom, @camSpeed, @language, @matchViewMode,
-                    @cameraMode, @timeOfDay, @weather, @aiDecisionInterval, @venue, @ballControl, @offsides
+                    @cameraMode, @timeOfDay, @weather, @aiDecisionInterval, @venue, @ballControl, @offsides,
+                    @recordMatches, @recordVerbose
                 );
             ";
             
@@ -1014,6 +1033,8 @@ namespace NoPasaranFC.Database
             command.Parameters.AddWithValue("@venue", settings.Venue ?? "Bahramis");
             command.Parameters.AddWithValue("@ballControl", settings.BallControl ?? "Easy");
             command.Parameters.AddWithValue("@offsides", settings.OffsidesEnabled ? 1 : 0);
+            command.Parameters.AddWithValue("@recordMatches", settings.RecordMatches ? 1 : 0);
+            command.Parameters.AddWithValue("@recordVerbose", settings.RecordVerbose ? 1 : 0);
             
             command.ExecuteNonQuery();
         }
@@ -1055,7 +1076,9 @@ namespace NoPasaranFC.Database
                     AIDecisionInterval = reader.FieldCount > 22 && !reader.IsDBNull(22) ? reader.GetFloat(22) : 0.1f,
                     Venue = reader.FieldCount > 23 && !reader.IsDBNull(23) ? reader.GetString(23) : "Bahramis",
                     BallControl = reader.FieldCount > 24 && !reader.IsDBNull(24) ? reader.GetString(24) : "Easy",
-                    OffsidesEnabled = reader.FieldCount > 25 && !reader.IsDBNull(25) && reader.GetInt32(25) == 1
+                    OffsidesEnabled = reader.FieldCount > 25 && !reader.IsDBNull(25) && reader.GetInt32(25) == 1,
+                    RecordMatches = reader.FieldCount > 26 && !reader.IsDBNull(26) && reader.GetInt32(26) == 1,
+                    RecordVerbose = reader.FieldCount > 27 && !reader.IsDBNull(27) && reader.GetInt32(27) == 1
                 };
                 return settings;
             }

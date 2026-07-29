@@ -60,6 +60,12 @@ namespace NoPasaranFC.Models
         /// <summary>Offside rule enforcement with linesman flags (default off).</summary>
         public bool OffsidesEnabled { get; set; } = false; // "Bahramis" (default) or "Sperchogeia"
         
+        /// <summary>Opt-in: record live matches to harness-compatible JSONL (recordings/).</summary>
+        public bool RecordMatches { get; set; } = false;
+        
+        /// <summary>Include per-player AI decision detail (chosen action + runners-up) in recordings.</summary>
+        public bool RecordVerbose { get; set; } = false;
+        
         // Language settings
         public string Language { get; set; } = "el"; // "el" Greek (default) or "en" English
         

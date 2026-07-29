@@ -77,6 +77,10 @@ namespace NoPasaranFC.Screens
         // Optional 3D match view (null in default 2D mode)
         private Graphics3D.MatchRenderer3D _renderer3D;
         
+        // Opt-in match recorder (Settings: RecordMatches) - harness-compatible
+        // JSONL of the live match for retrospective AI-behavior analysis
+        private Gameplay.MatchRecorder _recorder;
+        
         // Goal replay (3D mode): live play is recorded and the goal build-up is
         // replayed over the post-goal countdown, skippable with the shoot key
         private MatchEngine.MatchState _previousMatchState = MatchEngine.MatchState.CameraInit;
@@ -112,6 +116,20 @@ namespace NoPasaranFC.Screens
             _graphicsInitialized = false;
             _minimap = new Minimap(Game1.ScreenWidth, Game1.ScreenHeight, 150, 100); // Minimap 150x100 pixels
             _content = content;
+            
+            // Opt-in match recording (read-only observer of the engine; a disk
+            // error must never stop a match from starting)
+            if (GameSettings.Instance.RecordMatches)
+            {
+                try
+                {
+                    _recorder = new Gameplay.MatchRecorder(_matchEngine, GameSettings.Instance.RecordVerbose);
+                }
+                catch (Exception)
+                {
+                    _recorder = null;
+                }
+            }
             
             // Switch to match music
             Gameplay.AudioManager.Instance.PlayMusic("match_music");
@@ -337,6 +355,9 @@ namespace NoPasaranFC.Screens
             _matchEngine.Update(gameTime, moveDirection, isShootKeyDown, isPassKeyDown);
 #endif
 
+            // Match recorder: sample frames at 10 Hz from real elapsed time
+            _recorder?.Update((float)gameTime.ElapsedGameTime.TotalSeconds);
+
             // Switch player (Space, X button, or touch X)
             if (_input.IsSwitchPlayerPressed() || touchUI.IsSwitchJustPressed)
             {
@@ -346,6 +367,7 @@ namespace NoPasaranFC.Screens
             // Back to menu (Escape, B button, or touch B)
             if (_input.IsBackPressed() || touchUI.IsBackJustPressed)
             {
+                StopRecorder();
                 IsFinished = true;
             }
             
@@ -702,8 +724,16 @@ namespace NoPasaranFC.Screens
             }
         }
         
+        /// <summary>Closes the match recording (end of match or back to menu).</summary>
+        private void StopRecorder()
+        {
+            _recorder?.Dispose();
+            _recorder = null;
+        }
+        
         private void EndMatch()
         {
+            StopRecorder();
             _match.HomeScore = _matchEngine.HomeScore;
             _match.AwayScore = _matchEngine.AwayScore;
             _match.IsPlayed = true;

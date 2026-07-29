@@ -6,6 +6,9 @@ Reads a harness JSONL log and renders the pitch, ball path (dashed, blue,
 blue, numbered circles at 1s ticks with a direction tick).
 
 Usage: python3 Scripts/trajectory_plot.py <out.log.jsonl> <out.png>
+
+The drawing core is exposed as render() so other tools (e.g.
+Scripts/analyze_recording.py) can produce consistent diagrams.
 """
 
 import json
@@ -28,29 +31,55 @@ GRASS_DARK = (30, 84, 40)
 
 
 def load_log(path):
+    """Parse a JSONL log. Returns (meta, frames, events).
+
+    Event lines ({"t":..,"ev":...}) come from the live match recorder.
+    An unparseable trailing line (hard kill mid-write) is skipped.
+    """
     meta = {}
     frames = []
+    events = []
     with open(path, encoding="utf-8-sig") as f:
         for line in f:
             line = line.strip()
             if not line:
                 continue
-            rec = json.loads(line)
+            try:
+                rec = json.loads(line)
+            except json.JSONDecodeError:
+                continue  # truncated write at EOF (or corrupted line)
             if rec.get("meta"):
                 meta = rec
-            else:
+            elif "players" in rec:
                 frames.append(rec)
-    return meta, frames
+            elif "ev" in rec:
+                events.append(rec)
+    return meta, frames, events
 
 
-def main():
-    if len(sys.argv) != 3:
-        print(__doc__)
-        return 1
+def load_fonts():
+    font = ImageFont.load_default()
+    try:
+        font = ImageFont.truetype("DejaVuSans.ttf", 13)
+        title_font = ImageFont.truetype("DejaVuSans-Bold.ttf", 18)
+        small_font = ImageFont.truetype("DejaVuSans.ttf", 10)
+    except OSError:
+        title_font = font
+        small_font = font
+    return {"font": font, "title": title_font, "small": small_font}
 
-    meta, frames = load_log(sys.argv[1])
-    out_path = sys.argv[2]
 
+def render(meta, frames, out_path, title=None, annotate=None):
+    """Render the pitch + trails diagram for the given frames.
+
+    meta:     meta line from the log (field size, margin, fps, teams).
+    frames:   frame records to draw (may be a time-window slice).
+    out_path: PNG destination.
+    title:    override the title line (default: scenario summary).
+    annotate: optional callback draw_fn(draw, P, scale, fonts) invoked after
+              trails/ball are drawn (so annotations sit on top), before the
+              title/legend. P(x, y) maps world px -> image px.
+    """
     margin = float(meta.get("stadiumMargin", 400))
     fw = float(meta.get("fieldWidth", 7665))
     fh = float(meta.get("fieldHeight", 4964))
@@ -71,14 +100,8 @@ def main():
 
     img = Image.new("RGB", (WIDTH, HEIGHT), (18, 18, 22))
     draw = ImageDraw.Draw(img)
-    font = ImageFont.load_default()
-    try:
-        font = ImageFont.truetype("DejaVuSans.ttf", 13)
-        title_font = ImageFont.truetype("DejaVuSans-Bold.ttf", 18)
-        small_font = ImageFont.truetype("DejaVuSans.ttf", 10)
-    except OSError:
-        title_font = font
-        small_font = font
+    fonts = load_fonts()
+    font, title_font, small_font = fonts["font"], fonts["title"], fonts["small"]
 
     # --- Pitch (mowed stripes, outline, center line, center circle, boxes) ---
     pitch_x0, pitch_y0 = P(margin, margin)
@@ -154,10 +177,15 @@ def main():
                          outline=BALL_COLOR, width=2)
             draw.text((px + 11, py - 7), f"{t:.0f}s", fill=(140, 170, 255), font=small_font)
 
+    # --- Custom annotation hook (anomaly rings, highlights, labels) ---
+    if annotate is not None:
+        annotate(draw, P, scale, fonts)
+
     # --- Title + legend ---
-    title = (f"Scenario: {meta.get('scenario', '?')}   seed={meta.get('seed', '?')}   "
-             f"duration={meta.get('seconds', '?')}s   "
-             f"{meta.get('homeTeam', 'home')} (red) vs {meta.get('awayTeam', 'away')} (blue)")
+    if title is None:
+        title = (f"Scenario: {meta.get('scenario', '?')}   seed={meta.get('seed', '?')}   "
+                 f"duration={meta.get('seconds', '?')}s   "
+                 f"{meta.get('homeTeam', 'home')} (red) vs {meta.get('awayTeam', 'away')} (blue)")
     draw.text((SIDE_MARGIN, 12), title, fill=(240, 240, 240), font=title_font)
 
     ly = 42
@@ -171,6 +199,17 @@ def main():
     draw.text((SIDE_MARGIN + 290, ly - 6), "ball (circles every 5s)", fill=(220, 220, 220), font=font)
 
     img.save(out_path)
+    return n_players
+
+
+def main():
+    if len(sys.argv) != 3:
+        print(__doc__)
+        return 1
+
+    meta, frames, _events = load_log(sys.argv[1])
+    out_path = sys.argv[2]
+    n_players = render(meta, frames, out_path)
     print(f"wrote {out_path} ({len(frames)} frames, {n_players} players)")
     return 0
 
