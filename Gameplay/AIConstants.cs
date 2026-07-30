@@ -174,6 +174,7 @@ namespace NoPasaranFC.Gameplay
         // Chaser selection (AIBehaviorManager.ShouldPlayerChaseBall)
         public static float ChaseSelectionLookahead = 0.35f;  // Seconds of ball travel considered when ranking chasers
         public static float ChaseStickinessFactor = 0.8f;     // Current chaser's distance discount (hysteresis)
+        public static float ChaseReassignMargin = 150f;       // Designated chaser keeps the role until a rival is this much closer (px)
         public static float SupportChaseDistance = 400f;      // 2nd-closest joins the chase within this range
         public static float BallControlRadius = 250f;         // Last toucher within this of the ball = ball carrier (covers dribble taps)
 

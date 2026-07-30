@@ -59,6 +59,13 @@ namespace NoPasaranFC.Gameplay.UtilityAI
         private float _runAfterPassUntil = -1f;
         private Vector2 _runAfterPassTarget;
         
+        // Post-kick commitment: for a beat after a deliberate kick (pass, shot
+        // or clearance), the kicker may not kick the ball he just kicked AGAIN
+        // (Pass/Shoot/Clear suppressed in carrier scoring; Dribble still
+        // collects it) - kills the Idle<->RunAfterPass flap when an under-hit
+        // pass dies next to him, and blocked-shot machine-gun loops
+        private float _postPassCommitUntil = -1f;
+        
         // Timed-run hysteresis: enter the deep run when the ball is clearly in
         // through-pass position, stay until play clearly breaks down
         private bool _inDeepRun;
@@ -164,6 +171,11 @@ namespace NoPasaranFC.Gameplay.UtilityAI
             }
             _wasCarrier = context.BallCarrier == player;
 
+            // Post-pass commitment ends for good once anyone else controls the
+            // ball (the pass was received, intercepted, or genuinely came back)
+            if (_postPassCommitUntil > 0f && context.BallCarrier != null && context.BallCarrier != player)
+                _postPassCommitUntil = -1f;
+
             // Re-evaluate on tick OR when the current action became impossible
             if (_evalTimer <= 0f || !IsActionViable(player, context, _current))
             {
@@ -182,6 +194,14 @@ namespace NoPasaranFC.Gameplay.UtilityAI
         private bool IsBallEffectivelyLoose(AIContext ctx)
         {
             return ctx.BallCarrier == null || _carrierStallTimer > 3f;
+        }
+        
+        /// <summary>True during the post-pass commitment window while nobody
+        /// else has controlled the ball since the kick (latched off in Update).</summary>
+        private bool InPostPassCommit(Player player, AIContext ctx)
+        {
+            return _postPassCommitUntil > ctx.MatchTime &&
+                (ctx.BallCarrier == null || ctx.BallCarrier == player);
         }
         
         // ------------------------------------------------------------------
@@ -277,7 +297,21 @@ namespace NoPasaranFC.Gameplay.UtilityAI
                 // Holding is more attractive when far from the ball or a teammate has it
                 if (ctx.TeammateHasBall(player)) holdScore += 10f;
                 
-                best = chaseScore > holdScore
+                // Boundary hysteresis on a LOOSE ball: switching INTO ChaseBall
+                // must beat hold by a margin; a current chaser only drops back
+                // below hold - margin. Score noise at the knife-edge can't flap
+                // the boundary (the post-hoc CommitmentBonus below never gates
+                // the switch itself). Against a clean carrier the comparison
+                // stays raw - pressing must stay eager.
+                bool chaseWins;
+                if (ctx.BallCarrier == null && _current.Type == UtilityActionType.ChaseBall)
+                    chaseWins = chaseScore > holdScore - UtilityTuning.ChaseExitMargin;
+                else if (ctx.BallCarrier == null && _current.Type == UtilityActionType.HoldPosition)
+                    chaseWins = chaseScore > holdScore + UtilityTuning.ChaseEnterMargin;
+                else
+                    chaseWins = chaseScore > holdScore;
+                
+                best = chaseWins
                     ? new UtilityAction(UtilityActionType.ChaseBall, GetBallInterceptPoint(ctx), chaseScore)
                     : new UtilityAction(UtilityActionType.HoldPosition, holdPoint, holdScore);
                 
@@ -381,6 +415,19 @@ namespace NoPasaranFC.Gameplay.UtilityAI
             // Recent dribble failures: this player keeps losing it -> pass first
             if (ctx.MatchTime < _dribbleFailUntil)
                 dribbleScore *= 1f - 0.25f * _dribbleFailures; // x0.75 / x0.5 / x0.25
+            
+            // Post-pass commitment: the ball I just kicked is not mine to kick
+            // AGAIN for a beat (kills the Pass<->Idle flap when an under-hit
+            // pass dies next to the passer) - but Dribble still collects it,
+            // so the ball never goes dead. ForcedPounce still overrides (it is
+            // checked before carrier scoring), and the window latches off in
+            // Update the moment anyone else controls the ball.
+            if (InPostPassCommit(player, ctx))
+            {
+                shootScore = 0f;
+                clearScore = 0f;
+                passScore = float.MinValue;
+            }
             
             // Pick the best (shoot can actually win now)
             float bestScore = shootScore;
@@ -700,14 +747,25 @@ namespace NoPasaranFC.Gameplay.UtilityAI
                         // Give-and-go: run into space after releasing, offering
                         // the return pass. Target: deep, offset from the pass lane
                         _runAfterPassUntil = ctx.MatchTime + 5f;
+                        _postPassCommitUntil = ctx.MatchTime + UtilityTuning.PostPassCommitSeconds;
                         float side = player.FieldPosition.Y < action.TargetPlayer.FieldPosition.Y ? -1f : 1f;
                         _runAfterPassTarget = new Vector2(
                             MathHelper.Lerp(player.FieldPosition.X, ctx.OpponentGoalCenter.X, 0.55f),
                             player.FieldPosition.Y + side * 500f);
+                        
+                        // The kick is instant: decide the follow-up NOW instead of
+                        // parking in Idle for a tick (the Idle gap read as state
+                        // flapping). The commit above bans an instant re-kick.
+                        player.Velocity = Vector2.Zero;
+                        _current = Decide(player, ctx);
+                        _evalTimer = EvalInterval;
                     }
-                    player.Velocity = Vector2.Zero;
-                    // Pass is instant: fall back to re-evaluating next tick
-                    _current = new UtilityAction(UtilityActionType.Idle, player.FieldPosition, 0f);
+                    else
+                    {
+                        player.Velocity = Vector2.Zero;
+                        // Kick became impossible: fall back to re-evaluating next tick
+                        _current = new UtilityAction(UtilityActionType.Idle, player.FieldPosition, 0f);
+                    }
                     break;
                 
                 case UtilityActionType.Shoot:
@@ -716,9 +774,19 @@ namespace NoPasaranFC.Gameplay.UtilityAI
                         var (aim, power) = GetShotAim(player, ctx);
                         _shootBall(player, aim, power);
                         ShotsAttempted++;
+                        // Same commitment as after a pass: no instant re-blast of
+                        // the rebound (kills blocked-shot machine-gun loops), then
+                        // decide the follow-up now instead of parking in Idle
+                        _postPassCommitUntil = ctx.MatchTime + UtilityTuning.PostPassCommitSeconds;
+                        player.Velocity = Vector2.Zero;
+                        _current = Decide(player, ctx);
+                        _evalTimer = EvalInterval;
                     }
-                    player.Velocity = Vector2.Zero;
-                    _current = new UtilityAction(UtilityActionType.Idle, player.FieldPosition, 0f);
+                    else
+                    {
+                        player.Velocity = Vector2.Zero;
+                        _current = new UtilityAction(UtilityActionType.Idle, player.FieldPosition, 0f);
+                    }
                     break;
                 
                 case UtilityActionType.Clear:
@@ -729,9 +797,16 @@ namespace NoPasaranFC.Gameplay.UtilityAI
                             ctx.BallPosition.Y + (float)(_random.NextDouble() - 0.5) * 800f);
                         _shootBall(player, clearTarget, 1.0f);
                         ClearsAttempted++;
+                        _postPassCommitUntil = ctx.MatchTime + UtilityTuning.PostPassCommitSeconds;
+                        player.Velocity = Vector2.Zero;
+                        _current = Decide(player, ctx);
+                        _evalTimer = EvalInterval;
                     }
-                    player.Velocity = Vector2.Zero;
-                    _current = new UtilityAction(UtilityActionType.Idle, player.FieldPosition, 0f);
+                    else
+                    {
+                        player.Velocity = Vector2.Zero;
+                        _current = new UtilityAction(UtilityActionType.Idle, player.FieldPosition, 0f);
+                    }
                     break;
                 
                 default:

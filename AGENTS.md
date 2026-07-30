@@ -109,6 +109,11 @@ dotnet build NoPasaranFC.Android/NoPasaranFC.Android.csproj  # Android (needs an
 - **Animations**: KayKit clips on all humanoids (same skeleton). State→clip mapping in `PlayerAnimator`.
 - **Anti-oscillation**: AI uses target inertia + start/stop hysteresis (`AIConstants`), animations use
   hysteresis (`PlayerAnimator`). Don't reintroduce raw per-frame target/state flipping.
+  Utility-brain specifics: post-kick commitment window (`UtilityTuning.PostPassCommitSeconds` —
+  the kicker can't immediately re-select Pass/Shoot/Clear), chase/hold hysteresis on loose balls
+  (`ChaseEnterMargin`/`ChaseExitMargin`), stable designated chaser per team
+  (`AIConstants.ChaseReassignMargin`). Verify behavior changes with the match recorder +
+  `Scripts/analyze_recording.py` before/after.
 
 - **Player/kit editor** (desktop only): `dotnet run --project NoPasaranFC.csproj -- --editor` opens
   straight into the editor (both championships → teams → roster/kit). Edits players (stats, gender,

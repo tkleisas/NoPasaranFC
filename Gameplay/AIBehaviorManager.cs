@@ -14,6 +14,13 @@ namespace NoPasaranFC.Gameplay
     {
         private readonly MatchEngine _engine;
 
+        // Designated-chaser memory (per team): the primary chaser keeps the role
+        // until a rival is CLEARLY closer to the ball's predicted position, so
+        // the designation doesn't hot-potato between equidistant teammates (the
+        // resulting ShouldChaseBall flip flapped ChaseBall<->HoldPosition)
+        private readonly Dictionary<int, Player> _designatedChaser = new Dictionary<int, Player>();
+        private int _lastChaseCarrierTeamId = -1;
+
         public AIBehaviorManager(MatchEngine engine)
         {
             _engine = engine;
@@ -431,6 +438,16 @@ namespace NoPasaranFC.Gameplay
 
             var carrier = GetBallCarrier();
 
+            // Possession change (to a different team) invalidates the chase
+            // designations; loose-ball stretches keep them (that is exactly
+            // when the chaser role must not hot-potato)
+            if (carrier != null)
+            {
+                if (_lastChaseCarrierTeamId != -1 && carrier.TeamId != _lastChaseCarrierTeamId)
+                    _designatedChaser.Clear();
+                _lastChaseCarrierTeamId = carrier.TeamId;
+            }
+
             // The carrier always collects his own tapped-ahead ball, regardless of
             // role-based chase rules (e.g. a defender dribbling in the opponent half)
             if (carrier == player)
@@ -465,14 +482,39 @@ namespace NoPasaranFC.Gameplay
                 .OrderBy(x => x.Distance)
                 .ToList();
 
-            int playerRank = teamDistances.FindIndex(x => x.Player == player);
+            // Stable designation: the remembered primary chaser keeps rank 0
+            // until a rival is clearly closer (margin) — equidistant teammates
+            // don't trade the role back and forth frame to frame
+            Player designated = null;
+            if (_designatedChaser.TryGetValue(team.Id, out var remembered) &&
+                !remembered.IsControlled && activeTeammates.Contains(remembered))
+            {
+                designated = remembered;
+            }
+            Player closest = teamDistances.First(x => !x.Player.IsControlled).Player;
+            if (designated != null && designated != closest)
+            {
+                float designatedDistance = teamDistances.First(x => x.Player == designated).Distance;
+                if (designatedDistance > teamDistances.First(x => x.Player == closest).Distance
+                    + AIConstants.ChaseReassignMargin)
+                {
+                    designated = null; // clearly beaten: reassign below
+                }
+            }
+            if (designated == null)
+            {
+                designated = closest;
+                _designatedChaser[team.Id] = designated;
+            }
 
-            // Primary chaser: closest player always chases
-            if (playerRank == 0)
+            // Primary chaser: the designated player always chases
+            if (player == designated)
                 return true;
 
-            // Support chaser: 2nd closest chases if they're close enough to the ball
-            if (playerRank == 1 && teamDistances[1].Distance < AIConstants.SupportChaseDistance)
+            // Support chaser: closest teammate after the designated one joins
+            // the chase if they're close enough to the ball
+            var support = teamDistances.First(x => x.Player != designated);
+            if (player == support.Player && support.Distance < AIConstants.SupportChaseDistance)
                 return true;
 
             return false;

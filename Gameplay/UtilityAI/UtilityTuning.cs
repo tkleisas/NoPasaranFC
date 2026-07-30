@@ -43,6 +43,9 @@ namespace NoPasaranFC.Gameplay.UtilityAI
         public static float PounceBonus = 25f;          // loose ball in the attacking third
         public static float HoldBaseScore = 47.3f;
         public static float CommitmentBonus = 30f;      // anti-flapping stickiness
+        public static float ChaseEnterMargin = 6f;      // switching INTO ChaseBall must beat hold by this
+        public static float ChaseExitMargin = 4f;       // a chaser only drops out below hold - this
+        public static float PostPassCommitSeconds = 1.5f; // after a deliberate kick: his own kick can't be re-kicked (dribble-collect only)
         
         // Attacking shape (GetTacticalPoint)
         public static float AttackDepthDefender = 0.46f;   // fraction of the way to the opponent goal
