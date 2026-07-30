@@ -37,8 +37,8 @@ public class CardCutsceneTests
         Assert.Equal(MatchEngine.RefCardPhase.Showing, engine.CardPhase);
         Assert.NotNull(engine.LastCardShown);
         Assert.True(engine.LastCardShown.Value.IsRed);
-        Assert.True(Vector2.Distance(engine.RefereePosition, offender.FieldPosition) < 60f,
-            "ref should be next to the offender");
+        Assert.True(Vector2.Distance(engine.RefereePosition, offender.FieldPosition) < 200f,
+            "ref should be at the offender (160px standoff ≈ the renderer's 2m, was 40px)");
     }
 
     [Fact]

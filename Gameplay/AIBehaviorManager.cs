@@ -292,6 +292,7 @@ namespace NoPasaranFC.Gameplay
 
         public void AIPassBall(Player passer, Vector2 targetPosition, float power)
         {
+            if (_engine.GoalScoredPending) return; // ball is dead (goal delay)
             if (_engine.BallHeight >= 100f) return;
             _engine.MarkPass(passer);
 
@@ -361,6 +362,7 @@ namespace NoPasaranFC.Gameplay
 
         public void AIShootBall(Player shooter, Vector2 targetPosition, float power)
         {
+            if (_engine.GoalScoredPending) return; // ball is dead (goal delay)
             if (_engine.BallHeight >= 100f) return;
             _engine.MarkShot(shooter);
 
@@ -484,7 +486,17 @@ namespace NoPasaranFC.Gameplay
 
             // Stable designation: the remembered primary chaser keeps rank 0
             // until a rival is clearly closer (margin) — equidistant teammates
-            // don't trade the role back and forth frame to frame
+            // don't trade the role back and forth frame to frame. During a
+            // scramble the margin grows: ricochets reshuffle distances every
+            // bounce, and the contestor role must not hot-potato with them
+            bool scrambledNow = (carrier == null
+                    || _engine.BallVelocity.Length() > UtilityAI.UtilityTuning.ScrambleMinBallSpeed)
+                && IsCrowdNearBall();
+            if (scrambledNow)
+                _scrambleUntil = (float)_engine.MatchTime + UtilityAI.UtilityTuning.ScramblePersistSeconds;
+            bool scrambled = (float)_engine.MatchTime < _scrambleUntil;
+            float reassignMargin = scrambled
+                ? AIConstants.ScrambleReassignMargin : AIConstants.ChaseReassignMargin;
             Player designated = null;
             if (_designatedChaser.TryGetValue(team.Id, out var remembered) &&
                 !remembered.IsControlled && activeTeammates.Contains(remembered))
@@ -496,7 +508,7 @@ namespace NoPasaranFC.Gameplay
             {
                 float designatedDistance = teamDistances.First(x => x.Player == designated).Distance;
                 if (designatedDistance > teamDistances.First(x => x.Player == closest).Distance
-                    + AIConstants.ChaseReassignMargin)
+                    + reassignMargin)
                 {
                     designated = null; // clearly beaten: reassign below
                 }
@@ -511,6 +523,11 @@ namespace NoPasaranFC.Gameplay
             if (player == designated)
                 return true;
 
+            // Scramble discipline: ONE contestor per team - no support join
+            // while the ball pinballs in a crowd
+            if (scrambled)
+                return false;
+
             // Support chaser: closest teammate after the designated one joins
             // the chase if they're close enough to the ball
             var support = teamDistances.First(x => x.Player != designated);
@@ -518,6 +535,32 @@ namespace NoPasaranFC.Gameplay
                 return true;
 
             return false;
+        }
+        
+        // Scramble window tracking (per engine): a crowd around a loose/fast
+        // ball sets it, and it persists briefly (UtilityTuning.ScramblePersistSeconds)
+        // so discipline doesn't flicker per ricochet
+        private float _scrambleUntil = -1f;
+        
+        /// <summary>Crowd around the ball (goal-mouth pinball). Mirrors
+        /// UtilityBrain.IsCrowdNearBall - same thresholds
+        /// (UtilityTuning.ScrambleRadius/ScramblePlayers).</summary>
+        private bool IsCrowdNearBall()
+        {
+            int near = 0;
+            foreach (var team in new[] { _engine.HomeTeam, _engine.AwayTeam })
+            {
+                foreach (var p in team.Players)
+                {
+                    if (p.IsStarting && !p.IsKnockedDown &&
+                        Vector2.Distance(p.FieldPosition, _engine.BallPosition)
+                            < UtilityAI.UtilityTuning.ScrambleRadius)
+                    {
+                        near++;
+                    }
+                }
+            }
+            return near >= UtilityAI.UtilityTuning.ScramblePlayers;
         }
 
         private static bool IsChasingBall(Player player)

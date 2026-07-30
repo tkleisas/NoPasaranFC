@@ -60,6 +60,16 @@ namespace NoPasaranFC.Gameplay
             // Set initial state
             _currentState = _states[AIStateType.Idle];
             _currentState.Enter(_player, _context);
+            
+            // Utility brain: create eagerly so its lifetime kick counters can be
+            // carried over when kickoff resets recreate the controller (the
+            // callbacks are late-bound fields, so pre-registration is safe)
+            if (UseUtilityBrain)
+            {
+                _utilityBrain = new UtilityAI.UtilityBrain(_playerRandom,
+                    (p, target, power) => _passCallback?.Invoke(target, power),
+                    (p, target, power) => _shootCallback?.Invoke(target, power));
+            }
         }
         
         private AIState CreatePositioningStateForPlayer(Player player)

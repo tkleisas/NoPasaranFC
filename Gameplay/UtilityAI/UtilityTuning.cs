@@ -33,6 +33,18 @@ namespace NoPasaranFC.Gameplay.UtilityAI
         public static float DribbleBaseScore = 33.5f;
         public static float DribbleLaneBonus = 27f;     // per missing lane blocker (0-3)
         public static float DribbleFreeSpaceBonus = 10.6f; // no pressure within 400px
+        public static float DribbleEnterMargin = 6f;   // marginal touch: entering Dribble must clearly beat chase/hold
+        public static float DribbleCommitSeconds = 1.0f; // once dribbling: glue/contest flicker tolerated before dropping out
+        public static float DribbleEnterMaxBallSpeed = 900f; // ball faster than this: a touch is a deflection, not a reception
+        
+        // Scramble discipline (goal-mouth pinball): a loose ball with this many
+        // players this close is a scramble - only the designated contestor per
+        // team pounces, teammates hold anticipation positions
+        public static float ScrambleRadius = 300f;      // players within this of the ball count as crowd
+        public static int ScramblePlayers = 4;          // crowd size that makes a loose ball a scramble
+        public static float ScrambleMinBallSpeed = 300f; // above this the ball is ricocheting, not controlled
+        public static float ScramblePersistSeconds = 1.0f; // scramble window persistence (no per-bounce flicker)
+        public static float ContestCommitSeconds = 0.75f; // contestor stays on the ball through ricochets
         
         // Clearing
         public static float ClearScore = 47f;           // own third + pressure

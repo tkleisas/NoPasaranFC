@@ -55,6 +55,65 @@ public class MatchEngineTests
     }
 
     [Fact]
+    public void GoalPending_BallDriftsInNet_DoesNotTriggerGoalKick()
+    {
+        var engine = TestHelper.MakeEngine();
+        TestHelper.ReachPlaying(engine);
+
+        var events = new List<string>();
+        engine.MatchEvent += (kind, team, player, velocity, payload) => events.Add(kind);
+
+        // Ball crosses the right goal line: goal is pending during the 0.5s delay
+        float goalX = MatchEngine.StadiumMargin + MatchEngine.FieldWidth;
+        float centerY = MatchEngine.StadiumMargin + MatchEngine.FieldHeight / 2f;
+        engine.BallPosition = new Vector2(goalX + 30f, centerY);
+        engine.BallVelocity = Vector2.Zero;
+        events.Clear();
+        TestHelper.Step(engine, 0.1f); // goal registers, the delay window starts
+        Assert.Contains("goal", events);
+        Assert.Equal(1, engine.HomeScore);
+
+        // A net ricochet pushes the ball further back, outside the goal width.
+        // The out-of-bounds goal-line handler used to fire here and hijack the
+        // goal into a goal kick (ΕΠΑΝΑΦΟΡΑ banner) before the celebration.
+        engine.BallPosition = new Vector2(goalX + 300f, centerY + 500f);
+        engine.BallVelocity = new Vector2(200f, 100f);
+        TestHelper.Step(engine, 0.3f);
+
+        Assert.DoesNotContain(events, k => k is "goal_kick" or "corner");
+        Assert.NotEqual(MatchEngine.MatchState.GoalKick, engine.CurrentState);
+        Assert.NotEqual(MatchEngine.MatchState.CornerKick, engine.CurrentState);
+    }
+
+    [Fact]
+    public void GoalScoredPending_NoAIKicksDuringGoalDelay()
+    {
+        var engine = TestHelper.MakeEngine();
+        TestHelper.ReachPlaying(engine);
+
+        var events = new List<string>();
+        engine.MatchEvent += (kind, team, player, velocity, payload) => events.Add(kind);
+
+        // Ball crosses the right goal line and dies in the net, right next to the
+        // away GK. During the 0.5s goal-pending delay the state is still Playing,
+        // and the GK's sweeper/distribution logic used to grab the ball and punt
+        // it out of the net before the celebration started.
+        var gk = engine.AwayTeam.Players.First(p => p.Position == PlayerPosition.Goalkeeper);
+        float goalX = MatchEngine.StadiumMargin + MatchEngine.FieldWidth;
+        float centerY = MatchEngine.StadiumMargin + MatchEngine.FieldHeight / 2f;
+        engine.BallPosition = new Vector2(goalX + 30f, centerY);
+        engine.BallVelocity = Vector2.Zero;
+        gk.FieldPosition = new Vector2(goalX + 60f, centerY);
+        gk.Velocity = Vector2.Zero;
+
+        events.Clear();
+        TestHelper.Step(engine, 0.45f); // stay inside the 0.5s goal-pending window
+
+        Assert.Contains("goal", events);
+        Assert.DoesNotContain(events, k => k is "pass" or "shot" or "kick");
+    }
+
+    [Fact]
     public void Goal_EmitsKickoffEvent_ForConcedingTeam()
     {
         var engine = TestHelper.MakeEngine();

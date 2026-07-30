@@ -434,6 +434,10 @@ namespace NoPasaranFC.Gameplay
         private float _shootButtonHoldTime = 0f;
         private bool _wasShootButtonDown = false;
         private bool _goalScored = false;
+
+        /// <summary>A goal has registered and the celebration delay is running
+        /// (state still Playing, ball dead in the net). AI must not play the ball.</summary>
+        public bool GoalScoredPending => _goalScored;
         private Team _scoringTeam; // Team that benefits from the current goal (set at detection)
 
         /// <summary>Team that celebrated the most recent goal (test/debug introspection).</summary>
@@ -770,12 +774,16 @@ namespace NoPasaranFC.Gameplay
             // Initialize AI controllers for all starting players
             foreach (var player in startingPlayers)
             {
+                // Kickoff resets recreate the controllers (fresh decision state);
+                // the lifetime kick counters move over to the new brain
+                var oldBrain = (player.AIController as AIController)?.Brain;
                 player.AIController = new AIController(player, this);
                 
                 // Register callbacks for AI actions
                 var aiController = player.AIController as AIController;
                 if (aiController != null)
                 {
+                    aiController.Brain?.CarryCountersFrom(oldBrain);
                     var capturedPlayer = player;
                     aiController.RegisterPassCallback((targetPosition, power) => _aiBehaviorManager.AIPassBall(capturedPlayer, targetPosition, power));
                     aiController.RegisterShootCallback((targetPosition, power) => _aiBehaviorManager.AIShootBall(capturedPlayer, targetPosition, power));
@@ -1530,6 +1538,12 @@ namespace NoPasaranFC.Gameplay
         
         private CardEvent _pendingCard;
         private const float RefCardWalkSpeed = 550f;
+        // Renderer-side MatchOfficials stops the ref ~2m (146px) from the booked
+        // player, so the arrival check must accept that standoff; the timeout
+        // (distance/walk-speed + margin) guarantees the cutscene completes even
+        // if positions never converge (un-stallable without player input)
+        private const float RefCardArriveDistance = 160f;
+        private float _cardGoingTimer;
         
         private const float TackleFailFoulChance = 0.35f;
         private const float CarrierKnockdownFoulChance = 0.60f;
@@ -1710,6 +1724,9 @@ namespace NoPasaranFC.Gameplay
             CardPlayer = offender;
             CardIsRed = isRed;
             CardPhase = RefCardPhase.Going;
+            // Walk-time budget + margin: forces Showing if the ref never arrives
+            // (renderer standoff, clamping, NaN guards) so set pieces can't stall
+            _cardGoingTimer = Vector2.Distance(RefereePosition, offender.FieldPosition) / 400f + 3f;
             EmitMatchEvent("card", offender.Team, offender, Vector2.Zero, isRed ? 1f : 0f);
         }
         
@@ -2111,7 +2128,7 @@ namespace NoPasaranFC.Gameplay
                 // Don't kick during countdown or when in Passing/Shooting state (those handle their own kicks)
                 string currentAIState = aiController.GetCurrentStateName();
                 bool isExecutingKick = currentAIState == "Passing" || currentAIState == "Shooting";
-                if (!aiGlued && !isExecutingKick && CurrentState == MatchState.Playing && baseVelocity.LengthSquared() > 0.01f && BallHeight < 100f)
+                if (!aiGlued && !isExecutingKick && !_goalScored && CurrentState == MatchState.Playing && baseVelocity.LengthSquared() > 0.01f && BallHeight < 100f)
                 {
                     float distToBall = Vector2.Distance(player.FieldPosition, BallPosition);
                     if (distToBall < BallShootDistance * 0.75f)
@@ -2240,8 +2257,11 @@ namespace NoPasaranFC.Gameplay
             {
                 Vector2 toPlayer = CardPlayer.FieldPosition - RefereePosition;
                 float dist = toPlayer.Length();
-                if (dist < 40f)
+                _cardGoingTimer -= deltaTime;
+                if (dist < RefCardArriveDistance || _cardGoingTimer <= 0f)
                 {
+                    // Arrived (160px ≈ the renderer's 2m standoff) or walk budget
+                    // exhausted - show the card either way, never stall
                     CardPhase = RefCardPhase.Showing;
                     LastCardShown = _pendingCard;
                     _refereeVelocity = Vector2.Zero;
@@ -2878,6 +2898,11 @@ namespace NoPasaranFC.Gameplay
             }
             
             // === BALL OUT OF BOUNDS DETECTION ===
+            // A goal is pending (ball nestling in the net during the celebration
+            // delay): the ball is dead - no restarts. Without this a net ricochet
+            // drifting behind the line hijacked the goal into a goal kick/corner.
+            if (_goalScored) return;
+
             // Ball went over the crossbar (over goal posts)
             if ((BallPosition.X < leftGoalLine || BallPosition.X > rightGoalLine) &&
                 BallPosition.Y >= goalTop && BallPosition.Y <= goalBottom &&

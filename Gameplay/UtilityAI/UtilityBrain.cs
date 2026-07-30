@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Microsoft.Xna.Framework;
 using NoPasaranFC.Models;
 
@@ -65,6 +66,20 @@ namespace NoPasaranFC.Gameplay.UtilityAI
         // collects it) - kills the Idle<->RunAfterPass flap when an under-hit
         // pass dies next to him, and blocked-shot machine-gun loops
         private float _postPassCommitUntil = -1f;
+        
+        // Dribble commitment: once collecting/dribbling, stay committed through
+        // glue/contest flicker (possession blips across the carrier threshold)
+        // until someone else clearly takes the ball - kills ChaseBall<->Dribble
+        // flapping at the collection point
+        private float _dribbleCommitUntil = -1f;
+        
+        // Contest commitment: once contesting a loose ball in a scramble, stay
+        // on it through ricochets instead of flipping chase<->hold per bounce
+        private float _contestCommitUntil = -1f;
+        
+        // Scramble window: set while a crowd packs around a loose/fast ball,
+        // persists briefly so discipline doesn't flicker per ricochet
+        private float _scrambleUntil = -1f;
         
         // Timed-run hysteresis: enter the deep run when the ball is clearly in
         // through-pass position, stay until play clearly breaks down
@@ -142,6 +157,17 @@ namespace NoPasaranFC.Gameplay.UtilityAI
         public int PassesAttempted { get; private set; }
         public int ClearsAttempted { get; private set; }
         
+        /// <summary>Carries another brain's lifetime counters over (kickoff
+        /// resets recreate the AI controllers; the counters are match-lifetime
+        /// metrics and must survive the recreation).</summary>
+        internal void CarryCountersFrom(UtilityBrain other)
+        {
+            if (other == null) return;
+            ShotsAttempted += other.ShotsAttempted;
+            PassesAttempted += other.PassesAttempted;
+            ClearsAttempted += other.ClearsAttempted;
+        }
+        
         public void Update(Player player, AIContext context, float deltaTime)
         {
             _evalTimer -= deltaTime;
@@ -176,6 +202,27 @@ namespace NoPasaranFC.Gameplay.UtilityAI
             if (_postPassCommitUntil > 0f && context.BallCarrier != null && context.BallCarrier != player)
                 _postPassCommitUntil = -1f;
 
+            // Dribble commitment: latched off for good when someone else
+            // controls the ball (clearly lost it); refreshed while he keeps
+            // registered control, so only glue-flicker time counts down
+            if (_dribbleCommitUntil > 0f && context.BallCarrier != null && context.BallCarrier != player)
+                _dribbleCommitUntil = -1f;
+            else if (_dribbleCommitUntil > 0f && _current.Type == UtilityActionType.Dribble
+                && context.BallCarrier == player)
+            {
+                _dribbleCommitUntil = context.MatchTime + UtilityTuning.DribbleCommitSeconds;
+            }
+            
+            // Scramble tracking: a crowd around a loose or fast (ricocheting)
+            // ball = pinball conditions; the window persists through the
+            // carrier/speed flicker between bounces
+            if ((context.BallCarrier == null
+                    || context.BallVelocity.Length() > UtilityTuning.ScrambleMinBallSpeed)
+                && IsCrowdNearBall(player, context))
+            {
+                _scrambleUntil = context.MatchTime + UtilityTuning.ScramblePersistSeconds;
+            }
+
             // Re-evaluate on tick OR when the current action became impossible
             if (_evalTimer <= 0f || !IsActionViable(player, context, _current))
             {
@@ -204,15 +251,65 @@ namespace NoPasaranFC.Gameplay.UtilityAI
                 (ctx.BallCarrier == null || ctx.BallCarrier == player);
         }
         
+        /// <summary>True during the dribble commitment window while nobody else
+        /// has controlled the ball (latched off in Update).</summary>
+        private bool InDribbleCommit(Player player, AIContext ctx)
+        {
+            return _dribbleCommitUntil > ctx.MatchTime &&
+                (ctx.BallCarrier == null || ctx.BallCarrier == player);
+        }
+        
+        /// <summary>True while this player is the committed contestor of a
+        /// scramble (he does not own the ball right now).</summary>
+        private bool InContestCommit(Player player, AIContext ctx)
+        {
+            return _contestCommitUntil > ctx.MatchTime && ctx.BallCarrier != player;
+        }
+        
+        /// <summary>True during the scramble window (crowd + loose/fast ball,
+        /// persisted so discipline doesn't flicker per ricochet).</summary>
+        private bool InScramble(Player player, AIContext ctx) => _scrambleUntil > ctx.MatchTime;
+        
+        /// <summary>Crowd count around the ball (this player included).</summary>
+        private static bool IsCrowdNearBall(Player player, AIContext ctx)
+        {
+            int near = 1; // the player himself
+            foreach (var mate in ctx.Teammates)
+            {
+                if (Vector2.Distance(mate.FieldPosition, ctx.BallPosition) < UtilityTuning.ScrambleRadius)
+                    near++;
+            }
+            foreach (var opp in ctx.Opponents)
+            {
+                if (Vector2.Distance(opp.FieldPosition, ctx.BallPosition) < UtilityTuning.ScrambleRadius)
+                    near++;
+            }
+            return near >= UtilityTuning.ScramblePlayers;
+        }
+        
+        /// <summary>True when no teammate stands closer to the ball - the one
+        /// rebound man allowed to pounce during a scramble.</summary>
+        private static bool IsClosestTeammateToBall(Player player, AIContext ctx)
+        {
+            float best = ctx.DistanceToBall;
+            foreach (var mate in ctx.Teammates)
+            {
+                if (Vector2.Distance(mate.FieldPosition, ctx.BallPosition) < best)
+                    return false;
+            }
+            return true;
+        }
+        
         // ------------------------------------------------------------------
         // Decision
         // ------------------------------------------------------------------
         
-        private UtilityAction Decide(Player player, AIContext ctx)
+        private UtilityAction Decide(Player player, AIContext ctx, bool justKicked = false)
         {
             // Goalkeeper has a specialized, narrow action set
             if (player.Position == PlayerPosition.Goalkeeper)
                 return Snap(DecideGoalkeeper(player, ctx));
+
 
             // Ball-stall watchdog: a stalled loose ball overrides everything -
             // this player is the nearest and MUST engage (kills idle dead zones)
@@ -222,15 +319,48 @@ namespace NoPasaranFC.Gameplay.UtilityAI
             UtilityAction best;
             
             // Carrier mode: anyone who owns the ball stays in carrier actions
-            // (Dribble collects the ball itself) across a huge radius — no
-            // Dribble<->Chase boundary to flip on
-            bool isCarrier = (ctx.HasBallPossession || ctx.BallCarrier == player)
-                && ctx.DistanceToBall < 800f;
+            // (Dribble collects the ball itself) across a huge radius. The
+            // dribble commitment extends this through glue/contest flicker:
+            // once collecting, he stays in carrier mode until someone else
+            // clearly takes the ball. After his own deliberate kick the ball
+            // is leaving at kick speed - the (stale) pre-kick context must not
+            // claim possession for the immediate follow-up.
+            bool isCarrier = !justKicked &&
+                (((ctx.HasBallPossession || ctx.BallCarrier == player)
+                && ctx.DistanceToBall < 800f)
+                || (InDribbleCommit(player, ctx) && ctx.DistanceToBall < 800f));
             
             if (isCarrier)
             {
                 // --- I have the ball: Shoot / Pass / Dribble / Clear ---
                 best = ScoreCarrierActions(player, ctx);
+                
+                // Dribble enter margin: a MARGINAL touch must clearly beat the
+                // chase/hold option before a chaser/holder is yanked into
+                // carrier mode on possession noise. Clean control = ball at his
+                // feet AND catchable (a ball blasting past at kick speed is a
+                // deflection, not a reception - ApplyDribbleGlue would never
+                // hold it either). Clean control always enters immediately.
+                bool cleanControl = ctx.HasBallPossession
+                    && ctx.BallVelocity.Length() <= UtilityTuning.DribbleEnterMaxBallSpeed;
+                if (!cleanControl && !InDribbleCommit(player, ctx) &&
+                    (_current.Type == UtilityActionType.ChaseBall || _current.Type == UtilityActionType.HoldPosition))
+                {
+                    var (offBall, _, _) = ScoreChaseOrHold(player, ctx);
+                    // A ball at kick speed is uncatchable - a touch on it is a
+                    // deflection, never a reception: keep the off-ball role
+                    // (ChaseBall pursues the intercept point, Dribble-collect
+                    // trails the raw position). Score noise alone must also
+                    // never yank him across.
+                    bool refuse = ctx.BallVelocity.Length() > UtilityTuning.DribbleEnterMaxBallSpeed
+                        || offBall.Score > best.Score + UtilityTuning.DribbleEnterMargin;
+                    if (refuse)
+                    {
+                        SetDecision(offBall.Type.ToString(), offBall.Score,
+                            best.Type.ToString(), best.Score);
+                        return offBall;
+                    }
+                }
             }
             else
             {
@@ -250,10 +380,6 @@ namespace NoPasaranFC.Gameplay.UtilityAI
                         GetTacticalPoint(player, ctx), 100f));
                 }
                 
-                // A stalled controlled carrier means the ball is effectively loose
-                // (harness without human input, or an AFK player) - chase it.
-                bool ballLoose = IsBallEffectivelyLoose(ctx);
-                
                 // Give-and-go: just passed -> sprint into space for the return ball.
                 // Beats holding position; cancelled if we get the ball back sooner
                 if (_runAfterPassUntil > ctx.MatchTime && ctx.BallCarrier != player)
@@ -265,60 +391,21 @@ namespace NoPasaranFC.Gameplay.UtilityAI
                     _runAfterPassUntil = -1f;
                 }
                 
-                float chaseScore = 0f;
-                float ballProgress = Math.Abs(ctx.BallPosition.X - ctx.OwnGoalCenter.X)
-                    / Math.Abs(ctx.OpponentGoalCenter.X - ctx.OwnGoalCenter.X);
-                
-                // Pounce: ball in the attacking third, loose (or abandoned), and
-                // I'm close — attack it regardless of chase rank (rebounds,
-                // defensive mistakes; this is what forwards exist for)
-                bool pounce = ballProgress > 0.6f / _thresholdJitter &&
-                    ctx.DistanceToBall < 400f * _thresholdJitter &&
-                    (IsBallLooseForReal(ctx) || ctx.BallCarrier.TeamId != player.TeamId);
-                
-                if (ctx.ShouldChaseBall || pounce ||
-                    (ballLoose && ctx.BallCarrier != null && ctx.DistanceToBall < 800f))
+                // Contest commitment: engaged with a loose ball in a scramble -
+                // stay on it through ricochets instead of flipping chase<->hold
+                // per bounce. Releases when I win it (carrier mode above), when
+                // someone holds it past the window, or when it escapes the
+                // chase radius. The give-and-go run above still outranks it.
+                if (InContestCommit(player, ctx) && ctx.DistanceToBall < 800f)
                 {
-                    // Closer = more attractive; must beat holdScore even for the
-                    // designated chaser when the ball is far (kickoff distances)
-                    chaseScore = UtilityTuning.ChaseBaseScore - ctx.DistanceToBall / 40f;
-                    if (ctx.DistanceToBall < 200f) chaseScore += UtilityTuning.ChaseCloseBonus;
-                    if (pounce) chaseScore += UtilityTuning.PounceBonus; // box pounce: highest priority
-                    else if (!ctx.ShouldChaseBall) chaseScore -= 10f; // rescue, not primary duty
-                    
-                    // Press hard when the ball is loose in the attacking third
-                    if (ballProgress > 0.6f) chaseScore += 15f;
-                    // And when it's loose right next to us, rank be damned
-                    if (ctx.BallCarrier == null && ctx.DistanceToBall < 350f) chaseScore += 25f;
+                    return Snap(new UtilityAction(UtilityActionType.ChaseBall, GetBallInterceptPoint(ctx), 120f));
                 }
                 
-                Vector2 holdPoint = GetTacticalPoint(player, ctx);
-                float holdScore = UtilityTuning.HoldBaseScore;
-                // Holding is more attractive when far from the ball or a teammate has it
-                if (ctx.TeammateHasBall(player)) holdScore += 10f;
-                
-                // Boundary hysteresis on a LOOSE ball: switching INTO ChaseBall
-                // must beat hold by a margin; a current chaser only drops back
-                // below hold - margin. Score noise at the knife-edge can't flap
-                // the boundary (the post-hoc CommitmentBonus below never gates
-                // the switch itself). Against a clean carrier the comparison
-                // stays raw - pressing must stay eager.
-                bool chaseWins;
-                if (ctx.BallCarrier == null && _current.Type == UtilityActionType.ChaseBall)
-                    chaseWins = chaseScore > holdScore - UtilityTuning.ChaseExitMargin;
-                else if (ctx.BallCarrier == null && _current.Type == UtilityActionType.HoldPosition)
-                    chaseWins = chaseScore > holdScore + UtilityTuning.ChaseEnterMargin;
-                else
-                    chaseWins = chaseScore > holdScore;
-                
-                best = chaseWins
-                    ? new UtilityAction(UtilityActionType.ChaseBall, GetBallInterceptPoint(ctx), chaseScore)
-                    : new UtilityAction(UtilityActionType.HoldPosition, holdPoint, holdScore);
+                var (chaseOrHold, altName, altScore) = ScoreChaseOrHold(player, ctx);
+                best = chaseOrHold;
                 
                 // Recorder snapshot: the loser is the only alternative in this branch
-                SetDecision(best.Type.ToString(), best.Score,
-                    best.Type == UtilityActionType.ChaseBall ? "HoldPosition" : "ChaseBall",
-                    best.Type == UtilityActionType.ChaseBall ? holdScore : chaseScore);
+                SetDecision(best.Type.ToString(), best.Score, altName, altScore);
             }
             
             // Commitment bonus: staying with the current action beats switching
@@ -327,7 +414,102 @@ namespace NoPasaranFC.Gameplay.UtilityAI
             if (_current.Type == best.Type && best.Type != UtilityActionType.Idle)
                 best.Score += UtilityTuning.CommitmentBonus;
             
+            // Dribble commitment: entering Dribble starts the collect window
+            // (refreshed by ownership in Update; only flicker counts it down).
+            // Not during the post-kick commit - there Dribble is a fallback,
+            // not a commitment (the give-and-go run keeps its claim)
+            if (best.Type == UtilityActionType.Dribble && _current.Type != UtilityActionType.Dribble
+                && !InPostPassCommit(player, ctx))
+            {
+                _dribbleCommitUntil = ctx.MatchTime + UtilityTuning.DribbleCommitSeconds;
+            }
+            
+            // Contest commitment: chasing a loose ball IN A SCRAMBLE keeps the
+            // contestor engaged through ricochets (re-armed while the ball
+            // stays loose in a crowd, so only carrier touches count it down)
+            if (best.Type == UtilityActionType.ChaseBall && ctx.BallCarrier == null
+                && InScramble(player, ctx))
+            {
+                _contestCommitUntil = ctx.MatchTime + UtilityTuning.ContestCommitSeconds;
+            }
+            
             return best;
+        }
+        
+        /// <summary>
+        /// Chase-vs-hold scoring with loose-ball boundary hysteresis: the winner
+        /// plus the loser (for the recorder snapshot and the dribble enter
+        /// margin). Pure scoring - no snapshots, no side effects on _current.
+        /// </summary>
+        private (UtilityAction best, string altName, float altScore) ScoreChaseOrHold(Player player, AIContext ctx)
+        {
+            // A stalled controlled carrier means the ball is effectively loose
+            // (harness without human input, or an AFK player) - chase it.
+            bool ballLoose = IsBallEffectivelyLoose(ctx);
+            
+            float chaseScore = 0f;
+            float ballProgress = Math.Abs(ctx.BallPosition.X - ctx.OwnGoalCenter.X)
+                / Math.Abs(ctx.OpponentGoalCenter.X - ctx.OwnGoalCenter.X);
+            
+            // Pounce: ball in the attacking third, loose (or abandoned), and
+            // I'm close — attack it regardless of chase rank (rebounds,
+            // defensive mistakes; this is what forwards exist for)
+            bool pounce = ballProgress > 0.6f / _thresholdJitter &&
+                ctx.DistanceToBall < 400f * _thresholdJitter &&
+                (IsBallLooseForReal(ctx) || ctx.BallCarrier.TeamId != player.TeamId);
+            
+            // Scramble discipline: a loose ball in a crowd is contested by the
+            // designated chaser only - the abandoned-carrier RESCUE join is
+            // suppressed and the rank-free attacking-third POUNCE is limited
+            // to the closest teammate (one rebound man, not a pile-in), so
+            // everyone else holds anticipation positions. A clean opponent
+            // carrier still gets pressed normally.
+            bool scramble = InScramble(player, ctx) &&
+                (ctx.BallCarrier == null || ctx.BallCarrier.TeamId == player.TeamId);
+            bool pounceAllowed = pounce && (!scramble || IsClosestTeammateToBall(player, ctx));
+            
+            if (ctx.ShouldChaseBall || pounceAllowed ||
+                (!scramble && ballLoose && ctx.BallCarrier != null && ctx.DistanceToBall < 800f))
+            {
+                // Closer = more attractive; must beat holdScore even for the
+                // designated chaser when the ball is far (kickoff distances)
+                chaseScore = UtilityTuning.ChaseBaseScore - ctx.DistanceToBall / 40f;
+                if (ctx.DistanceToBall < 200f) chaseScore += UtilityTuning.ChaseCloseBonus;
+                if (pounce) chaseScore += UtilityTuning.PounceBonus; // box pounce: highest priority
+                else if (!ctx.ShouldChaseBall) chaseScore -= 10f; // rescue, not primary duty
+                
+                // Press hard when the ball is loose in the attacking third
+                if (ballProgress > 0.6f) chaseScore += 15f;
+                // And when it's loose right next to us, rank be damned
+                if (ctx.BallCarrier == null && ctx.DistanceToBall < 350f) chaseScore += 25f;
+            }
+            
+            Vector2 holdPoint = GetTacticalPoint(player, ctx);
+            float holdScore = UtilityTuning.HoldBaseScore;
+            // Holding is more attractive when far from the ball or a teammate has it
+            if (ctx.TeammateHasBall(player)) holdScore += 10f;
+            
+            // Boundary hysteresis on a LOOSE ball: switching INTO ChaseBall
+            // must beat hold by a margin; a current chaser only drops back
+            // below hold - margin. Score noise at the knife-edge can't flap
+            // the boundary (the post-hoc CommitmentBonus below never gates
+            // the switch itself). Against a clean carrier the comparison
+            // stays raw - pressing must stay eager.
+            bool chaseWins;
+            if (ctx.BallCarrier == null && _current.Type == UtilityActionType.ChaseBall)
+                chaseWins = chaseScore > holdScore - UtilityTuning.ChaseExitMargin;
+            else if (ctx.BallCarrier == null && _current.Type == UtilityActionType.HoldPosition)
+                chaseWins = chaseScore > holdScore + UtilityTuning.ChaseEnterMargin;
+            else
+                chaseWins = chaseScore > holdScore;
+            
+            var best = chaseWins
+                ? new UtilityAction(UtilityActionType.ChaseBall, GetBallInterceptPoint(ctx), chaseScore)
+                : new UtilityAction(UtilityActionType.HoldPosition, holdPoint, holdScore);
+            
+            return (best,
+                best.Type == UtilityActionType.ChaseBall ? "HoldPosition" : "ChaseBall",
+                best.Type == UtilityActionType.ChaseBall ? holdScore : chaseScore);
         }
         
         private UtilityAction ScoreCarrierActions(Player player, AIContext ctx)
@@ -429,6 +611,12 @@ namespace NoPasaranFC.Gameplay.UtilityAI
                 passScore = float.MinValue;
             }
             
+            // Scramble contest: no panic passes into the crowd while the
+            // contest window runs (the ricochet ping-pong is the goal-mouth
+            // flap generator) - shoot, clear, or dribble instead
+            if (_contestCommitUntil > ctx.MatchTime)
+                passScore = float.MinValue;
+            
             // Pick the best (shoot can actually win now)
             float bestScore = shootScore;
             var type = UtilityActionType.Shoot;
@@ -460,6 +648,28 @@ namespace NoPasaranFC.Gameplay.UtilityAI
         // GK dive state (shot reaction): short burst to the predicted intercept
         private float _gkDiveUntil = -1f;
 
+        /// <summary>True when an opponent's body blocks the lane from->to
+        /// (perpendicular distance within the margin). Local to the brain;
+        /// mirrors AIBehaviorManager.IsPathBlocked.</summary>
+        private static bool IsPathCrowded(Vector2 from, Vector2 to, List<Player> opponents, float margin = 40f)
+        {
+            Vector2 dir = to - from;
+            float len = dir.Length();
+            if (len < 1f) return false;
+            dir /= len;
+            foreach (var opp in opponents)
+            {
+                Vector2 rel = opp.FieldPosition - from;
+                float along = Vector2.Dot(rel, dir);
+                if (along > 0f && along < len &&
+                    Math.Abs(rel.X * dir.Y - rel.Y * dir.X) < margin)
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
+
         /// <summary>
         /// Forward distribution: the GK starts the attack. Quick roll/throw to an
         /// open teammate (fullbacks and open midfielders first); a long punt to
@@ -484,6 +694,12 @@ namespace NoPasaranFC.Gameplay.UtilityAI
                     if (d < openness) openness = d;
                 }
                 if (openness < 250f) continue; // marked
+                
+                // Scramble discipline: the lane itself must be free. A pass
+                // through bodies gets blocked and ricochets straight back -
+                // that pinball loop is the goal-mouth flap generator
+                if (IsPathCrowded(player.FieldPosition, mate.FieldPosition, ctx.Opponents))
+                    continue;
 
                 float progress = (mate.FieldPosition.X - ctx.OwnGoalCenter.X) * ctx.AttackSign;
                 float score = openness / 100f + progress / 400f;
@@ -643,8 +859,10 @@ namespace NoPasaranFC.Gameplay.UtilityAI
                     return (ctx.HasBallPossession || ctx.BallCarrier == player)
                         && ctx.DistanceToBall < 140f;
                 case UtilityActionType.Dribble:
-                    // Dribble stays alive while we own the ball (it collects)
-                    return (ctx.HasBallPossession || ctx.BallCarrier == player)
+                    // Dribble stays alive while we own the ball (it collects) -
+                    // and through glue/contest flicker during the commit window
+                    return (ctx.HasBallPossession || ctx.BallCarrier == player
+                            || InDribbleCommit(player, ctx))
                         && ctx.DistanceToBall < 800f;
                 case UtilityActionType.ChaseBall:
                     // Stop chasing if a teammate now controls it
@@ -748,6 +966,7 @@ namespace NoPasaranFC.Gameplay.UtilityAI
                         // the return pass. Target: deep, offset from the pass lane
                         _runAfterPassUntil = ctx.MatchTime + 5f;
                         _postPassCommitUntil = ctx.MatchTime + UtilityTuning.PostPassCommitSeconds;
+                        _dribbleCommitUntil = -1f; // post-kick discipline supersedes
                         float side = player.FieldPosition.Y < action.TargetPlayer.FieldPosition.Y ? -1f : 1f;
                         _runAfterPassTarget = new Vector2(
                             MathHelper.Lerp(player.FieldPosition.X, ctx.OpponentGoalCenter.X, 0.55f),
@@ -755,9 +974,10 @@ namespace NoPasaranFC.Gameplay.UtilityAI
                         
                         // The kick is instant: decide the follow-up NOW instead of
                         // parking in Idle for a tick (the Idle gap read as state
-                        // flapping). The commit above bans an instant re-kick.
+                        // flapping). The commit above bans an instant re-kick, and
+                        // the just-kicked ball is leaving - never a carrier action.
                         player.Velocity = Vector2.Zero;
-                        _current = Decide(player, ctx);
+                        _current = Decide(player, ctx, justKicked: true);
                         _evalTimer = EvalInterval;
                     }
                     else
@@ -778,8 +998,9 @@ namespace NoPasaranFC.Gameplay.UtilityAI
                         // the rebound (kills blocked-shot machine-gun loops), then
                         // decide the follow-up now instead of parking in Idle
                         _postPassCommitUntil = ctx.MatchTime + UtilityTuning.PostPassCommitSeconds;
+                        _dribbleCommitUntil = -1f; // post-kick discipline supersedes
                         player.Velocity = Vector2.Zero;
-                        _current = Decide(player, ctx);
+                        _current = Decide(player, ctx, justKicked: true);
                         _evalTimer = EvalInterval;
                     }
                     else
@@ -798,8 +1019,9 @@ namespace NoPasaranFC.Gameplay.UtilityAI
                         _shootBall(player, clearTarget, 1.0f);
                         ClearsAttempted++;
                         _postPassCommitUntil = ctx.MatchTime + UtilityTuning.PostPassCommitSeconds;
+                        _dribbleCommitUntil = -1f; // post-kick discipline supersedes
                         player.Velocity = Vector2.Zero;
-                        _current = Decide(player, ctx);
+                        _current = Decide(player, ctx, justKicked: true);
                         _evalTimer = EvalInterval;
                     }
                     else

@@ -112,8 +112,14 @@ dotnet build NoPasaranFC.Android/NoPasaranFC.Android.csproj  # Android (needs an
   Utility-brain specifics: post-kick commitment window (`UtilityTuning.PostPassCommitSeconds` —
   the kicker can't immediately re-select Pass/Shoot/Clear), chase/hold hysteresis on loose balls
   (`ChaseEnterMargin`/`ChaseExitMargin`), stable designated chaser per team
-  (`AIConstants.ChaseReassignMargin`). Verify behavior changes with the match recorder +
-  `Scripts/analyze_recording.py` before/after.
+  (`AIConstants.ChaseReassignMargin`), dribble commitment + fast-ball deflection gate
+  (`DribbleCommitSeconds`/`DribbleEnterMargin`/`DribbleEnterMaxBallSpeed`), scramble discipline
+  (one contestor per team in a pinball: `ScrambleRadius`/`ScramblePlayers`/`ContestCommitSeconds`,
+  `AIConstants.ScrambleReassignMargin`; GK distribution lane check via `IsPathCrowded`).
+  Card cutscene can't stall set pieces (arrival accepts the renderer's 2m standoff +
+  walk-time budget). While `MatchEngine.GoalScoredPending` (0.5s goal delay) the ball is
+  dead: no out-of-bounds restarts, no AI kicks.
+  Verify behavior changes with the match recorder + `Scripts/analyze_recording.py` before/after.
 
 - **Player/kit editor** (desktop only): `dotnet run --project NoPasaranFC.csproj -- --editor` opens
   straight into the editor (both championships → teams → roster/kit). Edits players (stats, gender,
