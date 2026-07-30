@@ -20,6 +20,15 @@ namespace NoPasaranFC.Gameplay
         // resulting ShouldChaseBall flip flapped ChaseBall<->HoldPosition)
         private readonly Dictionary<int, Player> _designatedChaser = new Dictionary<int, Player>();
         private int _lastChaseCarrierTeamId = -1;
+        
+        // SECOND defender (cover): contains goal-side of a controlled opponent
+        // carrier instead of also diving in. Same stability discipline
+        private readonly Dictionary<int, Player> _designatedCover = new Dictionary<int, Player>();
+        
+        // Pass offers: 1-2 designated timed runners into the carrier's lane,
+        // active only while a teammate has clean control
+        private readonly Dictionary<int, Player> _passOfferPrimary = new Dictionary<int, Player>();
+        private readonly Dictionary<int, Player> _passOfferSecondary = new Dictionary<int, Player>();
 
         public AIBehaviorManager(MatchEngine engine)
         {
@@ -233,13 +242,53 @@ namespace NoPasaranFC.Gameplay
 
             bool ballInDefensiveHalf = _engine.IsBallInHalf(player.Team.Name);
 
+            // Team coordination designations (both computed fresh each build,
+            // stable via their own margins)
+            var carrier = GetBallCarrier();
+            bool isCoverDefender = false;
+            var coverPoint = Vector2.Zero;
+            if (carrier != null && carrier.TeamId != player.TeamId &&
+                _designatedCover.TryGetValue(player.TeamId, out var cover) && cover == player)
+            {
+                // SECOND defender: contain goal-side of the carrier
+                isCoverDefender = true;
+                Vector2 toGoal = ownGoalCenter - carrier.FieldPosition;
+                if (toGoal.LengthSquared() > 1f) toGoal.Normalize();
+                coverPoint = carrier.FieldPosition + toGoal * UtilityAI.UtilityTuning.CoverOffsetDistance;
+                coverPoint.X = MathHelper.Clamp(coverPoint.X,
+                    MatchEngine.StadiumMargin + 50f, MatchEngine.StadiumMargin + MatchEngine.FieldWidth - 50f);
+                coverPoint.Y = MathHelper.Clamp(coverPoint.Y,
+                    MatchEngine.StadiumMargin + 50f, MatchEngine.StadiumMargin + MatchEngine.FieldHeight - 50f);
+            }
+
+            bool isPassOffer = false;
+            bool passOfferOppositeSide = false;
+            if (carrier != null && carrier.TeamId == player.TeamId && carrier != player &&
+                Vector2.Distance(carrier.FieldPosition, _engine.BallPosition) < 200f)
+            {
+                // Teammate in clean control: designate the timed runners
+                UpdatePassOffers(myTeam, carrier);
+                if (_passOfferPrimary.TryGetValue(player.TeamId, out var offer) && offer == player)
+                    isPassOffer = true;
+                else if (_passOfferSecondary.TryGetValue(player.TeamId, out var offer2) && offer2 == player)
+                {
+                    isPassOffer = true;
+                    passOfferOppositeSide = true;
+                }
+            }
+            else
+            {
+                _passOfferPrimary.Remove(player.TeamId);
+                _passOfferSecondary.Remove(player.TeamId);
+            }
+
             return new AIContext
             {
                 BallPosition = _engine.BallPosition,
                 BallVelocity = _engine.BallVelocity,
                 BallHeight = _engine.BallHeight,
                 BallVerticalVelocity = _engine.BallVerticalVelocity,
-                BallCarrier = GetBallCarrier(),
+                BallCarrier = carrier,
                 LastBallToucher = _engine.LastPlayerTouchedBall,
                 NearestOpponent = nearestOpponent,
                 NearestTeammate = nearestTeammate,
@@ -263,8 +312,88 @@ namespace NoPasaranFC.Gameplay
                 Teammates = myTeam.Players.Where(p => p.IsStarting && !p.IsKnockedDown && p != player).ToList(),
                 Opponents = opponentTeam.Players.Where(p => p.IsStarting && !p.IsKnockedDown).ToList(),
                 KickoffTaken = _engine.KickoffTaken,
-                KickoffTeamId = _engine.KickoffTeamId
+                KickoffTeamId = _engine.KickoffTeamId,
+                IsCoverDefender = isCoverDefender,
+                CoverPoint = coverPoint,
+                IsPassOffer = isPassOffer,
+                PassOfferOppositeSide = passOfferOppositeSide
             };
+        }
+        
+        /// <summary>
+        /// Pass-offer designation: while a teammate has clean control, the two
+        /// best-placed attackers (forwards first, then attacking mids) make
+        /// timed runs into the carrier's lane. Remembered with a score margin
+        /// so the offer roles don't hot-potato on noise.
+        /// </summary>
+        private void UpdatePassOffers(Team team, Player carrier)
+        {
+            var candidates = new List<(Player Player, float Score)>();
+            Vector2 opponentGoal = _engine.GetOpponentGoalCenter(team);
+            float attackSign = _engine.AttackSign(team);
+            foreach (var mate in team.Players)
+            {
+                if (!mate.IsStarting || mate.IsKnockedDown || mate.IsControlled || mate == carrier) continue;
+                float roleWeight = mate.Position switch
+                {
+                    PlayerPosition.Forward => 3f,
+                    PlayerPosition.Midfielder when
+                        mate.Role == PlayerRole.AttackingMidfielder ||
+                        mate.Role == PlayerRole.LeftWinger ||
+                        mate.Role == PlayerRole.RightWinger => 2f,
+                    PlayerPosition.Midfielder => 1f,
+                    _ => 0f, // GK and defenders don't make offer runs
+                };
+                if (roleWeight <= 0f) continue;
+
+                float progress = (mate.FieldPosition.X - _engine.GetOwnGoalCenter(team).X) * attackSign / 20f;
+                float openness = float.MaxValue;
+                foreach (var opp in _engine.HomeTeam == team ? _engine.AwayTeam.Players : _engine.HomeTeam.Players)
+                {
+                    if (!opp.IsStarting || opp.IsKnockedDown) continue;
+                    float d = Vector2.Distance(opp.FieldPosition, mate.FieldPosition);
+                    if (d < openness) openness = d;
+                }
+                float score = roleWeight * 100f + progress + System.Math.Min(openness, 600f) / 20f;
+                candidates.Add((mate, score));
+            }
+            if (candidates.Count == 0) return;
+            candidates.Sort((a, b) => b.Score.CompareTo(a.Score));
+            
+            float margin = UtilityAI.UtilityTuning.PassOfferReassignMargin;
+            Player bestPrimary = candidates[0].Player;
+            Player bestSecondary = candidates.Count > 1 ? candidates[1].Player : null;
+            
+            Player primary = null;
+            if (_passOfferPrimary.TryGetValue(team.Id, out var remP) &&
+                candidates.Exists(c => c.Player == remP))
+            {
+                primary = remP;
+                if (primary != bestPrimary &&
+                    candidates.Find(c => c.Player == primary).Score < candidates[0].Score - margin)
+                {
+                    primary = null; // clearly outplayed: reassign below
+                }
+            }
+            if (primary == null) primary = bestPrimary;
+            _passOfferPrimary[team.Id] = primary;
+            
+            Player secondary = null;
+            if (bestSecondary != null)
+            {
+                if (_passOfferSecondary.TryGetValue(team.Id, out var remS) &&
+                    remS != primary && candidates.Exists(c => c.Player == remS))
+                {
+                    secondary = remS;
+                    if (secondary != bestSecondary &&
+                        candidates.Find(c => c.Player == secondary).Score < candidates[1].Score - margin)
+                    {
+                        secondary = null;
+                    }
+                }
+                if (secondary == null || secondary == primary) secondary = bestSecondary;
+                _passOfferSecondary[team.Id] = secondary;
+            }
         }
 
         public bool IsPathBlocked(Vector2 start, Vector2 end, List<Player> obstacles, float threshold = 50f)
@@ -447,7 +576,12 @@ namespace NoPasaranFC.Gameplay
             if (carrier != null)
             {
                 if (_lastChaseCarrierTeamId != -1 && carrier.TeamId != _lastChaseCarrierTeamId)
+                {
                     _designatedChaser.Clear();
+                    _designatedCover.Clear();
+                    _passOfferPrimary.Clear();
+                    _passOfferSecondary.Clear();
+                }
                 _lastChaseCarrierTeamId = carrier.TeamId;
             }
 
@@ -524,16 +658,42 @@ namespace NoPasaranFC.Gameplay
             if (player == designated)
                 return true;
 
+            // SECOND defender (cover): vs a controlled opponent carrier, the
+            // closest non-designated teammate CONTAINS goal-side instead of
+            // also diving in (replaces the old support-chaser join).
+            // Remembered with a margin - no per-frame press/cover swap
+            if (carrier != null && carrier.TeamId != team.Id)
+            {
+                Player cover = null;
+                if (_designatedCover.TryGetValue(team.Id, out var rememberedCover) &&
+                    !rememberedCover.IsControlled && activeTeammates.Contains(rememberedCover) &&
+                    rememberedCover != designated)
+                {
+                    cover = rememberedCover;
+                }
+                Player bestCover = teamDistances.First(x => x.Player != designated && !x.Player.IsControlled).Player;
+                if (cover != null && cover != bestCover)
+                {
+                    float coverDist = teamDistances.First(x => x.Player == cover).Distance;
+                    float bestCoverDist = teamDistances.First(x => x.Player == bestCover).Distance;
+                    if (coverDist > bestCoverDist + UtilityAI.UtilityTuning.CoverReassignMargin)
+                        cover = null; // clearly beaten: reassign below
+                }
+                if (cover == null)
+                {
+                    cover = bestCover;
+                    _designatedCover[team.Id] = cover;
+                }
+            }
+            else
+            {
+                _designatedCover.Remove(team.Id); // no opponent carrier: no cover duty
+            }
+
             // Scramble discipline: ONE contestor per team - no support join
             // while the ball pinballs in a crowd
             if (scrambled)
                 return false;
-
-            // Support chaser: closest teammate after the designated one joins
-            // the chase if they're close enough to the ball
-            var support = teamDistances.First(x => x.Player != designated);
-            if (player == support.Player && support.Distance < AIConstants.SupportChaseDistance)
-                return true;
 
             return false;
         }

@@ -157,6 +157,13 @@ dotnet build NoPasaranFC.Android/NoPasaranFC.Android.csproj  # Android (needs an
   dead zones), dribble dead-end detection + dribble-failure decay (no ball-hogging), offside awareness
   when enabled (`MatchEngine.WouldBeOffside` pass penalty + hold-the-line clamp in GetTacticalPoint),
   shot aim at far post with distance-scaled power, far-post cross runs.
+  v2.26 **team coordination** (`AIBehaviorManager`): second defender takes a goal-side
+  contain position (`CoverOffsetDistance`, stable via `CoverReassignMargin`) instead of a
+  second dive-in; two pass-offer runners make timed runs into the emptier lane while the
+  carrier has clean control (`PassOfferRunDepth`, forwards > wingers > mids by openness);
+  attacking shape stretches (`AttackBallPull` 0.1, `AttackMinSpacing` 300px anti-stack
+  nudge). All roles are score/target inputs — commitment layer, ForcedPounce and set
+  pieces keep precedence.
   **GK**: near-post discipline (seal ball-side post by flankness), sweeper-keeper rushes through-balls
   in the box, cross claiming on descending aerials, forward distribution (`DecideGkDistribution` —
   open teammate first, punt to emptier flank when covered).

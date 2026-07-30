@@ -75,12 +75,26 @@ namespace NoPasaranFC.Gameplay.UtilityAI
         public static float ChaseDesignationBonus = 25f;    // designated chaser's score bonus (replaces the hard gate)
         public static float ChaseNonDesignatedPenalty = 3f; // everyone else's pile-on damper
         
+        // Team coordination: SECOND defender (cover) vs a controlled opponent
+        // carrier - contains goal-side instead of diving in
+        public static float CoverOffsetDistance = 400f; // contain point this far goal-side of the carrier
+        public static float CoverScore = 60f;           // cover hold score: beats plain hold (47.3), loses to designated chase
+        public static float CoverReassignMargin = 200f; // cover role changes hands only when a rival is this much closer (px)
+        
+        // Team coordination: pass offers - 1-2 designated runners make timed
+        // runs into the carrier's lane when a teammate has clean control
+        public static float PassOfferRunDepth = 800f;   // how far ahead of the ball the run goes (px)
+        public static float PassOfferRunWidth = 500f;   // diagonal offset into the emptier lane (px)
+        public static float PassOfferReassignMargin = 40f; // offer role stability (score points)
+        
         // Attacking shape (GetTacticalPoint)
         public static float AttackDepthDefender = 0.46f;   // fraction of the way to the opponent goal
         public static float AttackDepthMidfielder = 0.90f;
         public static float AttackDepthForward = 0.83f;
         public static float HomePositionLerp = 0.58f;      // formation shape pull when attacking
         public static float DeepRunDepth = 0.98f;          // forward timed-run depth
+        public static float AttackBallPull = 0.1f;         // central roles' y drift toward the ball (anti-convergence)
+        public static float AttackMinSpacing = 300f;       // mutual spacing: anti-stack nudge distance (px)
         
         // Defensive shape (GetTacticalPoint, not-attacking branch)
         public static float DefendDepthDefender = 0.23f;   // shift toward the ball by role

@@ -90,6 +90,12 @@ namespace NoPasaranFC.Gameplay
         public float BestPassScore { get; set; } = float.MinValue; // Score of BestPassTarget (MinValue = no option)
         public Player BallCarrier { get; set; } // Player in clean control of the ball (null = loose ball)
         public Player LastBallToucher { get; set; } // Last player to touch the ball (any contact, not just control)
+        
+        // Team coordination (AIBehaviorManager designations, stable via margins):
+        public bool IsCoverDefender { get; set; }   // SECOND defender: contain goal-side of the opponent carrier
+        public Vector2 CoverPoint { get; set; }     // the contain position (valid when IsCoverDefender)
+        public bool IsPassOffer { get; set; }       // designated timed runner into the carrier's lane (clean control)
+        public bool PassOfferOppositeSide { get; set; } // secondary offer takes the other lane
         public bool KickoffTaken { get; set; } = true; // false while waiting for the kickoff to be played
         public int KickoffTeamId { get; set; } = -1; // team that has the kickoff
 

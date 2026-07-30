@@ -638,6 +638,15 @@ namespace NoPasaranFC.Gameplay.UtilityAI
             // Holding is more attractive when far from the ball or a teammate has it
             if (ctx.TeammateHasBall(player)) holdScore += 10f;
             
+            // SECOND defender: the designated cover holds the contain point
+            // goal-side of the carrier instead of joining the dive (beats
+            // plain hold, loses to the designated press)
+            if (ctx.IsCoverDefender && ctx.BallCarrier != null)
+            {
+                holdPoint = ctx.CoverPoint;
+                holdScore = UtilityTuning.CoverScore;
+            }
+            
             var best = chaseScore > holdScore
                 ? new UtilityAction(UtilityActionType.ChaseBall, GetBallInterceptPoint(ctx), chaseScore)
                 : new UtilityAction(UtilityActionType.HoldPosition, holdPoint, holdScore);
@@ -1281,8 +1290,49 @@ namespace NoPasaranFC.Gameplay.UtilityAI
                 }
                 else
                 {
-                    // Own lane mostly, slight ball pull
-                    y = MathHelper.Lerp(player.HomePosition.Y + laneJitter, ctx.BallPosition.Y, 0.2f);
+                    // Own lane mostly, slight ball pull (anti-convergence)
+                    y = MathHelper.Lerp(player.HomePosition.Y + laneJitter, ctx.BallPosition.Y,
+                        UtilityTuning.AttackBallPull);
+                }
+                
+                // Mutual spacing: don't stack on a teammate - nudge the point
+                // away from anyone standing closer than the minimum (target
+                // level, continuous - no per-frame force, no flipping)
+                foreach (var mate in ctx.Teammates)
+                {
+                    float d = Vector2.Distance(player.FieldPosition, mate.FieldPosition);
+                    if (d < UtilityTuning.AttackMinSpacing && d > 1f)
+                    {
+                        float push = (UtilityTuning.AttackMinSpacing - d) / d;
+                        x += (player.FieldPosition.X - mate.FieldPosition.X) * push;
+                        y += (player.FieldPosition.Y - mate.FieldPosition.Y) * push;
+                    }
+                }
+                
+                // Pass offer: designated runners make a timed run ahead-diagonal
+                // into the emptier side of the carrier->goal lane (the
+                // secondary offer takes the other lane). The forwards' box
+                // occupation / deep run below may still override situationally
+                if (ctx.IsPassOffer)
+                {
+                    Vector2 goalDir = ctx.OpponentGoalCenter - ctx.BallPosition;
+                    if (goalDir.LengthSquared() > 1f) goalDir.Normalize();
+                    var lateralDir = new Vector2(-goalDir.Y, goalDir.X);
+                    int left = 0, right = 0;
+                    foreach (var opp in ctx.Opponents)
+                    {
+                        Vector2 rel = opp.FieldPosition - ctx.BallPosition;
+                        if (rel.LengthSquared() > 90000f) continue; // only nearby markers (300px)
+                        float lat = rel.X * lateralDir.Y - rel.Y * lateralDir.X;
+                        if (lat > 0f) right++; else left++;
+                    }
+                    float sideSign = left <= right ? 1f : -1f;
+                    if (ctx.PassOfferOppositeSide) sideSign = -sideSign;
+                    Vector2 lateral = lateralDir * sideSign;
+                    x = ctx.BallPosition.X + goalDir.X * UtilityTuning.PassOfferRunDepth
+                        + lateral.X * UtilityTuning.PassOfferRunWidth;
+                    y = ctx.BallPosition.Y + goalDir.Y * UtilityTuning.PassOfferRunDepth
+                        + lateral.Y * UtilityTuning.PassOfferRunWidth;
                 }
                 
                 // Forwards: make runs BEHIND the defensive line when the ball is
