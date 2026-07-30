@@ -279,6 +279,8 @@ namespace NoPasaranFC.Database
             int[] positionCounts = { gkCount, defCount, midCount, fwdCount };
             int shirtNumber = 1;
             int startingCount = 0;
+            int playerIndex = 0;
+            var usedNames = new HashSet<string>();
             
             for (int posIdx = 0; posIdx < 4; posIdx++)
             {
@@ -287,7 +289,7 @@ namespace NoPasaranFC.Database
                 
                 for (int i = 0; i < count; i++)
                 {
-                    string playerName = GeneratePlayerName(team.Name, position, i, random);
+                    string playerName = GeneratePlayerName(team.Name, playerIndex++, usedNames);
                     var player = new Player(playerName, position)
                     {
                         ShirtNumber = shirtNumber++,
@@ -321,23 +323,37 @@ namespace NoPasaranFC.Database
             }
         }
 
-        private static string GeneratePlayerName(string teamName, PlayerPosition position, int index, Random random)
+        private static string GeneratePlayerName(string teamName, int index, HashSet<string> usedNames)
         {
-            string[] firstNames = { "Κώστας", "Γιώργος", "Δημήτρης", "Νίκος", "Μιχάλης", "Σωτήρης", 
+            string[] firstNames = { "Κώστας", "Γιώργος", "Δημήτρης", "Νίκος", "Μιχάλης", "Σωτήρης",
                                     "Ανδρέας", "Παναγιώτης", "Θανάσης", "Βασίλης", "Χρήστος", "Αλέξανδρος",
                                     "Σπύρος", "Λευτέρης", "Γιάννης", "Στέλιος", "Μάνος", "Πέτρος",
                                     "Κυριάκος", "Ηλίας", "Τάσος", "Φώτης" };
-            
-            string[] lastNames = { "Παπαδόπουλος", "Νικολάου", "Αθανασίου", "Βασιλείου", "Γεωργίου", 
+
+            string[] lastNames = { "Παπαδόπουλος", "Νικολάου", "Αθανασίου", "Βασιλείου", "Γεωργίου",
                                    "Χριστοδούλου", "Ιωάννου", "Κωνσταντίνου", "Δημητρίου", "Μιχαηλίδης",
                                    "Σταυρίδης", "Παύλου", "Αντωνίου", "Πετρίδης", "Μαρίνος", "Θεοδώρου",
                                    "Σαββίδης", "Φιλίππου", "Ανδρέου", "Χαραλάμπους", "Λουκά", "Χατζηγεωργίου" };
-            
+
             int nameHash = DeterministicRosterSeed.HasValue ? StableNameHash(teamName) : teamName.GetHashCode();
-            int firstIdx = (nameHash + index * 3) % firstNames.Length;
-            int lastIdx = (nameHash + index * 7) % lastNames.Length;
-            
-            return $"{firstNames[Math.Abs(firstIdx)]} {lastNames[Math.Abs(lastIdx)]}";
+            int firstIdx = Math.Abs(nameHash + index * 3) % firstNames.Length;
+            int lastIdx = Math.Abs(nameHash + index * 7) % lastNames.Length;
+
+            // Guarantee uniqueness within the roster: the deterministic pick
+            // collides across position groups (per-position indices) and for
+            // rosters larger than the pool period. Walk the pools (deterministically)
+            // until an unused combination is found.
+            string name;
+            int guard = 0;
+            do
+            {
+                name = $"{firstNames[firstIdx]} {lastNames[lastIdx]}";
+                lastIdx = (lastIdx + 1) % lastNames.Length;
+                if (++guard % lastNames.Length == 0)
+                    firstIdx = (firstIdx + 1) % firstNames.Length;
+            } while (!usedNames.Add(name) && guard < firstNames.Length * lastNames.Length);
+
+            return name;
         }
         
         private static int GenerateStatForPosition(PlayerPosition position, string statName, Random random)

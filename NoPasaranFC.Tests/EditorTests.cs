@@ -24,6 +24,21 @@ public class EditorTests
     }
 
     [Fact]
+    public void SynthesizedRoster_NamesUnique_ElevenStarters()
+    {
+        // Regression: GeneratePlayerName picked names by PER-POSITION index, so the
+        // GK and a defender/midfielder/forward with the same group index got the
+        // SAME name (observed live: TUBA LIBRE fielded "Ανδρέας Ιωάννου" at GK,
+        // defender and midfielder simultaneously, breaking the lineup).
+        var team = TeamSeeder.CreateTeamWithDefaultRoster("TEST UNITED", false);
+
+        var names = team.Players.Select(p => p.Name).ToList();
+        Assert.Equal(names.Count, names.Distinct().Count()); // all unique
+        Assert.Equal(11, team.Players.Count(p => p.IsStarting));
+        Assert.NotEmpty(team.Players.Where(p => p.IsStarting && p.Position == PlayerPosition.Goalkeeper));
+    }
+
+    [Fact]
     public void SeedJson_NamedTeams_HaveKitBlocks()
     {
         var teams = TeamSeeder.LoadTeamsFromJson(FindRepoFile(Path.Combine("Database", "teams_seed.json")));

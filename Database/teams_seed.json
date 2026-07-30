@@ -516,7 +516,7 @@
           "stamina": 87
         },
         {
-          "name": "Γιάννης Μαρίνος",
+          "name": "Κώστας Παπαδόπουλος",
           "position": "Defender",
           "shirtNumber": 3,
           "isStarting": true,
@@ -529,7 +529,7 @@
           "stamina": 86
         },
         {
-          "name": "Αλέξανδρος Κωνσταντίνου",
+          "name": "Παναγιώτης Παύλου",
           "position": "Defender",
           "shirtNumber": 4,
           "isStarting": true,
@@ -620,7 +620,7 @@
           "stamina": 88
         },
         {
-          "name": "Γιάννης Μαρίνος",
+          "name": "Γιάννης Παπαδόπουλος",
           "position": "Midfielder",
           "shirtNumber": 11,
           "isStarting": true,
@@ -633,7 +633,7 @@
           "stamina": 92
         },
         {
-          "name": "Αλέξανδρος Κωνσταντίνου",
+          "name": "Φώτης Παύλου",
           "position": "Midfielder",
           "shirtNumber": 12,
           "isStarting": false,
@@ -646,7 +646,7 @@
           "stamina": 94
         },
         {
-          "name": "Θανάσης Παπαδόπουλος",
+          "name": "Ανδρέας Παπαδόπουλος",
           "position": "Midfielder",
           "shirtNumber": 13,
           "isStarting": false,
@@ -659,7 +659,7 @@
           "stamina": 87
         },
         {
-          "name": "Σωτήρης Θεοδώρου",
+          "name": "Λευτέρης Παύλου",
           "position": "Midfielder",
           "shirtNumber": 14,
           "isStarting": false,
@@ -672,7 +672,7 @@
           "stamina": 81
         },
         {
-          "name": "Γιάννης Μαρίνος",
+          "name": "Τάσος Παπαδόπουλος",
           "position": "Forward",
           "shirtNumber": 15,
           "isStarting": false,
@@ -685,7 +685,7 @@
           "stamina": 79
         },
         {
-          "name": "Αλέξανδρος Κωνσταντίνου",
+          "name": "Σωτήρης Παύλου",
           "position": "Forward",
           "shirtNumber": 16,
           "isStarting": false,
@@ -698,7 +698,7 @@
           "stamina": 75
         },
         {
-          "name": "Θανάσης Παπαδόπουλος",
+          "name": "Σπύρος Παπαδόπουλος",
           "position": "Forward",
           "shirtNumber": 17,
           "isStarting": false,
@@ -711,7 +711,7 @@
           "stamina": 76
         },
         {
-          "name": "Σωτήρης Θεοδώρου",
+          "name": "Ηλίας Παύλου",
           "position": "Forward",
           "shirtNumber": 18,
           "isStarting": false,
@@ -724,7 +724,7 @@
           "stamina": 85
         },
         {
-          "name": "Δημήτρης Δημητρίου",
+          "name": "Μιχάλης Παπαδόπουλος",
           "position": "Forward",
           "shirtNumber": 19,
           "isStarting": false,
@@ -737,7 +737,7 @@
           "stamina": 79
         },
         {
-          "name": "Φώτης Νικολάου",
+          "name": "Αλέξανδρος Παύλου",
           "position": "Forward",
           "shirtNumber": 20,
           "isStarting": false,
@@ -750,7 +750,7 @@
           "stamina": 85
         },
         {
-          "name": "Κυριάκος Σαββίδης",
+          "name": "Κυριάκος Παπαδόπουλος",
           "position": "Forward",
           "shirtNumber": 21,
           "isStarting": false,
@@ -763,7 +763,7 @@
           "stamina": 92
         },
         {
-          "name": "Στέλιος Μιχαηλίδης",
+          "name": "Νίκος Αντωνίου",
           "position": "Forward",
           "shirtNumber": 22,
           "isStarting": false,
@@ -847,7 +847,7 @@
           "stamina": 87
         },
         {
-          "name": "Παναγιώτης Κωνσταντίνου",
+          "name": "Κώστας Παπαδόπουλος",
           "position": "Defender",
           "shirtNumber": 3,
           "isStarting": true,
@@ -860,7 +860,7 @@
           "stamina": 87
         },
         {
-          "name": "Χρήστος Μαρίνος",
+          "name": "Παναγιώτης Παύλου",
           "position": "Defender",
           "shirtNumber": 4,
           "isStarting": true,
@@ -951,7 +951,7 @@
           "stamina": 79
         },
         {
-          "name": "Παναγιώτης Κωνσταντίνου",
+          "name": "Γιάννης Παπαδόπουλος",
           "position": "Midfielder",
           "shirtNumber": 11,
           "isStarting": true,
@@ -964,7 +964,7 @@
           "stamina": 86
         },
         {
-          "name": "Χρήστος Μαρίνος",
+          "name": "Φώτης Παύλου",
           "position": "Midfielder",
           "shirtNumber": 12,
           "isStarting": false,
@@ -977,7 +977,7 @@
           "stamina": 84
         },
         {
-          "name": "Λευτέρης Χατζηγεωργίου",
+          "name": "Ανδρέας Παπαδόπουλος",
           "position": "Midfielder",
           "shirtNumber": 13,
           "isStarting": false,
@@ -990,7 +990,7 @@
           "stamina": 85
         },
         {
-          "name": "Μάνος Ιωάννου",
+          "name": "Λευτέρης Παύλου",
           "position": "Midfielder",
           "shirtNumber": 14,
           "isStarting": false,
@@ -1003,7 +1003,7 @@
           "stamina": 75
         },
         {
-          "name": "Παναγιώτης Κωνσταντίνου",
+          "name": "Τάσος Παπαδόπουλος",
           "position": "Forward",
           "shirtNumber": 15,
           "isStarting": false,
@@ -1016,7 +1016,7 @@
           "stamina": 94
         },
         {
-          "name": "Χρήστος Μαρίνος",
+          "name": "Σωτήρης Παύλου",
           "position": "Forward",
           "shirtNumber": 16,
           "isStarting": false,
@@ -1029,7 +1029,7 @@
           "stamina": 81
         },
         {
-          "name": "Λευτέρης Χατζηγεωργίου",
+          "name": "Σπύρος Παπαδόπουλος",
           "position": "Forward",
           "shirtNumber": 17,
           "isStarting": false,
@@ -1042,7 +1042,7 @@
           "stamina": 93
         },
         {
-          "name": "Μάνος Ιωάννου",
+          "name": "Ηλίας Παύλου",
           "position": "Forward",
           "shirtNumber": 18,
           "isStarting": false,
@@ -1055,7 +1055,7 @@
           "stamina": 91
         },
         {
-          "name": "Ηλίας Πετρίδης",
+          "name": "Μιχάλης Παπαδόπουλος",
           "position": "Forward",
           "shirtNumber": 19,
           "isStarting": false,
@@ -1068,7 +1068,7 @@
           "stamina": 88
         },
         {
-          "name": "Κώστας Λουκά",
+          "name": "Αλέξανδρος Παύλου",
           "position": "Forward",
           "shirtNumber": 20,
           "isStarting": false,
@@ -1081,7 +1081,7 @@
           "stamina": 91
         },
         {
-          "name": "Νίκος Χριστοδούλου",
+          "name": "Κυριάκος Παπαδόπουλος",
           "position": "Forward",
           "shirtNumber": 21,
           "isStarting": false,
@@ -1094,7 +1094,7 @@
           "stamina": 92
         },
         {
-          "name": "Ανδρέας Αντωνίου",
+          "name": "Νίκος Αντωνίου",
           "position": "Forward",
           "shirtNumber": 22,
           "isStarting": false,
@@ -1178,7 +1178,7 @@
           "stamina": 88
         },
         {
-          "name": "Φώτης Χατζηγεωργίου",
+          "name": "Κώστας Παπαδόπουλος",
           "position": "Defender",
           "shirtNumber": 3,
           "isStarting": true,
@@ -1191,7 +1191,7 @@
           "stamina": 90
         },
         {
-          "name": "Κυριάκος Μαρίνος",
+          "name": "Παναγιώτης Παύλου",
           "position": "Defender",
           "shirtNumber": 4,
           "isStarting": true,
@@ -1282,7 +1282,7 @@
           "stamina": 81
         },
         {
-          "name": "Φώτης Χατζηγεωργίου",
+          "name": "Γιάννης Παπαδόπουλος",
           "position": "Midfielder",
           "shirtNumber": 11,
           "isStarting": true,
@@ -1295,7 +1295,7 @@
           "stamina": 85
         },
         {
-          "name": "Κυριάκος Μαρίνος",
+          "name": "Φώτης Παύλου",
           "position": "Midfielder",
           "shirtNumber": 12,
           "isStarting": false,
@@ -1308,7 +1308,7 @@
           "stamina": 83
         },
         {
-          "name": "Στέλιος Κωνσταντίνου",
+          "name": "Ανδρέας Παπαδόπουλος",
           "position": "Midfielder",
           "shirtNumber": 13,
           "isStarting": false,
@@ -1321,7 +1321,7 @@
           "stamina": 83
         },
         {
-          "name": "Σπύρος Παπαδόπουλος",
+          "name": "Λευτέρης Παύλου",
           "position": "Midfielder",
           "shirtNumber": 14,
           "isStarting": false,
@@ -1334,7 +1334,7 @@
           "stamina": 88
         },
         {
-          "name": "Φώτης Χατζηγεωργίου",
+          "name": "Τάσος Παπαδόπουλος",
           "position": "Forward",
           "shirtNumber": 15,
           "isStarting": false,
@@ -1347,7 +1347,7 @@
           "stamina": 79
         },
         {
-          "name": "Κυριάκος Μαρίνος",
+          "name": "Σωτήρης Παύλου",
           "position": "Forward",
           "shirtNumber": 16,
           "isStarting": false,
@@ -1360,7 +1360,7 @@
           "stamina": 93
         },
         {
-          "name": "Στέλιος Κωνσταντίνου",
+          "name": "Ηλίας Παύλου",
           "position": "Forward",
           "shirtNumber": 17,
           "isStarting": false,
@@ -1373,7 +1373,7 @@
           "stamina": 80
         },
         {
-          "name": "Σπύρος Παπαδόπουλος",
+          "name": "Μιχάλης Παπαδόπουλος",
           "position": "Forward",
           "shirtNumber": 18,
           "isStarting": false,
@@ -1386,7 +1386,7 @@
           "stamina": 91
         },
         {
-          "name": "Βασίλης Θεοδώρου",
+          "name": "Αλέξανδρος Παύλου",
           "position": "Forward",
           "shirtNumber": 19,
           "isStarting": false,
@@ -1399,7 +1399,7 @@
           "stamina": 79
         },
         {
-          "name": "Ανδρέας Δημητρίου",
+          "name": "Κυριάκος Παπαδόπουλος",
           "position": "Forward",
           "shirtNumber": 20,
           "isStarting": false,
@@ -1412,7 +1412,7 @@
           "stamina": 79
         },
         {
-          "name": "Νίκος Νικολάου",
+          "name": "Νίκος Αντωνίου",
           "position": "Forward",
           "shirtNumber": 21,
           "isStarting": false,
@@ -1425,7 +1425,7 @@
           "stamina": 81
         },
         {
-          "name": "Κώστας Σαββίδης",
+          "name": "Χρήστος Νικολάου",
           "position": "Forward",
           "shirtNumber": 22,
           "isStarting": false,
@@ -1509,7 +1509,7 @@
           "stamina": 90
         },
         {
-          "name": "Ηλίας Χαραλάμπους",
+          "name": "Κώστας Παπαδόπουλος",
           "position": "Defender",
           "shirtNumber": 3,
           "isStarting": true,
@@ -1522,7 +1522,7 @@
           "stamina": 88
         },
         {
-          "name": "Κώστας Γεωργίου",
+          "name": "Παναγιώτης Παύλου",
           "position": "Defender",
           "shirtNumber": 4,
           "isStarting": true,
@@ -1613,7 +1613,7 @@
           "stamina": 77
         },
         {
-          "name": "Ηλίας Χαραλάμπους",
+          "name": "Γιάννης Παπαδόπουλος",
           "position": "Midfielder",
           "shirtNumber": 11,
           "isStarting": true,
@@ -1626,7 +1626,7 @@
           "stamina": 86
         },
         {
-          "name": "Κώστας Γεωργίου",
+          "name": "Φώτης Παύλου",
           "position": "Midfielder",
           "shirtNumber": 12,
           "isStarting": false,
@@ -1639,7 +1639,7 @@
           "stamina": 92
         },
         {
-          "name": "Νίκος Παύλου",
+          "name": "Ανδρέας Παπαδόπουλος",
           "position": "Midfielder",
           "shirtNumber": 13,
           "isStarting": false,
@@ -1652,7 +1652,7 @@
           "stamina": 89
         },
         {
-          "name": "Ανδρέας Ανδρέου",
+          "name": "Λευτέρης Παύλου",
           "position": "Midfielder",
           "shirtNumber": 14,
           "isStarting": false,
@@ -1665,7 +1665,7 @@
           "stamina": 83
         },
         {
-          "name": "Ηλίας Χαραλάμπους",
+          "name": "Τάσος Παπαδόπουλος",
           "position": "Forward",
           "shirtNumber": 15,
           "isStarting": false,
@@ -1678,7 +1678,7 @@
           "stamina": 92
         },
         {
-          "name": "Κώστας Γεωργίου",
+          "name": "Σωτήρης Παύλου",
           "position": "Forward",
           "shirtNumber": 16,
           "isStarting": false,
@@ -1691,7 +1691,7 @@
           "stamina": 90
         },
         {
-          "name": "Νίκος Παύλου",
+          "name": "Σπύρος Παπαδόπουλος",
           "position": "Forward",
           "shirtNumber": 17,
           "isStarting": false,
@@ -1704,7 +1704,7 @@
           "stamina": 84
         },
         {
-          "name": "Ανδρέας Ανδρέου",
+          "name": "Ηλίας Παύλου",
           "position": "Forward",
           "shirtNumber": 18,
           "isStarting": false,
@@ -1717,7 +1717,7 @@
           "stamina": 76
         },
         {
-          "name": "Βασίλης Βασιλείου",
+          "name": "Μιχάλης Παπαδόπουλος",
           "position": "Forward",
           "shirtNumber": 19,
           "isStarting": false,
@@ -1730,7 +1730,7 @@
           "stamina": 77
         },
         {
-          "name": "Σπύρος Σταυρίδης",
+          "name": "Αλέξανδρος Παύλου",
           "position": "Forward",
           "shirtNumber": 20,
           "isStarting": false,
@@ -1743,7 +1743,7 @@
           "stamina": 77
         },
         {
-          "name": "Στέλιος Φιλίππου",
+          "name": "Κυριάκος Παπαδόπουλος",
           "position": "Forward",
           "shirtNumber": 21,
           "isStarting": false,
@@ -1756,7 +1756,7 @@
           "stamina": 88
         },
         {
-          "name": "Κυριάκος Αθανασίου",
+          "name": "Νίκος Αντωνίου",
           "position": "Forward",
           "shirtNumber": 22,
           "isStarting": false,
@@ -1852,7 +1852,7 @@
           "stamina": 85
         },
         {
-          "name": "Τάσος Λουκά",
+          "name": "Κώστας Παπαδόπουλος",
           "position": "Defender",
           "shirtNumber": 3,
           "isStarting": true,
@@ -1865,7 +1865,7 @@
           "stamina": 84
         },
         {
-          "name": "Πέτρος Πετρίδης",
+          "name": "Παναγιώτης Παύλου",
           "position": "Defender",
           "shirtNumber": 4,
           "isStarting": true,
@@ -1956,7 +1956,7 @@
           "stamina": 88
         },
         {
-          "name": "Τάσος Λουκά",
+          "name": "Γιάννης Παπαδόπουλος",
           "position": "Midfielder",
           "shirtNumber": 11,
           "isStarting": true,
@@ -1969,7 +1969,7 @@
           "stamina": 76
         },
         {
-          "name": "Πέτρος Πετρίδης",
+          "name": "Φώτης Παύλου",
           "position": "Midfielder",
           "shirtNumber": 12,
           "isStarting": false,
@@ -1982,7 +1982,7 @@
           "stamina": 77
         },
         {
-          "name": "Γιάννης Ιωάννου",
+          "name": "Ανδρέας Παπαδόπουλος",
           "position": "Midfielder",
           "shirtNumber": 13,
           "isStarting": false,
@@ -1995,7 +1995,7 @@
           "stamina": 94
         },
         {
-          "name": "Αλέξανδρος Χατζηγεωργίου",
+          "name": "Λευτέρης Παύλου",
           "position": "Midfielder",
           "shirtNumber": 14,
           "isStarting": false,
@@ -2008,7 +2008,7 @@
           "stamina": 78
         },
         {
-          "name": "Τάσος Λουκά",
+          "name": "Τάσος Παπαδόπουλος",
           "position": "Forward",
           "shirtNumber": 15,
           "isStarting": false,
@@ -2021,7 +2021,7 @@
           "stamina": 83
         },
         {
-          "name": "Πέτρος Πετρίδης",
+          "name": "Σωτήρης Παύλου",
           "position": "Forward",
           "shirtNumber": 16,
           "isStarting": false,
@@ -2034,7 +2034,7 @@
           "stamina": 85
         },
         {
-          "name": "Γιάννης Ιωάννου",
+          "name": "Σπύρος Παπαδόπουλος",
           "position": "Forward",
           "shirtNumber": 17,
           "isStarting": false,
@@ -2047,7 +2047,7 @@
           "stamina": 78
         },
         {
-          "name": "Αλέξανδρος Χατζηγεωργίου",
+          "name": "Ηλίας Παύλου",
           "position": "Forward",
           "shirtNumber": 18,
           "isStarting": false,
@@ -2060,7 +2060,7 @@
           "stamina": 80
         },
         {
-          "name": "Θανάσης Μαρίνος",
+          "name": "Μιχάλης Παπαδόπουλος",
           "position": "Forward",
           "shirtNumber": 19,
           "isStarting": false,
@@ -2073,7 +2073,7 @@
           "stamina": 78
         },
         {
-          "name": "Σωτήρης Κωνσταντίνου",
+          "name": "Αλέξανδρος Παύλου",
           "position": "Forward",
           "shirtNumber": 20,
           "isStarting": false,
@@ -2086,7 +2086,7 @@
           "stamina": 76
         },
         {
-          "name": "Δημήτρης Παπαδόπουλος",
+          "name": "Κυριάκος Παπαδόπουλος",
           "position": "Forward",
           "shirtNumber": 21,
           "isStarting": false,
@@ -2099,7 +2099,7 @@
           "stamina": 75
         },
         {
-          "name": "Φώτης Θεοδώρου",
+          "name": "Νίκος Αντωνίου",
           "position": "Forward",
           "shirtNumber": 22,
           "isStarting": false,
@@ -2195,7 +2195,7 @@
           "stamina": 91
         },
         {
-          "name": "Θανάσης Δημητρίου",
+          "name": "Κώστας Παπαδόπουλος",
           "position": "Defender",
           "shirtNumber": 3,
           "isStarting": true,
@@ -2208,7 +2208,7 @@
           "stamina": 83
         },
         {
-          "name": "Αλέξανδρος Θεοδώρου",
+          "name": "Παναγιώτης Παύλου",
           "position": "Defender",
           "shirtNumber": 4,
           "isStarting": true,
@@ -2299,7 +2299,7 @@
           "stamina": 83
         },
         {
-          "name": "Θανάσης Δημητρίου",
+          "name": "Φώτης Παύλου",
           "position": "Midfielder",
           "shirtNumber": 11,
           "isStarting": true,
@@ -2312,7 +2312,7 @@
           "stamina": 78
         },
         {
-          "name": "Αλέξανδρος Θεοδώρου",
+          "name": "Ανδρέας Παπαδόπουλος",
           "position": "Midfielder",
           "shirtNumber": 12,
           "isStarting": false,
@@ -2325,7 +2325,7 @@
           "stamina": 85
         },
         {
-          "name": "Γιάννης Παπαδόπουλος",
+          "name": "Λευτέρης Παύλου",
           "position": "Midfielder",
           "shirtNumber": 13,
           "isStarting": false,
@@ -2338,7 +2338,7 @@
           "stamina": 82
         },
         {
-          "name": "Πέτρος Κωνσταντίνου",
+          "name": "Τάσος Παπαδόπουλος",
           "position": "Midfielder",
           "shirtNumber": 14,
           "isStarting": false,
@@ -2351,7 +2351,7 @@
           "stamina": 85
         },
         {
-          "name": "Θανάσης Δημητρίου",
+          "name": "Σωτήρης Παύλου",
           "position": "Forward",
           "shirtNumber": 15,
           "isStarting": false,
@@ -2364,7 +2364,7 @@
           "stamina": 78
         },
         {
-          "name": "Αλέξανδρος Θεοδώρου",
+          "name": "Σπύρος Παπαδόπουλος",
           "position": "Forward",
           "shirtNumber": 16,
           "isStarting": false,
@@ -2377,7 +2377,7 @@
           "stamina": 82
         },
         {
-          "name": "Γιάννης Παπαδόπουλος",
+          "name": "Ηλίας Παύλου",
           "position": "Forward",
           "shirtNumber": 17,
           "isStarting": false,
@@ -2390,7 +2390,7 @@
           "stamina": 78
         },
         {
-          "name": "Πέτρος Κωνσταντίνου",
+          "name": "Μιχάλης Παπαδόπουλος",
           "position": "Forward",
           "shirtNumber": 18,
           "isStarting": false,
@@ -2403,7 +2403,7 @@
           "stamina": 76
         },
         {
-          "name": "Τάσος Μαρίνος",
+          "name": "Αλέξανδρος Παύλου",
           "position": "Forward",
           "shirtNumber": 19,
           "isStarting": false,
@@ -2416,7 +2416,7 @@
           "stamina": 94
         },
         {
-          "name": "Γιώργος Χατζηγεωργίου",
+          "name": "Κυριάκος Παπαδόπουλος",
           "position": "Forward",
           "shirtNumber": 20,
           "isStarting": false,
@@ -2429,7 +2429,7 @@
           "stamina": 78
         },
         {
-          "name": "Μιχάλης Ιωάννου",
+          "name": "Νίκος Αντωνίου",
           "position": "Forward",
           "shirtNumber": 21,
           "isStarting": false,
@@ -2442,7 +2442,7 @@
           "stamina": 79
         },
         {
-          "name": "Παναγιώτης Πετρίδης",
+          "name": "Χρήστος Νικολάου",
           "position": "Forward",
           "shirtNumber": 22,
           "isStarting": false,
@@ -2538,7 +2538,7 @@
           "stamina": 91
         },
         {
-          "name": "Δημήτρης Αθανασίου",
+          "name": "Κώστας Παπαδόπουλος",
           "position": "Defender",
           "shirtNumber": 3,
           "isStarting": true,
@@ -2551,7 +2551,7 @@
           "stamina": 85
         },
         {
-          "name": "Σωτήρης Μιχαηλίδης",
+          "name": "Παναγιώτης Παύλου",
           "position": "Defender",
           "shirtNumber": 4,
           "isStarting": true,
@@ -2642,7 +2642,7 @@
           "stamina": 77
         },
         {
-          "name": "Δημήτρης Αθανασίου",
+          "name": "Γιάννης Παπαδόπουλος",
           "position": "Midfielder",
           "shirtNumber": 11,
           "isStarting": true,
@@ -2655,7 +2655,7 @@
           "stamina": 85
         },
         {
-          "name": "Σωτήρης Μιχαηλίδης",
+          "name": "Φώτης Παύλου",
           "position": "Midfielder",
           "shirtNumber": 12,
           "isStarting": false,
@@ -2668,7 +2668,7 @@
           "stamina": 89
         },
         {
-          "name": "Θανάσης Σαββίδης",
+          "name": "Ανδρέας Παπαδόπουλος",
           "position": "Midfielder",
           "shirtNumber": 13,
           "isStarting": false,
@@ -2681,7 +2681,7 @@
           "stamina": 92
         },
         {
-          "name": "Αλέξανδρος Νικολάου",
+          "name": "Λευτέρης Παύλου",
           "position": "Midfielder",
           "shirtNumber": 14,
           "isStarting": false,
@@ -2694,7 +2694,7 @@
           "stamina": 87
         },
         {
-          "name": "Δημήτρης Αθανασίου",
+          "name": "Σωτήρης Παύλου",
           "position": "Forward",
           "shirtNumber": 15,
           "isStarting": false,
@@ -2707,7 +2707,7 @@
           "stamina": 85
         },
         {
-          "name": "Σωτήρης Μιχαηλίδης",
+          "name": "Σπύρος Παπαδόπουλος",
           "position": "Forward",
           "shirtNumber": 16,
           "isStarting": false,
@@ -2720,7 +2720,7 @@
           "stamina": 87
         },
         {
-          "name": "Θανάσης Σαββίδης",
+          "name": "Ηλίας Παύλου",
           "position": "Forward",
           "shirtNumber": 17,
           "isStarting": false,
@@ -2733,7 +2733,7 @@
           "stamina": 78
         },
         {
-          "name": "Αλέξανδρος Νικολάου",
+          "name": "Μιχάλης Παπαδόπουλος",
           "position": "Forward",
           "shirtNumber": 18,
           "isStarting": false,
@@ -2746,7 +2746,7 @@
           "stamina": 87
         },
         {
-          "name": "Γιάννης Δημητρίου",
+          "name": "Αλέξανδρος Παύλου",
           "position": "Forward",
           "shirtNumber": 19,
           "isStarting": false,
@@ -2759,7 +2759,7 @@
           "stamina": 78
         },
         {
-          "name": "Πέτρος Θεοδώρου",
+          "name": "Κυριάκος Παπαδόπουλος",
           "position": "Forward",
           "shirtNumber": 20,
           "isStarting": false,
@@ -2772,7 +2772,7 @@
           "stamina": 92
         },
         {
-          "name": "Τάσος Παπαδόπουλος",
+          "name": "Νίκος Αντωνίου",
           "position": "Forward",
           "shirtNumber": 21,
           "isStarting": false,
@@ -2785,7 +2785,7 @@
           "stamina": 75
         },
         {
-          "name": "Γιώργος Κωνσταντίνου",
+          "name": "Χρήστος Νικολάου",
           "position": "Forward",
           "shirtNumber": 22,
           "isStarting": false,
@@ -2881,7 +2881,7 @@
           "stamina": 81
         },
         {
-          "name": "Σπύρος Αντωνίου",
+          "name": "Κώστας Παπαδόπουλος",
           "position": "Defender",
           "shirtNumber": 3,
           "isStarting": true,
@@ -2894,7 +2894,7 @@
           "stamina": 81
         },
         {
-          "name": "Βασίλης Χριστοδούλου",
+          "name": "Παναγιώτης Παύλου",
           "position": "Defender",
           "shirtNumber": 4,
           "isStarting": true,
@@ -2985,7 +2985,7 @@
           "stamina": 84
         },
         {
-          "name": "Σπύρος Αντωνίου",
+          "name": "Γιάννης Παπαδόπουλος",
           "position": "Midfielder",
           "shirtNumber": 11,
           "isStarting": true,
@@ -2998,7 +2998,7 @@
           "stamina": 88
         },
         {
-          "name": "Βασίλης Χριστοδούλου",
+          "name": "Φώτης Παύλου",
           "position": "Midfielder",
           "shirtNumber": 12,
           "isStarting": false,
@@ -3011,7 +3011,7 @@
           "stamina": 77
         },
         {
-          "name": "Ανδρέας Λουκά",
+          "name": "Ανδρέας Παπαδόπουλος",
           "position": "Midfielder",
           "shirtNumber": 13,
           "isStarting": false,
@@ -3024,7 +3024,7 @@
           "stamina": 88
         },
         {
-          "name": "Νίκος Πετρίδης",
+          "name": "Λευτέρης Παύλου",
           "position": "Midfielder",
           "shirtNumber": 14,
           "isStarting": false,
@@ -3037,7 +3037,7 @@
           "stamina": 93
         },
         {
-          "name": "Σπύρος Αντωνίου",
+          "name": "Τάσος Παπαδόπουλος",
           "position": "Forward",
           "shirtNumber": 15,
           "isStarting": false,
@@ -3050,7 +3050,7 @@
           "stamina": 90
         },
         {
-          "name": "Βασίλης Χριστοδούλου",
+          "name": "Σωτήρης Παύλου",
           "position": "Forward",
           "shirtNumber": 16,
           "isStarting": false,
@@ -3063,7 +3063,7 @@
           "stamina": 88
         },
         {
-          "name": "Ανδρέας Λουκά",
+          "name": "Σπύρος Παπαδόπουλος",
           "position": "Forward",
           "shirtNumber": 17,
           "isStarting": false,
@@ -3076,7 +3076,7 @@
           "stamina": 91
         },
         {
-          "name": "Νίκος Πετρίδης",
+          "name": "Ηλίας Παύλου",
           "position": "Forward",
           "shirtNumber": 18,
           "isStarting": false,
@@ -3089,7 +3089,7 @@
           "stamina": 76
         },
         {
-          "name": "Κώστας Ιωάννου",
+          "name": "Μιχάλης Παπαδόπουλος",
           "position": "Forward",
           "shirtNumber": 19,
           "isStarting": false,
@@ -3102,7 +3102,7 @@
           "stamina": 92
         },
         {
-          "name": "Ηλίας Χατζηγεωργίου",
+          "name": "Αλέξανδρος Παύλου",
           "position": "Forward",
           "shirtNumber": 20,
           "isStarting": false,
@@ -3115,7 +3115,7 @@
           "stamina": 92
         },
         {
-          "name": "Μάνος Μαρίνος",
+          "name": "Κυριάκος Παπαδόπουλος",
           "position": "Forward",
           "shirtNumber": 21,
           "isStarting": false,
@@ -3128,7 +3128,7 @@
           "stamina": 78
         },
         {
-          "name": "Λευτέρης Κωνσταντίνου",
+          "name": "Νίκος Αντωνίου",
           "position": "Forward",
           "shirtNumber": 22,
           "isStarting": false,
@@ -3214,7 +3214,7 @@
           "stamina": 93
         },
         {
-          "name": "Σωτήρης Χριστοδούλου",
+          "name": "Κώστας Παπαδόπουλος",
           "position": "Defender",
           "shirtNumber": 3,
           "isStarting": true,
@@ -3227,7 +3227,7 @@
           "stamina": 79
         },
         {
-          "name": "Δημήτρης Λουκά",
+          "name": "Παναγιώτης Παύλου",
           "position": "Defender",
           "shirtNumber": 4,
           "isStarting": true,
@@ -3318,7 +3318,7 @@
           "stamina": 75
         },
         {
-          "name": "Σωτήρης Χριστοδούλου",
+          "name": "Γιάννης Παπαδόπουλος",
           "position": "Midfielder",
           "shirtNumber": 11,
           "isStarting": true,
@@ -3331,7 +3331,7 @@
           "stamina": 76
         },
         {
-          "name": "Δημήτρης Λουκά",
+          "name": "Φώτης Παύλου",
           "position": "Midfielder",
           "shirtNumber": 12,
           "isStarting": false,
@@ -3344,7 +3344,7 @@
           "stamina": 84
         },
         {
-          "name": "Φώτης Πετρίδης",
+          "name": "Λευτέρης Παύλου",
           "position": "Midfielder",
           "shirtNumber": 13,
           "isStarting": false,
@@ -3357,7 +3357,7 @@
           "stamina": 80
         },
         {
-          "name": "Κυριάκος Ιωάννου",
+          "name": "Τάσος Παπαδόπουλος",
           "position": "Midfielder",
           "shirtNumber": 14,
           "isStarting": false,
@@ -3370,7 +3370,7 @@
           "stamina": 89
         },
         {
-          "name": "Σωτήρης Χριστοδούλου",
+          "name": "Σωτήρης Παύλου",
           "position": "Forward",
           "shirtNumber": 15,
           "isStarting": false,
@@ -3383,7 +3383,7 @@
           "stamina": 89
         },
         {
-          "name": "Δημήτρης Λουκά",
+          "name": "Σπύρος Παπαδόπουλος",
           "position": "Forward",
           "shirtNumber": 16,
           "isStarting": false,
@@ -3396,7 +3396,7 @@
           "stamina": 89
         },
         {
-          "name": "Φώτης Πετρίδης",
+          "name": "Ηλίας Παύλου",
           "position": "Forward",
           "shirtNumber": 17,
           "isStarting": false,
@@ -3409,7 +3409,7 @@
           "stamina": 94
         },
         {
-          "name": "Κυριάκος Ιωάννου",
+          "name": "Μιχάλης Παπαδόπουλος",
           "position": "Forward",
           "shirtNumber": 18,
           "isStarting": false,
@@ -3422,7 +3422,7 @@
           "stamina": 90
         },
         {
-          "name": "Στέλιος Χατζηγεωργίου",
+          "name": "Αλέξανδρος Παύλου",
           "position": "Forward",
           "shirtNumber": 19,
           "isStarting": false,
@@ -3435,7 +3435,7 @@
           "stamina": 94
         },
         {
-          "name": "Σπύρος Μαρίνος",
+          "name": "Κυριάκος Παπαδόπουλος",
           "position": "Forward",
           "shirtNumber": 20,
           "isStarting": false,
@@ -3448,7 +3448,7 @@
           "stamina": 81
         },
         {
-          "name": "Βασίλης Κωνσταντίνου",
+          "name": "Νίκος Αντωνίου",
           "position": "Forward",
           "shirtNumber": 21,
           "isStarting": false,
@@ -3461,7 +3461,7 @@
           "stamina": 81
         },
         {
-          "name": "Ανδρέας Παπαδόπουλος",
+          "name": "Χρήστος Νικολάου",
           "position": "Forward",
           "shirtNumber": 22,
           "isStarting": false,
@@ -3547,7 +3547,7 @@
           "stamina": 86
         },
         {
-          "name": "Ανδρέας Ιωάννου",
+          "name": "Κώστας Παπαδόπουλος",
           "position": "Defender",
           "shirtNumber": 3,
           "isStarting": true,
@@ -3560,7 +3560,7 @@
           "stamina": 75
         },
         {
-          "name": "Βασίλης Πετρίδης",
+          "name": "Παναγιώτης Παύλου",
           "position": "Defender",
           "shirtNumber": 4,
           "isStarting": true,
@@ -3651,7 +3651,7 @@
           "stamina": 78
         },
         {
-          "name": "Ανδρέας Ιωάννου",
+          "name": "Γιάννης Παπαδόπουλος",
           "position": "Midfielder",
           "shirtNumber": 11,
           "isStarting": true,
@@ -3664,7 +3664,7 @@
           "stamina": 81
         },
         {
-          "name": "Βασίλης Πετρίδης",
+          "name": "Φώτης Παύλου",
           "position": "Midfielder",
           "shirtNumber": 12,
           "isStarting": false,
@@ -3677,7 +3677,7 @@
           "stamina": 77
         },
         {
-          "name": "Σπύρος Λουκά",
+          "name": "Ανδρέας Παπαδόπουλος",
           "position": "Midfielder",
           "shirtNumber": 13,
           "isStarting": false,
@@ -3690,7 +3690,7 @@
           "stamina": 86
         },
         {
-          "name": "Στέλιος Χριστοδούλου",
+          "name": "Λευτέρης Παύλου",
           "position": "Midfielder",
           "shirtNumber": 14,
           "isStarting": false,
@@ -3703,7 +3703,7 @@
           "stamina": 83
         },
         {
-          "name": "Ανδρέας Ιωάννου",
+          "name": "Τάσος Παπαδόπουλος",
           "position": "Forward",
           "shirtNumber": 15,
           "isStarting": false,
@@ -3716,7 +3716,7 @@
           "stamina": 87
         },
         {
-          "name": "Βασίλης Πετρίδης",
+          "name": "Σπύρος Παπαδόπουλος",
           "position": "Forward",
           "shirtNumber": 16,
           "isStarting": false,
@@ -3729,7 +3729,7 @@
           "stamina": 89
         },
         {
-          "name": "Σπύρος Λουκά",
+          "name": "Ηλίας Παύλου",
           "position": "Forward",
           "shirtNumber": 17,
           "isStarting": false,
@@ -3742,7 +3742,7 @@
           "stamina": 89
         },
         {
-          "name": "Στέλιος Χριστοδούλου",
+          "name": "Μιχάλης Παπαδόπουλος",
           "position": "Forward",
           "shirtNumber": 18,
           "isStarting": false,
@@ -3755,7 +3755,7 @@
           "stamina": 90
         },
         {
-          "name": "Κυριάκος Αντωνίου",
+          "name": "Αλέξανδρος Παύλου",
           "position": "Forward",
           "shirtNumber": 19,
           "isStarting": false,
@@ -3768,7 +3768,7 @@
           "stamina": 78
         },
         {
-          "name": "Φώτης Χαραλάμπους",
+          "name": "Κυριάκος Παπαδόπουλος",
           "position": "Forward",
           "shirtNumber": 20,
           "isStarting": false,
@@ -3781,7 +3781,7 @@
           "stamina": 75
         },
         {
-          "name": "Δημήτρης Γεωργίου",
+          "name": "Νίκος Αντωνίου",
           "position": "Forward",
           "shirtNumber": 21,
           "isStarting": false,
@@ -3794,7 +3794,7 @@
           "stamina": 87
         },
         {
-          "name": "Σωτήρης Παύλου",
+          "name": "Χρήστος Νικολάου",
           "position": "Forward",
           "shirtNumber": 22,
           "isStarting": false,
@@ -3880,7 +3880,7 @@
           "stamina": 80
         },
         {
-          "name": "Κώστας Παπαδόπουλος",
+          "name": "Παναγιώτης Παύλου",
           "position": "Defender",
           "shirtNumber": 3,
           "isStarting": true,
@@ -3893,7 +3893,7 @@
           "stamina": 75
         },
         {
-          "name": "Νίκος Κωνσταντίνου",
+          "name": "Γιάννης Παπαδόπουλος",
           "position": "Defender",
           "shirtNumber": 4,
           "isStarting": true,
@@ -3984,7 +3984,7 @@
           "stamina": 91
         },
         {
-          "name": "Κώστας Παπαδόπουλος",
+          "name": "Φώτης Παύλου",
           "position": "Midfielder",
           "shirtNumber": 11,
           "isStarting": true,
@@ -3997,7 +3997,7 @@
           "stamina": 79
         },
         {
-          "name": "Νίκος Κωνσταντίνου",
+          "name": "Ανδρέας Παπαδόπουλος",
           "position": "Midfielder",
           "shirtNumber": 12,
           "isStarting": false,
@@ -4010,7 +4010,7 @@
           "stamina": 78
         },
         {
-          "name": "Ανδρέας Μαρίνος",
+          "name": "Λευτέρης Παύλου",
           "position": "Midfielder",
           "shirtNumber": 13,
           "isStarting": false,
@@ -4023,7 +4023,7 @@
           "stamina": 82
         },
         {
-          "name": "Βασίλης Χατζηγεωργίου",
+          "name": "Τάσος Παπαδόπουλος",
           "position": "Midfielder",
           "shirtNumber": 14,
           "isStarting": false,
@@ -4036,7 +4036,7 @@
           "stamina": 81
         },
         {
-          "name": "Κώστας Παπαδόπουλος",
+          "name": "Σωτήρης Παύλου",
           "position": "Forward",
           "shirtNumber": 15,
           "isStarting": false,
@@ -4049,7 +4049,7 @@
           "stamina": 82
         },
         {
-          "name": "Νίκος Κωνσταντίνου",
+          "name": "Σπύρος Παπαδόπουλος",
           "position": "Forward",
           "shirtNumber": 16,
           "isStarting": false,
@@ -4062,7 +4062,7 @@
           "stamina": 84
         },
         {
-          "name": "Ανδρέας Μαρίνος",
+          "name": "Ηλίας Παύλου",
           "position": "Forward",
           "shirtNumber": 17,
           "isStarting": false,
@@ -4075,7 +4075,7 @@
           "stamina": 90
         },
         {
-          "name": "Βασίλης Χατζηγεωργίου",
+          "name": "Μιχάλης Παπαδόπουλος",
           "position": "Forward",
           "shirtNumber": 18,
           "isStarting": false,
@@ -4088,7 +4088,7 @@
           "stamina": 85
         },
         {
-          "name": "Σπύρος Ιωάννου",
+          "name": "Αλέξανδρος Παύλου",
           "position": "Forward",
           "shirtNumber": 19,
           "isStarting": false,
@@ -4101,7 +4101,7 @@
           "stamina": 81
         },
         {
-          "name": "Στέλιος Πετρίδης",
+          "name": "Κυριάκος Παπαδόπουλος",
           "position": "Forward",
           "shirtNumber": 20,
           "isStarting": false,
@@ -4114,7 +4114,7 @@
           "stamina": 78
         },
         {
-          "name": "Κυριάκος Λουκά",
+          "name": "Νίκος Αντωνίου",
           "position": "Forward",
           "shirtNumber": 21,
           "isStarting": false,
@@ -4127,7 +4127,7 @@
           "stamina": 75
         },
         {
-          "name": "Φώτης Χριστοδούλου",
+          "name": "Χρήστος Νικολάου",
           "position": "Forward",
           "shirtNumber": 22,
           "isStarting": false,
