@@ -72,7 +72,7 @@ public class UtilityBrainTests
         // and the ball never goes dead.
         for (int i = 0; i < 3; i++)
         {
-            ctx = MakeContext(player, new Vector2(1300f, 300f), 1.3f + i * 0.2f);
+            ctx = MakeContext(player, new Vector2(1200f, 300f), 1.3f + i * 0.2f);
             ctx.BallCarrier = player;
             ctx.BestPassTarget = receiver;
             ctx.BestPassScore = 3000f;
@@ -82,7 +82,7 @@ public class UtilityBrainTests
 
         // Once the ball is no longer his (loose, nobody touched it yet), the
         // give-and-go run owns him as before
-        ctx = MakeContext(player, new Vector2(1300f, 300f), 2.0f);
+        ctx = MakeContext(player, new Vector2(1200f, 300f), 2.0f);
         ctx.ShouldChaseBall = true;
         brain.Update(player, ctx, 0.2f);
         Assert.Equal("RunAfterPass", brain.CurrentActionName);
@@ -95,7 +95,7 @@ public class UtilityBrainTests
     {
         var player = MakePlayer(5, new Vector2(1000f, 300f));
         var receiver = MakePlayer(8, new Vector2(1400f, 300f));
-        var opponent = MakePlayer(21, new Vector2(1250f, 300f));
+        var opponent = MakePlayer(21, new Vector2(1150f, 300f));
         opponent.TeamId = 2;
         var brain = new UtilityBrain(new Random(1), (p, t, power) => { }, (p, t, power) => { });
 
@@ -108,7 +108,7 @@ public class UtilityBrainTests
         brain.Update(player, ctx, 0.2f);
 
         // Inside the window: the stall watchdog must still override the commit
-        ctx = MakeContext(player, new Vector2(1300f, 300f), 1.4f);
+        ctx = MakeContext(player, new Vector2(1200f, 300f), 1.4f);
         ctx.ForcedPounce = true;
         brain.Update(player, ctx, 0.2f);
         Assert.Equal("ChaseBall", brain.CurrentActionName);
@@ -288,7 +288,7 @@ public class UtilityBrainTests
         // It clips him at 60px on the way past: registered possession, but a
         // ball at 2400px/s is a deflection, not a reception - stay chasing
         // (this exact pattern produced 0.1-0.2s Dribble flaps in the harness)
-        ctx = MakeContext(player, new Vector2(1060f, 300f), 1.2f);
+        ctx = MakeContext(player, new Vector2(960f, 300f), 1.2f);
         ctx.BallCarrier = player;
         ctx.HasBallPossession = true;
         ctx.BallVelocity = new Vector2(2400f, 300f);
@@ -452,5 +452,123 @@ public class UtilityBrainTests
         ctx.Opponents = CrowdAround(new Vector2(2200f, 300f), 0, 1);
         brain.Update(player, ctx, 0.2f);
         Assert.Equal("ChaseBall", brain.CurrentActionName);
+    }
+
+    // Shared boomerang setup: midfielder at (900,300) passes to T at (1300,300).
+    // Pass = 29 + 2200*0.021 + 17.8 (far) = 93.0 > dribble 79.3 without a
+    // penalty; x0.75 flips it to dribble. (X kept low so no CrossBonus applies:
+    // distToGoal 2250 > 2200.)
+    private static (Player player, Player target, Player opponent, int[] passes) BoomerangSetup()
+    {
+        var player = MakePlayer(5, new Vector2(900f, 300f));
+        var target = MakePlayer(8, new Vector2(1200f, 300f));
+        var opponent = MakePlayer(21, new Vector2(1150f, 300f));
+        opponent.TeamId = 2;
+        return (player, target, opponent, new int[1]);
+    }
+
+    private static AIContext CarrierCtx(Player player, Player target, float t, float bestPassScore)
+    {
+        var ctx = MakeContext(player, new Vector2(910f, 300f), t);
+        ctx.HasBallPossession = true;
+        ctx.BallCarrier = player;
+        ctx.BestPassTarget = target;
+        ctx.BestPassScore = bestPassScore;
+        return ctx;
+    }
+
+    [Fact]
+    public void BoomerangPass_SameTargetPenalized_OtherTargetFree()
+    {
+        var (player, target, opponent, passes) = BoomerangSetup();
+        var brain = new UtilityBrain(new Random(1), (p, x, power) => passes[0]++, (p, x, power) => { });
+
+        brain.Update(player, CarrierCtx(player, target, 1.0f, 2200f), 0.2f);
+        Assert.Equal(1, passes[0]); // the pass fired (93.0 > dribble 79.3)
+
+        // Intercepted: an opponent touches/controls it inside the window
+        var ctx = MakeContext(player, new Vector2(1150f, 300f), 1.5f);
+        ctx.BallCarrier = opponent;
+        ctx.LastBallToucher = opponent;
+        ctx.ShouldChaseBall = true;
+        brain.Update(player, ctx, 0.2f);
+
+        // Same target again: the boomerang penalty (x0.75 -> 69.75 < 79.3)
+        // makes dribble win instead of feeding the blocked lane
+        brain.Update(player, CarrierCtx(player, target, 2.0f, 2200f), 0.2f);
+        Assert.Equal("Dribble", brain.CurrentActionName);
+
+        // A different target is NOT penalized
+        var other = MakePlayer(9, new Vector2(1500f, 500f));
+        brain.Update(player, CarrierCtx(player, other, 2.2f, 2200f), 0.2f);
+        Assert.Equal(2, passes[0]); // pass to the other target fired
+    }
+
+    [Fact]
+    public void SuccessfulPass_NotPenalized()
+    {
+        var (player, target, opponent, passes) = BoomerangSetup();
+        var brain = new UtilityBrain(new Random(1), (p, x, power) => passes[0]++, (p, x, power) => { });
+
+        brain.Update(player, CarrierCtx(player, target, 1.0f, 2200f), 0.2f);
+        Assert.Equal(1, passes[0]);
+
+        // Received: a teammate touch resolves the outcome as success
+        var ctx = MakeContext(player, new Vector2(1290f, 300f), 1.4f);
+        ctx.BallCarrier = target;
+        ctx.LastBallToucher = target;
+        brain.Update(player, ctx, 0.2f);
+
+        // No penalty: passing to the same target still wins
+        brain.Update(player, CarrierCtx(player, target, 2.0f, 2200f), 0.2f);
+        Assert.Equal(2, passes[0]);
+    }
+
+    [Fact]
+    public void PassFailPenalty_DecaysAfterWindow()
+    {
+        var (player, target, opponent, passes) = BoomerangSetup();
+        var brain = new UtilityBrain(new Random(1), (p, x, power) => passes[0]++, (p, x, power) => { });
+
+        brain.Update(player, CarrierCtx(player, target, 1.0f, 2200f), 0.2f);
+        var ctx = MakeContext(player, new Vector2(1150f, 300f), 1.5f);
+        ctx.BallCarrier = opponent;
+        ctx.LastBallToucher = opponent;
+        ctx.ShouldChaseBall = true;
+        brain.Update(player, ctx, 0.2f);
+
+        // Penalized now...
+        brain.Update(player, CarrierCtx(player, target, 2.0f, 2200f), 0.2f);
+        Assert.Equal("Dribble", brain.CurrentActionName);
+
+        // ...but the memory decays: past the window the target is clean again
+        brain.Update(player, CarrierCtx(player, target, 1.5f + 8f + 0.2f, 2200f), 0.2f);
+        Assert.Equal(2, passes[0]);
+    }
+
+    [Fact]
+    public void BoomerangPass_ReturnToSelfWithoutTeammateTouch_IsFailure()
+    {
+        var (player, target, opponent, passes) = BoomerangSetup();
+        var brain = new UtilityBrain(new Random(1), (p, x, power) => passes[0]++, (p, x, power) => { });
+
+        brain.Update(player, CarrierCtx(player, target, 1.0f, 2200f), 0.2f);
+        Assert.Equal(1, passes[0]);
+
+        // The ball leaves (under-hit, dies) with no toucher change...
+        var ctx = MakeContext(player, new Vector2(1200f, 300f), 1.2f);
+        ctx.BallCarrier = null;
+        ctx.LastBallToucher = player;
+        brain.Update(player, ctx, 0.2f);
+
+        // ...and comes straight back to the passer: boomerang
+        ctx = MakeContext(player, new Vector2(960f, 300f), 1.6f);
+        ctx.BallCarrier = player;
+        ctx.HasBallPossession = true;
+        ctx.LastBallToucher = player;
+        brain.Update(player, ctx, 0.2f);
+
+        brain.Update(player, CarrierCtx(player, target, 2.0f, 2200f), 0.2f);
+        Assert.Equal("Dribble", brain.CurrentActionName);
     }
 }

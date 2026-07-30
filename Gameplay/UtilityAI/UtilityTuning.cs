@@ -29,6 +29,12 @@ namespace NoPasaranFC.Gameplay.UtilityAI
         public static float PassFarBonus = 17.8f;       // too far to shoot: move it on
         public static float CrossBonus = 26f;           // wide in attacking third: feed the box
         
+        // Pass-failure memory (boomerang loop): opponent touch / the ball coming
+        // straight back within this window = failed pass
+        public static float PassBoomerangSeconds = 2.5f;  // failure detection window after a pass
+        public static float PassFailMemorySeconds = 8f;   // the failed target stays penalized this long
+        public static float PassFailPenaltyFactor = 0.25f; // per-failure score decay (x0.75 / x0.5 / x0.25)
+        
         // Dribbling
         public static float DribbleBaseScore = 33.5f;
         public static float DribbleLaneBonus = 27f;     // per missing lane blocker (0-3)

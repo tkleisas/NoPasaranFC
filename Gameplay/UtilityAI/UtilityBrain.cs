@@ -197,6 +197,36 @@ namespace NoPasaranFC.Gameplay.UtilityAI
             }
             _wasCarrier = context.BallCarrier == player;
 
+            // Pass outcome tracking: resolve the last pass as completed
+            // (teammate touch), boomeranged (opponent touch, or the ball came
+            // straight back with no teammate touch), or unanswered (window
+            // expires - in flight, out of play, no verdict: NOT a failure)
+            if (_passOutcomePending)
+            {
+                var toucher = context.LastBallToucher;
+                if (toucher != null && toucher != player && toucher.TeamId == player.TeamId)
+                {
+                    _passOutcomePending = false; // received - success
+                }
+                else if (toucher != null && toucher.TeamId != player.TeamId)
+                {
+                    RegisterPassFailure(context); // intercepted by an opponent
+                    _passOutcomePending = false;
+                }
+                else if (_passBallGone && context.BallCarrier == player)
+                {
+                    RegisterPassFailure(context); // came straight back, nobody touched it
+                    _passOutcomePending = false;
+                }
+                else if (context.BallCarrier != player)
+                {
+                    _passBallGone = true; // it left - now watch for the return
+                }
+                
+                if (context.MatchTime - _lastPassTime > UtilityTuning.PassBoomerangSeconds)
+                    _passOutcomePending = false;
+            }
+
             // Post-pass commitment ends for good once anyone else controls the
             // ball (the pass was received, intercepted, or genuinely came back)
             if (_postPassCommitUntil > 0f && context.BallCarrier != null && context.BallCarrier != player)
@@ -234,13 +264,36 @@ namespace NoPasaranFC.Gameplay.UtilityAI
         }
 
         private bool _wasCarrier;
+        // Dribble failure tracking: lost the ball to an opponent while
+        // dribbling -> dribble less for a while (pass first next time)
         private int _dribbleFailures;
         private float _dribbleFailUntil = -1f;
+        
+        // Pass-failure memory (boomerang loop): a pass intercepted by an
+        // opponent or coming straight back within ~2.5s is remembered; that
+        // target's pass score decays per failure for a few seconds, so after
+        // 1-2 boomerangs the brain picks another lane / dribbles / holds
+        private float _lastPassTime = -1f;
+        private Player _lastPassTarget;
+        private bool _passOutcomePending;
+        private bool _passBallGone;
+        private Player _passFailTarget;
+        private int _passFailures;
+        private float _passFailUntil = -1f;
         
         /// <summary>Ball stuck with an idle controlled carrier for 3s+ = loose ball.</summary>
         private bool IsBallEffectivelyLoose(AIContext ctx)
         {
             return ctx.BallCarrier == null || _carrierStallTimer > 3f;
+        }
+        
+        /// <summary>Records a boomeranged pass: the failed target's score
+        /// decays per failure (capped at 3, like the dribble-failure decay).</summary>
+        private void RegisterPassFailure(AIContext ctx)
+        {
+            _passFailures = Math.Min(3, _passFailures + 1);
+            _passFailTarget = _lastPassTarget;
+            _passFailUntil = ctx.MatchTime + UtilityTuning.PassFailMemorySeconds;
         }
         
         /// <summary>True during the post-pass commitment window while nobody
@@ -598,7 +651,16 @@ namespace NoPasaranFC.Gameplay.UtilityAI
             if (ctx.MatchTime < _dribbleFailUntil)
                 dribbleScore *= 1f - 0.25f * _dribbleFailures; // x0.75 / x0.5 / x0.25
             
-            // Post-pass commitment: the ball I just kicked is not mine to kick
+            // Pass-failure memory: recent boomerangs against THIS target decay
+            // its score - after 1-2 blocked reps the brain picks another lane
+            // (a different target is not penalized)
+            if (passScore > float.MinValue && ctx.MatchTime < _passFailUntil &&
+                (_passFailTarget == null || ctx.BestPassTarget == _passFailTarget))
+            {
+                passScore *= 1f - UtilityTuning.PassFailPenaltyFactor * _passFailures;
+            }
+            
+                        // Post-pass commitment: the ball I just kicked is not mine to kick
             // AGAIN for a beat (kills the Pass<->Idle flap when an under-hit
             // pass dies next to the passer) - but Dribble still collects it,
             // so the ball never goes dead. ForcedPounce still overrides (it is
@@ -700,9 +762,14 @@ namespace NoPasaranFC.Gameplay.UtilityAI
                 // that pinball loop is the goal-mouth flap generator
                 if (IsPathCrowded(player.FieldPosition, mate.FieldPosition, ctx.Opponents))
                     continue;
-
+                
+                // Boomerang memory: a target that already bounced one back
+                // recently gets its distribution score decayed too
                 float progress = (mate.FieldPosition.X - ctx.OwnGoalCenter.X) * ctx.AttackSign;
                 float score = openness / 100f + progress / 400f;
+                if (mate == _passFailTarget && ctx.MatchTime < _passFailUntil)
+                    score *= 1f - UtilityTuning.PassFailPenaltyFactor * _passFailures;
+                
                 if (mate.Position == PlayerPosition.Defender) score += 5f; // fullbacks are the safe out-ball
                 if (score > bestScore) { bestScore = score; bestTarget = mate; }
             }
@@ -961,6 +1028,13 @@ namespace NoPasaranFC.Gameplay.UtilityAI
                         float lead = Math.Clamp(passDist / 1200f, 0.2f, 0.8f);
                         _passBall(player, action.TargetPlayer.FieldPosition + action.TargetPlayer.Velocity * lead, 0.85f);
                         PassesAttempted++;
+                        
+                        // Boomerang watch: resolve this pass's outcome over the
+                        // next PassBoomerangSeconds in Update
+                        _lastPassTime = ctx.MatchTime;
+                        _lastPassTarget = action.TargetPlayer;
+                        _passOutcomePending = true;
+                        _passBallGone = false;
                         
                         // Give-and-go: run into space after releasing, offering
                         // the return pass. Target: deep, offset from the pass lane

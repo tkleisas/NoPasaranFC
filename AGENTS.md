@@ -115,7 +115,10 @@ dotnet build NoPasaranFC.Android/NoPasaranFC.Android.csproj  # Android (needs an
   (`AIConstants.ChaseReassignMargin`), dribble commitment + fast-ball deflection gate
   (`DribbleCommitSeconds`/`DribbleEnterMargin`/`DribbleEnterMaxBallSpeed`), scramble discipline
   (one contestor per team in a pinball: `ScrambleRadius`/`ScramblePlayers`/`ContestCommitSeconds`,
-  `AIConstants.ScrambleReassignMargin`; GK distribution lane check via `IsPathCrowded`).
+  `AIConstants.ScrambleReassignMargin`; GK distribution lane check via `IsPathCrowded`),
+  pass-failure memory (a pass intercepted/returned within `PassBoomerangSeconds`=2.5s penalizes
+  that target ×(1−`PassFailPenaltyFactor`×failures) for `PassFailMemorySeconds`=8s — kills
+  boomerang loops into blocked lanes).
   Card cutscene can't stall set pieces (arrival accepts the renderer's 2m standoff +
   walk-time budget). While `MatchEngine.GoalScoredPending` (0.5s goal delay) the ball is
   dead: no out-of-bounds restarts, no AI kicks.

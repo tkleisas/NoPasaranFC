@@ -240,6 +240,7 @@ namespace NoPasaranFC.Gameplay
                 BallHeight = _engine.BallHeight,
                 BallVerticalVelocity = _engine.BallVerticalVelocity,
                 BallCarrier = GetBallCarrier(),
+                LastBallToucher = _engine.LastPlayerTouchedBall,
                 NearestOpponent = nearestOpponent,
                 NearestTeammate = nearestTeammate,
                 BestPassTarget = bestPassTarget,
