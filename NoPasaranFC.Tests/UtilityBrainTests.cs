@@ -135,38 +135,148 @@ public class UtilityBrainTests
     }
 
     [Fact]
-    public void ChaseHoldBoundary_HysteresisBlocksScoreNoiseFlapping()
+    public void UnifiedCommitment_HoldsAcrossNoiseFlip_MarginBreachSwitches()
     {
-        // HoldBaseScore is 47.3; enter needs chase > 53.3, exit needs chase < 43.3
-        var player = MakePlayer(5, new Vector2(2000f, 300f));
+        // Designated chaser (+25): chase = 94 - dist/40; hold is 47.3 and the
+        // commit margin is 8 - switches in past 55.3, out below hold - 8
+        var player = MakePlayer(5, new Vector2(2400f, 300f));
         var brain = new UtilityBrain(new Random(1), (p, t, power) => { }, (p, t, power) => { });
 
         AIContext At(float ballX, float t)
         {
             var c = MakeContext(player, new Vector2(ballX, 300f), t);
-            c.BallCarrier = null; // loose ball: the hysteresis applies here
+            c.BallCarrier = null;
             c.ShouldChaseBall = true;
             return c;
         }
 
-        // Far ball: chase 29 < hold -> HoldPosition
-        brain.Update(player, At(400f, 1.0f), 0.2f);
+        // Far ball: chase 39 < hold -> HoldPosition (commit to holding)
+        brain.Update(player, At(200f, 1.0f), 0.2f);
         Assert.Equal("HoldPosition", brain.CurrentActionName);
 
-        // chase 50: above hold but inside the enter margin -> stays holding
-        brain.Update(player, At(1240f, 1.2f), 0.2f);
+        // chase 51: above hold but inside the commit margin -> stays holding
+        brain.Update(player, At(680f, 1.2f), 0.2f);
         Assert.Equal("HoldPosition", brain.CurrentActionName);
 
-        // chase 59: clears the enter margin -> ChaseBall
-        brain.Update(player, At(1600f, 1.4f), 0.2f);
+        // chase 59: beats hold + margin -> switches to ChaseBall
+        brain.Update(player, At(1000f, 1.4f), 0.2f);
         Assert.Equal("ChaseBall", brain.CurrentActionName);
 
-        // chase 45: below hold but inside the exit margin -> keeps chasing
-        brain.Update(player, At(1040f, 1.6f), 0.2f);
+        // chase 51: dropped, but hold doesn't beat it by the margin -> keeps chasing
+        brain.Update(player, At(680f, 1.6f), 0.2f);
         Assert.Equal("ChaseBall", brain.CurrentActionName);
 
-        // chase 39: below hold - exit margin -> drops back to HoldPosition
-        brain.Update(player, At(800f, 1.8f), 0.2f);
+        // chase 39: hold beats it by the margin -> releases to HoldPosition
+        brain.Update(player, At(200f, 1.8f), 0.2f);
+        Assert.Equal("HoldPosition", brain.CurrentActionName);
+    }
+
+    [Fact]
+    public void UnifiedCommitment_GainedBallInterruptsChase()
+    {
+        // He gets the ball: carrier mode interrupts the chase instantly
+        // (midfield - far enough from goal that Dribble beats Shoot)
+        var player = MakePlayer(5, new Vector2(1500f, 300f));
+        var brain = new UtilityBrain(new Random(1), (p, t, power) => { }, (p, t, power) => { });
+
+        // Committed chaser
+        var ctx = MakeContext(player, new Vector2(1700f, 300f), 1.0f);
+        ctx.BallCarrier = null;
+        ctx.ShouldChaseBall = true;
+        brain.Update(player, ctx, 0.2f);
+        Assert.Equal("ChaseBall", brain.CurrentActionName);
+
+        // He gets the ball: carrier mode interrupts the chase instantly
+        ctx = MakeContext(player, new Vector2(1530f, 300f), 1.2f);
+        ctx.BallCarrier = player;
+        ctx.HasBallPossession = true;
+        brain.Update(player, ctx, 0.2f);
+        Assert.Equal("Dribble", brain.CurrentActionName);
+    }
+
+    [Fact]
+    public void UnifiedCommitment_ForcedPounceInterruptsHold()
+    {
+        var player = MakePlayer(5, new Vector2(2400f, 300f));
+        var brain = new UtilityBrain(new Random(1), (p, t, power) => { }, (p, t, power) => { });
+
+        var ctx = MakeContext(player, new Vector2(200f, 300f), 1.0f);
+        ctx.BallCarrier = null;
+        brain.Update(player, ctx, 0.2f);
+        Assert.Equal("HoldPosition", brain.CurrentActionName);
+
+        ctx = MakeContext(player, new Vector2(200f, 300f), 1.2f);
+        ctx.BallCarrier = null;
+        ctx.ForcedPounce = true;
+        brain.Update(player, ctx, 0.2f);
+        Assert.Equal("ChaseBall", brain.CurrentActionName);
+    }
+
+    [Fact]
+    public void DesignationBonus_StrongChaseSurvivesPenalty_PileOnDamped()
+    {
+        var player = MakePlayer(5, new Vector2(2000f, 300f));
+
+        // Undesignated but genuinely close to a loose attacking-third ball:
+        // the chase survives the pile-on penalty (the old hard gate zeroed it)
+        var brain1 = new UtilityBrain(new Random(1), (p, t, power) => { }, (p, t, power) => { });
+        var ctx = MakeContext(player, new Vector2(2300f, 300f), 1.0f);
+        ctx.BallCarrier = null;
+        ctx.ShouldChaseBall = false;
+        brain1.Update(player, ctx, 0.2f);
+        Assert.Equal("ChaseBall", brain1.CurrentActionName);
+
+        // Undesignated and merely in the same half: damped to hold
+        var brain2 = new UtilityBrain(new Random(1), (p, t, power) => { }, (p, t, power) => { });
+        ctx = MakeContext(player, new Vector2(3000f, 300f), 1.0f);
+        ctx.BallCarrier = null;
+        ctx.ShouldChaseBall = false;
+        brain2.Update(player, ctx, 0.2f);
+        Assert.Equal("HoldPosition", brain2.CurrentActionName);
+    }
+
+    [Fact]
+    public void GkContestCommit_RushHoldsThroughTriggerFlicker()
+    {
+        var gk = MakePlayer(1, new Vector2(212f, 2882f), PlayerPosition.Goalkeeper);
+        gk.Role = PlayerRole.Goalkeeper;
+        var opponent = MakePlayer(21, new Vector2(2500f, 2882f)); // far: sweeper fires
+        opponent.TeamId = 2;
+        var brain = new UtilityBrain(new Random(1), (p, t, power) => { }, (p, t, power) => { });
+
+        AIContext At(float t, Player carrier)
+        {
+            return new AIContext
+            {
+                BallPosition = new Vector2(900f, 2882f),
+                BallVelocity = Vector2.Zero,
+                DistanceToBall = Vector2.Distance(gk.FieldPosition, new Vector2(900f, 2882f)),
+                OwnGoalCenter = new Vector2(150f, 2882f),
+                OpponentGoalCenter = new Vector2(3150f, 2882f),
+                AttackSign = 1f,
+                MatchTime = t,
+                KickoffTaken = true,
+                BallCarrier = carrier,
+                NearestOpponent = opponent,
+                Teammates = new List<Player>(),
+                Opponents = new List<Player> { opponent },
+                Random = new Random(1),
+            };
+        }
+
+        // Loose ball in the box: the sweeper-keeper rush fires (ChaseBall 120)
+        brain.Update(gk, At(1.0f, null), 0.2f);
+        Assert.Equal("ChaseBall", brain.CurrentActionName);
+
+        // Trigger flicker: the opponent closes in and brushes the control
+        // radius - the tree offers close-down HoldPosition, but the rush
+        // commit holds
+        opponent.FieldPosition = new Vector2(1100f, 2882f);
+        brain.Update(gk, At(1.2f, opponent), 0.2f);
+        Assert.Equal("ChaseBall", brain.CurrentActionName);
+
+        // Window expired: the tree's close-down positioning takes over
+        brain.Update(gk, At(2.2f, opponent), 0.2f);
         Assert.Equal("HoldPosition", brain.CurrentActionName);
     }
 

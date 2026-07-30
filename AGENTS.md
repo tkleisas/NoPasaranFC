@@ -109,16 +109,17 @@ dotnet build NoPasaranFC.Android/NoPasaranFC.Android.csproj  # Android (needs an
 - **Animations**: KayKit clips on all humanoids (same skeleton). State→clip mapping in `PlayerAnimator`.
 - **Anti-oscillation**: AI uses target inertia + start/stop hysteresis (`AIConstants`), animations use
   hysteresis (`PlayerAnimator`). Don't reintroduce raw per-frame target/state flipping.
-  Utility-brain specifics: post-kick commitment window (`UtilityTuning.PostPassCommitSeconds` —
-  the kicker can't immediately re-select Pass/Shoot/Clear), chase/hold hysteresis on loose balls
-  (`ChaseEnterMargin`/`ChaseExitMargin`), stable designated chaser per team
-  (`AIConstants.ChaseReassignMargin`), dribble commitment + fast-ball deflection gate
-  (`DribbleCommitSeconds`/`DribbleEnterMargin`/`DribbleEnterMaxBallSpeed`), scramble discipline
-  (one contestor per team in a pinball: `ScrambleRadius`/`ScramblePlayers`/`ContestCommitSeconds`,
-  `AIConstants.ScrambleReassignMargin`; GK distribution lane check via `IsPathCrowded`),
-  pass-failure memory (a pass intercepted/returned within `PassBoomerangSeconds`=2.5s penalizes
-  that target ×(1−`PassFailPenaltyFactor`×failures) for `PassFailMemorySeconds`=8s — kills
-  boomerang loops into blocked lanes).
+  The primary mechanism is the **unified action-commitment layer** (`UtilityBrain.Decide`):
+  a committed action survives re-evaluation until a challenger beats its freshly re-scored
+  value by `UtilityTuning.ActionCommitMargin` (8) or a hard interrupt fires (ForcedPounce,
+  gaining the ball, action impossible, set pieces). Chaser designation is a score bonus
+  (`ChaseDesignationBonus`=25/`ChaseNonDesignatedPenalty`=3), never a gate that zeroes a
+  strong chase. GK chase uses a 0.75s contest-commit window (sweeper trigger flicker).
+  Specific mechanisms on top: post-kick commitment (`PostPassCommitSeconds`), dribble
+  commitment (`DribbleCommitSeconds`/`DribbleEnterMargin`/`DribbleEnterMaxBallSpeed`),
+  scramble discipline (one contestor per team: `ScrambleRadius`/`ContestCommitSeconds`;
+  GK distribution lane check via `IsPathCrowded`), pass-failure memory
+  (`PassBoomerangSeconds`/`PassFailPenaltyFactor`/`PassFailMemorySeconds`).
   Card cutscene can't stall set pieces (arrival accepts the renderer's 2m standoff +
   walk-time budget). While `MatchEngine.GoalScoredPending` (0.5s goal delay) the ball is
   dead: no out-of-bounds restarts, no AI kicks.

@@ -77,6 +77,10 @@ namespace NoPasaranFC.Gameplay.UtilityAI
         // on it through ricochets instead of flipping chase<->hold per bounce
         private float _contestCommitUntil = -1f;
         
+        // Unified action commitment: when the current action was committed to
+        // (for the optional minimum dwell; 0 = margin-only switching)
+        private float _actionCommittedAt = -1f;
+        
         // Scramble window: set while a crowd packs around a loose/fast ball,
         // persists briefly so discipline doesn't flicker per ricochet
         private float _scrambleUntil = -1f;
@@ -256,7 +260,10 @@ namespace NoPasaranFC.Gameplay.UtilityAI
             // Re-evaluate on tick OR when the current action became impossible
             if (_evalTimer <= 0f || !IsActionViable(player, context, _current))
             {
-                _current = Decide(player, context);
+                var next = Decide(player, context);
+                if (next.Type != _current.Type)
+                    _actionCommittedAt = context.MatchTime;
+                _current = next;
                 _evalTimer = EvalInterval;
             }
 
@@ -361,7 +368,24 @@ namespace NoPasaranFC.Gameplay.UtilityAI
         {
             // Goalkeeper has a specialized, narrow action set
             if (player.Position == PlayerPosition.Goalkeeper)
-                return Snap(DecideGoalkeeper(player, ctx));
+            {
+                var gk = DecideGoalkeeper(player, ctx);
+                
+                // Contest commitment for the GK rush (the ChaseBall<->HoldPosition
+                // goal-line flap): once rushing a loose ball in a scramble, the
+                // rush holds through the 250px carrier/trigger flicker. The dive
+                // (shot reaction) and having the ball (distribution) override.
+                if (_contestCommitUntil > ctx.MatchTime && ctx.BallCarrier != player
+                    && ctx.MatchTime >= _gkDiveUntil && gk.Type != UtilityActionType.ChaseBall)
+                {
+                    gk = new UtilityAction(UtilityActionType.ChaseBall, GetBallInterceptPoint(ctx), 120f);
+                }
+                else if (gk.Type == UtilityActionType.ChaseBall && gk.Score < 150f)
+                {
+                    _contestCommitUntil = ctx.MatchTime + UtilityTuning.ContestCommitSeconds;
+                }
+                return Snap(gk);
+            }
 
 
             // Ball-stall watchdog: a stalled loose ball overrides everything -
@@ -370,6 +394,12 @@ namespace NoPasaranFC.Gameplay.UtilityAI
                 return Snap(new UtilityAction(UtilityActionType.ChaseBall, GetBallInterceptPoint(ctx), 999f));
 
             UtilityAction best;
+            // Raw per-type scores for the commitment gate (filled by whichever
+            // branch runs; chase/hold are computed lazily in the carrier branch
+            // only when the committed action needs them)
+            (float shoot, float dribble, float clear, float pass) carrierScores =
+                (0f, 0f, 0f, float.MinValue);
+            float chaseScore = 0f, holdScore = 0f;
             
             // Carrier mode: anyone who owns the ball stays in carrier actions
             // (Dribble collects the ball itself) across a huge radius. The
@@ -386,7 +416,9 @@ namespace NoPasaranFC.Gameplay.UtilityAI
             if (isCarrier)
             {
                 // --- I have the ball: Shoot / Pass / Dribble / Clear ---
-                best = ScoreCarrierActions(player, ctx);
+                var (carrierAction, shootS, dribbleS, clearS, passS) = ScoreCarrierActions(player, ctx);
+                best = carrierAction;
+                carrierScores = (shootS, dribbleS, clearS, passS);
                 
                 // Dribble enter margin: a MARGINAL touch must clearly beat the
                 // chase/hold option before a chaser/holder is yanked into
@@ -399,7 +431,7 @@ namespace NoPasaranFC.Gameplay.UtilityAI
                 if (!cleanControl && !InDribbleCommit(player, ctx) &&
                     (_current.Type == UtilityActionType.ChaseBall || _current.Type == UtilityActionType.HoldPosition))
                 {
-                    var (offBall, _, _) = ScoreChaseOrHold(player, ctx);
+                    var (offBall, _, _, _, _) = ScoreChaseOrHold(player, ctx);
                     // A ball at kick speed is uncatchable - a touch on it is a
                     // deflection, never a reception: keep the off-ball role
                     // (ChaseBall pursues the intercept point, Dribble-collect
@@ -454,18 +486,46 @@ namespace NoPasaranFC.Gameplay.UtilityAI
                     return Snap(new UtilityAction(UtilityActionType.ChaseBall, GetBallInterceptPoint(ctx), 120f));
                 }
                 
-                var (chaseOrHold, altName, altScore) = ScoreChaseOrHold(player, ctx);
+                var (chaseOrHold, altName, altScore, chaseS, holdS) = ScoreChaseOrHold(player, ctx);
                 best = chaseOrHold;
+                chaseScore = chaseS;
+                holdScore = holdS;
                 
                 // Recorder snapshot: the loser is the only alternative in this branch
                 SetDecision(best.Type.ToString(), best.Score, altName, altScore);
             }
             
-            // Commitment bonus: staying with the current action beats switching
-            // to something only marginally better (kills boundary oscillation).
-            // (Never flips the winner, so the snapshot above stays accurate.)
-            if (_current.Type == best.Type && best.Type != UtilityActionType.Idle)
-                best.Score += UtilityTuning.CommitmentBonus;
+            // ---- Unified action commitment ----
+            // The current action survives this eval unless a hard interrupt
+            // fired or the new best beats its CURRENT value by the margin:
+            // designation churn, score noise and boundary flicker can't flip a
+            // committed player. Hard interrupts: ForcedPounce (returned above),
+            // gaining the ball (carrier mode owns me), the action becoming
+            // impossible, and the kickoff guards (returned above).
+            if (_current.Type != best.Type && _current.Type != UtilityActionType.Idle
+                && ctx.MatchTime >= _actionCommittedAt + UtilityTuning.ActionMinDwellSeconds)
+            {
+                bool gainedBall = ctx.HasBallPossession || ctx.BallCarrier == player;
+                if (!gainedBall && IsActionViable(player, ctx, _current))
+                {
+                    if ((_current.Type == UtilityActionType.ChaseBall || _current.Type == UtilityActionType.HoldPosition)
+                        && holdScore == 0f)
+                    {
+                        // Carrier branch didn't score chase/hold - get them now
+                        var (_, _, _, chaseS, holdS) = ScoreChaseOrHold(player, ctx);
+                        chaseScore = chaseS;
+                        holdScore = holdS;
+                    }
+                    float currentScore = ScoreOfCurrent(chaseScore, holdScore, carrierScores);
+                    if (best.Score < currentScore + UtilityTuning.ActionCommitMargin)
+                    {
+                        RefreshCurrentTarget(player, ctx);
+                        SetDecision(_current.Type.ToString(), currentScore,
+                            best.Type.ToString(), best.Score);
+                        return _current;
+                    }
+                }
+            }
             
             // Dribble commitment: entering Dribble starts the collect window
             // (refreshed by ownership in Update; only flicker counts it down).
@@ -489,18 +549,51 @@ namespace NoPasaranFC.Gameplay.UtilityAI
             return best;
         }
         
-        /// <summary>
-        /// Chase-vs-hold scoring with loose-ball boundary hysteresis: the winner
-        /// plus the loser (for the recorder snapshot and the dribble enter
-        /// margin). Pure scoring - no snapshots, no side effects on _current.
-        /// </summary>
-        private (UtilityAction best, string altName, float altScore) ScoreChaseOrHold(Player player, AIContext ctx)
+        /// <summary>The committed action's CURRENT value for the gate -
+        /// re-scored every eval (never frozen), so a genuinely decayed action
+        /// still releases.</summary>
+        private float ScoreOfCurrent(float chaseScore, float holdScore,
+            (float shoot, float dribble, float clear, float pass) carrier)
         {
-            // A stalled controlled carrier means the ball is effectively loose
-            // (harness without human input, or an AFK player) - chase it.
-            bool ballLoose = IsBallEffectivelyLoose(ctx);
-            
-            float chaseScore = 0f;
+            switch (_current.Type)
+            {
+                case UtilityActionType.ChaseBall: return chaseScore;
+                case UtilityActionType.HoldPosition: return holdScore;
+                case UtilityActionType.RunAfterPass: return 90f;
+                case UtilityActionType.Dribble: return carrier.dribble;
+                case UtilityActionType.Pass: return carrier.pass;
+                case UtilityActionType.Shoot: return carrier.shoot;
+                case UtilityActionType.Clear: return carrier.clear;
+                default: return 0f;
+            }
+        }
+        
+        /// <summary>Refreshes the committed action's steering target from the
+        /// fresh context (commitment holds the ACTION, not a stale point).</summary>
+        private void RefreshCurrentTarget(Player player, AIContext ctx)
+        {
+            switch (_current.Type)
+            {
+                case UtilityActionType.ChaseBall:
+                    _current.Point = GetBallInterceptPoint(ctx);
+                    break;
+                case UtilityActionType.HoldPosition:
+                    _current.Point = GetTacticalPoint(player, ctx);
+                    break;
+                case UtilityActionType.Dribble:
+                    _current.Point = GetDribblePoint(player, ctx);
+                    break;
+            }
+        }
+        
+        /// <summary>
+        /// Chase-vs-hold scoring: the winner plus the loser (for the recorder
+        /// snapshot, the dribble enter margin, and the commitment gate). Pure
+        /// scoring - no snapshots, no side effects on _current.
+        /// </summary>
+        private (UtilityAction best, string altName, float altScore, float chaseScore, float holdScore)
+            ScoreChaseOrHold(Player player, AIContext ctx)
+        {
             float ballProgress = Math.Abs(ctx.BallPosition.X - ctx.OwnGoalCenter.X)
                 / Math.Abs(ctx.OpponentGoalCenter.X - ctx.OwnGoalCenter.X);
             
@@ -521,51 +614,42 @@ namespace NoPasaranFC.Gameplay.UtilityAI
                 (ctx.BallCarrier == null || ctx.BallCarrier.TeamId == player.TeamId);
             bool pounceAllowed = pounce && (!scramble || IsClosestTeammateToBall(player, ctx));
             
-            if (ctx.ShouldChaseBall || pounceAllowed ||
-                (!scramble && ballLoose && ctx.BallCarrier != null && ctx.DistanceToBall < 800f))
-            {
-                // Closer = more attractive; must beat holdScore even for the
-                // designated chaser when the ball is far (kickoff distances)
-                chaseScore = UtilityTuning.ChaseBaseScore - ctx.DistanceToBall / 40f;
-                if (ctx.DistanceToBall < 200f) chaseScore += UtilityTuning.ChaseCloseBonus;
-                if (pounce) chaseScore += UtilityTuning.PounceBonus; // box pounce: highest priority
-                else if (!ctx.ShouldChaseBall) chaseScore -= 10f; // rescue, not primary duty
-                
-                // Press hard when the ball is loose in the attacking third
-                if (ballProgress > 0.6f) chaseScore += 15f;
-                // And when it's loose right next to us, rank be damned
-                if (ctx.BallCarrier == null && ctx.DistanceToBall < 350f) chaseScore += 25f;
-            }
+            // Chase scoring for EVERYONE - designation is a score input, not a
+            // gate: the designated chaser gets the role bonus, everyone else
+            // the pile-on penalty, so a strong local chase always survives
+            float chaseScore = UtilityTuning.ChaseBaseScore - ctx.DistanceToBall / 40f;
+            if (ctx.DistanceToBall < 200f) chaseScore += UtilityTuning.ChaseCloseBonus;
+            if (pounce) chaseScore += UtilityTuning.PounceBonus; // box pounce: highest priority
+            else if (!ctx.ShouldChaseBall) chaseScore -= 10f; // rescue, not primary duty
+            if (ballProgress > 0.6f) chaseScore += 15f;
+            if (ctx.BallCarrier == null && ctx.DistanceToBall < 350f) chaseScore += 25f;
+            chaseScore += ctx.ShouldChaseBall
+                ? UtilityTuning.ChaseDesignationBonus
+                : -UtilityTuning.ChaseNonDesignatedPenalty;
+            // Anti-swarm: a teammate in CLEAN control is never chased (the
+            // abandoned carrier still gets rescued via the normal scoring)
+            if (ctx.TeammateHasBall(player) && !IsBallLooseForReal(ctx))
+                chaseScore = 0f;
+            if (scramble && !ctx.ShouldChaseBall && !pounceAllowed)
+                chaseScore = 0f;
             
             Vector2 holdPoint = GetTacticalPoint(player, ctx);
             float holdScore = UtilityTuning.HoldBaseScore;
             // Holding is more attractive when far from the ball or a teammate has it
             if (ctx.TeammateHasBall(player)) holdScore += 10f;
             
-            // Boundary hysteresis on a LOOSE ball: switching INTO ChaseBall
-            // must beat hold by a margin; a current chaser only drops back
-            // below hold - margin. Score noise at the knife-edge can't flap
-            // the boundary (the post-hoc CommitmentBonus below never gates
-            // the switch itself). Against a clean carrier the comparison
-            // stays raw - pressing must stay eager.
-            bool chaseWins;
-            if (ctx.BallCarrier == null && _current.Type == UtilityActionType.ChaseBall)
-                chaseWins = chaseScore > holdScore - UtilityTuning.ChaseExitMargin;
-            else if (ctx.BallCarrier == null && _current.Type == UtilityActionType.HoldPosition)
-                chaseWins = chaseScore > holdScore + UtilityTuning.ChaseEnterMargin;
-            else
-                chaseWins = chaseScore > holdScore;
-            
-            var best = chaseWins
+            var best = chaseScore > holdScore
                 ? new UtilityAction(UtilityActionType.ChaseBall, GetBallInterceptPoint(ctx), chaseScore)
                 : new UtilityAction(UtilityActionType.HoldPosition, holdPoint, holdScore);
             
             return (best,
                 best.Type == UtilityActionType.ChaseBall ? "HoldPosition" : "ChaseBall",
-                best.Type == UtilityActionType.ChaseBall ? holdScore : chaseScore);
+                best.Type == UtilityActionType.ChaseBall ? holdScore : chaseScore,
+                chaseScore, holdScore);
         }
         
-        private UtilityAction ScoreCarrierActions(Player player, AIContext ctx)
+        private (UtilityAction action, float shoot, float dribble, float clear, float pass)
+            ScoreCarrierActions(Player player, AIContext ctx)
         {
             float distToGoal = Vector2.Distance(player.FieldPosition, ctx.OpponentGoalCenter);
             float pressure = ctx.NearestOpponent != null
@@ -704,7 +788,8 @@ namespace NoPasaranFC.Gameplay.UtilityAI
             Consider(UtilityActionType.Pass, passScore);
             SetDecision(type.ToString(), bestScore, n1, s1, n2, s2);
             
-            return new UtilityAction(type, point, bestScore, target);
+            return (new UtilityAction(type, point, bestScore, target),
+                shootScore, dribbleScore, clearScore, passScore);
         }
         
         // GK dive state (shot reaction): short burst to the predicted intercept
@@ -1051,7 +1136,10 @@ namespace NoPasaranFC.Gameplay.UtilityAI
                         // flapping). The commit above bans an instant re-kick, and
                         // the just-kicked ball is leaving - never a carrier action.
                         player.Velocity = Vector2.Zero;
-                        _current = Decide(player, ctx, justKicked: true);
+                        var followUp = Decide(player, ctx, justKicked: true);
+                        if (followUp.Type != _current.Type)
+                            _actionCommittedAt = ctx.MatchTime;
+                        _current = followUp;
                         _evalTimer = EvalInterval;
                     }
                     else
@@ -1074,7 +1162,10 @@ namespace NoPasaranFC.Gameplay.UtilityAI
                         _postPassCommitUntil = ctx.MatchTime + UtilityTuning.PostPassCommitSeconds;
                         _dribbleCommitUntil = -1f; // post-kick discipline supersedes
                         player.Velocity = Vector2.Zero;
-                        _current = Decide(player, ctx, justKicked: true);
+                        var followUp = Decide(player, ctx, justKicked: true);
+                        if (followUp.Type != _current.Type)
+                            _actionCommittedAt = ctx.MatchTime;
+                        _current = followUp;
                         _evalTimer = EvalInterval;
                     }
                     else
@@ -1095,7 +1186,10 @@ namespace NoPasaranFC.Gameplay.UtilityAI
                         _postPassCommitUntil = ctx.MatchTime + UtilityTuning.PostPassCommitSeconds;
                         _dribbleCommitUntil = -1f; // post-kick discipline supersedes
                         player.Velocity = Vector2.Zero;
-                        _current = Decide(player, ctx, justKicked: true);
+                        var followUp = Decide(player, ctx, justKicked: true);
+                        if (followUp.Type != _current.Type)
+                            _actionCommittedAt = ctx.MatchTime;
+                        _current = followUp;
                         _evalTimer = EvalInterval;
                     }
                     else

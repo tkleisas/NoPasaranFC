@@ -62,6 +62,7 @@ namespace NoPasaranFC.Gameplay
             {
                 ["meta"] = true,
                 ["scenario"] = "live",
+                ["version"] = Models.Version.GetFullVersion(), // v2.24.0-<commit> for reference
                 ["seed"] = 0,
                 ["seconds"] = (int)GameSettings.Instance.GetMatchDurationSeconds(),
                 ["fps"] = SampleHz, // frames actually logged per second (plot tick cadence)

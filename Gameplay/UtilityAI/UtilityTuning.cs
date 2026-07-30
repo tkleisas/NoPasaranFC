@@ -60,10 +60,20 @@ namespace NoPasaranFC.Gameplay.UtilityAI
         public static float ChaseCloseBonus = 20f;      // ball within 200px
         public static float PounceBonus = 25f;          // loose ball in the attacking third
         public static float HoldBaseScore = 47.3f;
-        public static float CommitmentBonus = 30f;      // anti-flapping stickiness
-        public static float ChaseEnterMargin = 6f;      // switching INTO ChaseBall must beat hold by this
-        public static float ChaseExitMargin = 4f;       // a chaser only drops out below hold - this
+        public static float CommitmentBonus = 30f;      // SUPERSEDED by ActionCommitMargin (kept for --params compat)
+        public static float ChaseEnterMargin = 6f;      // SUPERSEDED by ActionCommitMargin (kept for --params compat)
+        public static float ChaseExitMargin = 4f;       // SUPERSEDED by ActionCommitMargin (kept for --params compat)
         public static float PostPassCommitSeconds = 1.5f; // after a deliberate kick: his own kick can't be re-kicked (dribble-collect only)
+        
+        // Unified action commitment: once the brain commits to an action it
+        // survives re-evaluation until the new best beats its current value by
+        // this margin (or a hard interrupt fires: watchdog, lost/gained ball,
+        // action impossible). Chaser designation feeds the score instead of
+        // gating it: bonus for the designated, pile-on penalty for the rest
+        public static float ActionCommitMargin = 8f;
+        public static float ActionMinDwellSeconds = 0f; // minimum dwell before a switch is even considered (0 = margin only)
+        public static float ChaseDesignationBonus = 25f;    // designated chaser's score bonus (replaces the hard gate)
+        public static float ChaseNonDesignatedPenalty = 3f; // everyone else's pile-on damper
         
         // Attacking shape (GetTacticalPoint)
         public static float AttackDepthDefender = 0.46f;   // fraction of the way to the opponent goal
