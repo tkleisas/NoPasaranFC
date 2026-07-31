@@ -90,11 +90,14 @@ namespace NoPasaranFC.Screens
             KeyboardState keyboardState = DebugInput.GetState();
 
             // ENTER or ESC dismisses the stats, revealing the round results underneath
-            if ((keyboardState.IsKeyDown(Keys.Enter) && _previousKeyboardState.IsKeyUp(Keys.Enter)) ||
+            // (only after the press that dismissed the screen above us — e.g. the
+            // champion celebration — has been fully released)
+            if (DismissReArmed(keyboardState, Mouse.GetState()) &&
+                ((keyboardState.IsKeyDown(Keys.Enter) && _previousKeyboardState.IsKeyUp(Keys.Enter)) ||
                 (keyboardState.IsKeyDown(Keys.Escape) && _previousKeyboardState.IsKeyUp(Keys.Escape)) ||
                 (keyboardState.IsKeyDown(Keys.Space) && _previousKeyboardState.IsKeyUp(Keys.Space)) ||
                 _input.IsConfirmPressed() || _input.IsBackPressed() ||
-                touchUI.IsActionJustPressed || touchUI.IsBackJustPressed)
+                touchUI.IsActionJustPressed || touchUI.IsBackJustPressed))
             {
                 IsFinished = true;
             }

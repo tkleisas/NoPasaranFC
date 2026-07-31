@@ -141,6 +141,10 @@ namespace NoPasaranFC.Models
                 ["round_results_continue"] = "Press ENTER or SPACE to continue",
                 ["round_results_champion"] = "Team {0} is the Champion!",
                 
+                // Champion award screen
+                ["champion.title"] = "CHAMPIONS!",
+                ["champion.team_won"] = "{0} won the championship",
+                
                 // Lineup
                 ["lineup.title"] = "SELECT LINEUP",
                 ["lineup.starting"] = "STARTING",
@@ -405,6 +409,10 @@ namespace NoPasaranFC.Models
                 ["round_results_title"] = "ΑΠΟΤΕΛΕΣΜΑΤΑ {0}ΗΣ ΑΓΩΝΙΣΤΙΚΗΣ",
                 ["round_results_continue"] = "Πατήστε ENTER ή SPACE για συνέχεια",
                 ["round_results_champion"] = "Η ομάδα {0} είναι Πρωταθλήτρια!",
+                
+                // Champion award screen
+                ["champion.title"] = "ΠΡΩΤΑΘΛΗΤΕΣ!",
+                ["champion.team_won"] = "Η ομάδα {0} κατέκτησε το πρωτάθλημα",
                 // Settings
                 ["settings.title"] = "ΕΠΙΛΟΓΕΣ",
                 ["settings.video"] = "=== ΒΙΝΤΕΟ ===",

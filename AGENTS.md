@@ -32,7 +32,8 @@ dotnet build NoPasaranFC.Android/NoPasaranFC.Android.csproj  # Android (needs an
   `freekick` / `penalty` / `card` (stage set piece / card), `halftime` (jump to 2nd half, sides switch),
   `easter <fox|dog|crows|seagulls|tornado|ufo|blackout|cats>` (force an easter egg),
   `hold [on|off]` (freeze the match clock), `ppos <name> <x> <y>` (teleport player),
-  `kick <name> [vx vy]` (force a deliberate kick), `touch <name>` (register a touch), `quit`.
+  `kick <name> [vx vy]` (force a deliberate kick), `touch <name>` (register a touch),
+  `champion` (push the 3D ChampionScreen cup celebration for the standings leader), `quit`.
   Client: `python3 Scripts/dbg.py "state" "shot /tmp/x.png 3"`.
 - **Blender pipeline**: `python3 Scripts/blender_exec.py <script.py>` runs a Python script inside a
   running Blender instance (blender-mcp addon on 127.0.0.1:9876). Asset sources: `Content/Models3D/*.blend`.
@@ -82,6 +83,10 @@ dotnet build NoPasaranFC.Android/NoPasaranFC.Android.csproj  # Android (needs an
   FaceComposer, MatchEnvironment (lighting/weather), RainSystem,
   KitTextureFactory, `Skinning/` (GLB loader + skinned playback, SharpGLTF + SkinnedEffect)
 - `Screens/` — Screen system: Menu, Match, Lineup, Standings, Settings, RoundResults, etc.
+  `ChampionScreen` is the 3D season-end award (procedural gold cup on a podium, champion
+  starting 11 cheering in an arc, confetti, orbiting camera) pushed on top of the stats
+  screen when `IsChampionshipOver()`; stacked dismiss screens re-arm via `Screen.DismissReArmed`
+  so a held key can't fall through and pop the screen underneath.
 - `Debugging/` — DebugInput (input seam), DebugServer (TCP), ScreenCapture
 - `Content/Models3D/` — GLB models + atlases + `.blend` sources (Player, PlayerF, Knight, Rogue, Fox, SoccerBall)
 

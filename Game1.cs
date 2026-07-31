@@ -348,6 +348,16 @@ public class Game1 : Game
                     team, _contentManager, GraphicsDevice));
                 return "OK construct";
             }
+            case "champion":
+            {
+                // 3D cup celebration for the current standings leader
+                // (the season-end award screen, testable any time)
+                if (_championship?.Teams == null || _championship.Teams.Count == 0)
+                    return "ERR no championship";
+                _screenManager.PushScreen(new NoPasaranFC.Screens.ChampionScreen(
+                    _championship, _contentManager, GraphicsDevice));
+                return "OK champion";
+            }
             case "corner":
             {
                 if (_screenManager.CurrentScreen is not MatchScreen cms || cms.Engine == null)
@@ -501,7 +511,7 @@ public class Game1 : Game
                 ExitGame();
                 return "OK";
             default:
-                return "ERR unknown command (shot|key|down|up|state|players|setstat|match|construct|corner|freekick|penalty|card|ball|ballopp|hold|ppos|kick|touch|halftime|easter|quit)";
+                return "ERR unknown command (shot|key|down|up|state|players|setstat|match|construct|champion|corner|freekick|penalty|card|ball|ballopp|hold|ppos|kick|touch|halftime|easter|quit)";
         }
     }
 

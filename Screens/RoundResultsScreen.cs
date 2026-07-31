@@ -53,10 +53,12 @@ namespace NoPasaranFC.Screens
             
             KeyboardState keyboardState = DebugInput.GetState();
             
-            // Press Enter, Space, A, or B to continue
-            if ((keyboardState.IsKeyDown(Keys.Enter) && _previousKeyboardState.IsKeyUp(Keys.Enter)) ||
+            // Press Enter, Space, A, or B to continue (only after the press that
+            // dismissed the screen above us has been fully released)
+            if (DismissReArmed(keyboardState, Mouse.GetState()) &&
+                ((keyboardState.IsKeyDown(Keys.Enter) && _previousKeyboardState.IsKeyUp(Keys.Enter)) ||
                 (keyboardState.IsKeyDown(Keys.Space) && _previousKeyboardState.IsKeyUp(Keys.Space)) ||
-                _input.IsConfirmPressed() || touchUI.IsActionJustPressed || touchUI.IsBackJustPressed)
+                _input.IsConfirmPressed() || touchUI.IsActionJustPressed || touchUI.IsBackJustPressed))
             {
                 // Pop back to menu
                 _screenManager.PopScreen();

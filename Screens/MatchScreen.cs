@@ -793,6 +793,11 @@ namespace NoPasaranFC.Screens
             // Match statistics on top (ESC/Enter returns to the round results)
             _screenManager.PushScreen(new MatchStatsScreen(_matchEngine,
                 _screenManager, _content, _graphicsDevice));
+            // Season over: the 3D cup celebration shows first
+            // (champion -> stats -> round results, whose trophy block stays as fallback)
+            if (_championship.IsChampionshipOver())
+                _screenManager.PushScreen(new ChampionScreen(_championship,
+                    _content, _graphicsDevice));
         }
         
         public override void Draw(SpriteBatch spriteBatch, SpriteFont font)
