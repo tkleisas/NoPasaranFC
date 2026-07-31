@@ -1610,15 +1610,36 @@ namespace NoPasaranFC.Gameplay
             BallHeight = 0f;
             BallVerticalVelocity = 0f;
             
+            // GK on the line. The starting GK may have been sent off - then the
+            // nearest starting teammate stands in goal (a red-carded GK's team
+            // plays on with an outfield player between the posts)
             var gk = (forHome ? _awayTeam : _homeTeam).Players
-                .First(p => p.IsStarting && p.Position == PlayerPosition.Goalkeeper);
-            gk.FieldPosition = new Vector2(goalX + attackSign * 60f, spot.Y);
-            gk.Velocity = Vector2.Zero;
-            
+                .Where(p => p.IsStarting)
+                .OrderBy(p => p.Position == PlayerPosition.Goalkeeper ? 0 : 1)
+                .ThenBy(p => Vector2.Distance(p.FieldPosition, spot))
+                .FirstOrDefault();
+            if (gk != null)
+            {
+                gk.FieldPosition = new Vector2(goalX + attackSign * 60f, spot.Y);
+                gk.Velocity = Vector2.Zero;
+            }
+
             var taker = (forHome ? _homeTeam : _awayTeam).Players
                 .Where(p => p.IsStarting && !p.IsKnockedDown)
                 .OrderBy(p => Vector2.Distance(p.FieldPosition, spot))
-                .First();
+                .FirstOrDefault()
+                ?? (forHome ? _homeTeam : _awayTeam).Players
+                    .Where(p => p.IsStarting) // everyone upright is down: allow the floored
+                    .OrderBy(p => Vector2.Distance(p.FieldPosition, spot))
+                    .FirstOrDefault();
+            if (taker == null)
+            {
+                // Nobody left to take it (extreme send-off spiral): award a goal
+                // kick to the defending team instead of crashing
+                PlaceBallForRestart(new Vector2(goalX - attackSign * 300f, spot.Y),
+                    !forHome, MatchState.GoalKick);
+                return;
+            }
             taker.FieldPosition = spot - new Vector2(attackSign * 80f, 0f);
             taker.Velocity = Vector2.Zero;
             

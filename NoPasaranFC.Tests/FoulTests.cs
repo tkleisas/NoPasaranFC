@@ -97,6 +97,30 @@ public class FoulTests
     }
 
     [Fact]
+    public void Penalty_WithGoalkeeperSentOff_DoesNotCrash()
+    {
+        // Regression: PlacePenaltyKick looked up the opposing starting GK with
+        // First() - after a GK send-off there is none, and the engine crashed
+        // (found by param search v5: an extreme-tuning candidate accumulated
+        // send-offs and died on a penalty). A teammate must stand in goal.
+        var engine = TestHelper.MakeEngine();
+        TestHelper.ReachPlaying(engine);
+
+        foreach (var gk in engine.AwayTeam.Players.Where(p => p.Position == PlayerPosition.Goalkeeper))
+            gk.IsStarting = false; // sent off
+
+        engine.DebugTriggerPenalty(); // penalty for the home side -> away goal needs a body
+
+        Assert.Equal(MatchEngine.MatchState.PenaltyKick, engine.CurrentState);
+        Assert.NotNull(engine.RestartPlayer);
+        // Someone (nearest starting teammate) is placed on the away goal line
+        float awayGoalX = engine.AttackedGoalLineX(engine.HomeTeam);
+        Assert.True(engine.AwayTeam.Players.Any(p =>
+            p.IsStarting && System.Math.Abs(p.FieldPosition.X - awayGoalX) < 200f),
+            "a stand-in should cover the goal line");
+    }
+
+    [Fact]
     public void KnockdownFouls_AreRecorded()
     {
         var engine = TestHelper.MakeEngine(seed: 42);

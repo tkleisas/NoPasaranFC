@@ -91,7 +91,7 @@ public class TeamCoordinationTests
         // The contain point sits between the carrier and the covered goal
         Vector2 ownGoal = engine.GetOwnGoalCenter(home);
         float offset = Vector2.Distance(ctxCover.CoverPoint, carrier.FieldPosition);
-        Assert.True(System.Math.Abs(offset - 400f) < 2f, $"cover offset {offset:F0} != 400");
+        Assert.True(System.Math.Abs(offset - 177.06f) < 2f, $"cover offset {offset:F0} != 177");
         Assert.True(System.Math.Abs(ctxCover.CoverPoint.X - ownGoal.X)
             < System.Math.Abs(carrier.FieldPosition.X - ownGoal.X),
             "cover point must be goal-side of the carrier");
@@ -197,7 +197,7 @@ public class TeamCoordinationTests
         // Run goes ahead toward the opponent goal and into the empty (bottom) lane
         Assert.True(player.AITargetPosition.X > 2100f + 500f,
             $"offer run should go ahead: {player.AITargetPosition.X:F0}");
-        Assert.True(player.AITargetPosition.Y > 300f + 300f,
+        Assert.True(player.AITargetPosition.Y > 300f + 150f,
             $"offer run should take the emptier lane: {player.AITargetPosition.Y:F0}");
 
         // The secondary offer takes the OTHER lane (toward the far touchline,

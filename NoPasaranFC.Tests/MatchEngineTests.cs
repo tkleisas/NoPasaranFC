@@ -407,9 +407,13 @@ public class MatchEngineTests
         TestHelper.ReachPlaying(engine);
         GameSettings.Instance.BallControl = "Easy";
 
+        // Clear the area so no AI player collects the ball mid-charge (the
+        // v2.27 tuning makes nearby teammates eager collectors)
+        foreach (var p in engine.HomeTeam.Players.Concat(engine.AwayTeam.Players))
+            if (p.IsStarting) p.FieldPosition = new Vector2(7000f, 600f);
+
         var cp = engine.ControlledPlayer;
-        cp.FieldPosition = new Vector2(MatchEngine.StadiumMargin + MatchEngine.FieldWidth / 2f,
-            MatchEngine.StadiumMargin + MatchEngine.FieldHeight / 2f);
+        cp.FieldPosition = new Vector2(1500f, MatchEngine.StadiumMargin + MatchEngine.FieldHeight / 2f);
         engine.BallPosition = cp.FieldPosition + new Vector2(30f, 0f);
         engine.BallVelocity = Vector2.Zero;
         engine.LastPlayerTouchedBall = cp;

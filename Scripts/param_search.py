@@ -74,7 +74,13 @@ def run_harness(seed, seconds, params, tag, outdir):
     ]
     result = subprocess.run(cmd, cwd=PROJECT_ROOT, capture_output=True, text=True, timeout=600)
     if result.returncode != 0:
-        raise RuntimeError(f"harness failed for {tag}: {result.stderr[-500:]}")
+        # A crashing candidate must not kill the whole run: log params + full
+        # stderr for later repro and score it as the worst possible candidate
+        crash_dir = os.path.join(outdir, "crashes")
+        os.makedirs(crash_dir, exist_ok=True)
+        with open(os.path.join(crash_dir, f"{tag}.log"), "w") as f:
+            f.write(json.dumps(params, indent=2) + "\n\n" + result.stderr)
+        return None
     with open(out_prefix + ".metrics.json") as f:
         metrics = json.load(f)
     os.remove(out_prefix + ".metrics.json")
@@ -93,6 +99,11 @@ def evaluate(params, seeds, seconds, tag, outdir, workers):
         "possDiff": 0.0, "reversals": 0.0, "transPerSec": 0.0, "stationary": 0.0,
         "homeGoals": 0.0, "awayGoals": 0.0,
     }
+    if any(m is None for m in all_metrics):
+        # At least one seed crashed the harness (logged under crashes/):
+        # worst fitness, zeroed components (the candidate is rejected anyway)
+        return -1e9, comp
+
     for m in all_metrics:
         comp["homeGoals"] += m["HomeScore"]
         comp["awayGoals"] += m["AwayScore"]
