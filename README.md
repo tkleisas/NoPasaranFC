@@ -235,11 +235,12 @@ Key architectural rule: `MatchEngine` is pure 2D simulation (73 px = 1 m). The 3
 - **docs/screenshots/**: README captures; **docs/harness-*/**: AI harness trajectory studies
 - Older design/fix notes live in git history
 
-## 🚀 Current Status (v2.32.3)
+## 🚀 Current Status (v2.32.4)
 
 **Fully playable on desktop and Android**, with the 3D view as the default experience. 140+ automated tests guard the match engine.
 
 Recent highlights:
+- **v2.32.4**: Responsive start menu — all seven options fit on 800×600 through 1920×1080, with a width-capped logo on small screens
 - **v2.32.3**: CI/CD release fix — Android builds pin the .NET 9 SDK so the correct Android workload is used
 - **v2.32.2**: ΠΡΟΣΦΥΓΙΚΑ flower-pot goals have no phantom net/post/crossbar collisions (high balls count), 2D hides the ghost frame, and parked cars got round wheels
 - **v2.32.1**: ΠΡΟΣΦΥΓΙΚΑ refinements — open court with no fence (kick-ins instead of wall bounces), dirt pitch with faded chalk lines, cheering sideline fans, aged textured facades with bullet holes/laundry/AC units, and no goal nets

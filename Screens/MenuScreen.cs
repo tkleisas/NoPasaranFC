@@ -143,8 +143,8 @@ namespace NoPasaranFC.Screens
                 var tap = touchUI.GetTapPosition();
                 if (tap.HasValue)
                 {
-                    float menuStartY = Game1.ScreenHeight * 0.62f;
-                    float itemHeight = 50f * Game1.UIScale;
+                    var (menuStartY, itemHeight) = GetMainMenuLayout(
+                        Game1.ScreenHeight, Game1.UIScale, menuOptions.Length);
                     for (int i = 0; i < menuOptions.Length; i++)
                     {
                         float itemY = menuStartY + i * itemHeight;
@@ -397,6 +397,21 @@ namespace NoPasaranFC.Screens
             }
         }
         
+        /// <summary>
+        /// Main-menu rows must fit between the championship heading and the
+        /// bottom edge on every supported resolution (the old fixed 50px rows
+        /// pushed the last options off-screen).
+        /// </summary>
+        internal static (float StartY, float ItemHeight) GetMainMenuLayout(
+            int screenHeight, float scale, int itemCount)
+        {
+            float startY = screenHeight * 0.62f;
+            float bottomMargin = 16f * scale;
+            float available = Math.Max(0f, screenHeight - bottomMargin - startY);
+            float itemHeight = Math.Min(50f * scale, available / Math.Max(1, itemCount));
+            return (startY, itemHeight);
+        }
+
         private void DrawGrassBackground(SpriteBatch spriteBatch, int screenWidth, int screenHeight)
         {
             if (_grassTexture != null)
@@ -461,7 +476,9 @@ namespace NoPasaranFC.Screens
                 // Draw logo at top center
                 if (_logo != null)
                 {
-                    float logoScale = scale; // Scale logo with UI
+                    // Cap the logo width on narrow/small screens so it does not
+                    // crowd the championship heading and menu.
+                    float logoScale = Math.Min(scale, screenWidth * 0.62f / _logo.Width);
                     int logoWidth = (int)(_logo.Width * logoScale);
                     int logoHeight = (int)(_logo.Height * logoScale);
                     Vector2 logoPos = new Vector2((screenWidth - logoWidth) / 2, screenHeight * 0.01f);
@@ -509,10 +526,10 @@ namespace NoPasaranFC.Screens
                     spriteBatch.DrawString(font, useNewSeason, usePos, Color.Gray);
                 }
                 
-                // Draw menu options centered with scaling
+                // Draw menu options centered; rows shrink to fit the remaining height.
                 var menuOptions = GetMenuOptions();
-                float menuStartY = screenHeight * 0.62f;
-                float itemHeight = 50f * scale;
+                var (menuStartY, itemHeight) = GetMainMenuLayout(screenHeight, scale, menuOptions.Length);
+                float menuTextScale = Math.Min(scale, itemHeight / Math.Max(1f, font.LineSpacing));
                 for (int i = 0; i < menuOptions.Length; i++)
                 {
                     var prefix = i == _selectedOption ? "> " : "  ";
@@ -525,9 +542,11 @@ namespace NoPasaranFC.Screens
                         color = new Color(100, 100, 100); // Dark gray
                     }
                     
-                    Vector2 textSize = font.MeasureString(text) * scale;
-                    Vector2 textPos = new Vector2((screenWidth - textSize.X) / 2, menuStartY + i * itemHeight);
-                    spriteBatch.DrawString(font, text, textPos, color, 0f, Vector2.Zero, scale, SpriteEffects.None, 0f);
+                    Vector2 textSize = font.MeasureString(text) * menuTextScale;
+                    float rowY = menuStartY + i * itemHeight;
+                    float textY = rowY + (itemHeight - textSize.Y) / 2f;
+                    Vector2 textPos = new Vector2((screenWidth - textSize.X) / 2, textY);
+                    spriteBatch.DrawString(font, text, textPos, color, 0f, Vector2.Zero, menuTextScale, SpriteEffects.None, 0f);
                 }
                 
                 // Draw version in bottom left corner
