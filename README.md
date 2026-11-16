@@ -235,11 +235,12 @@ Key architectural rule: `MatchEngine` is pure 2D simulation (73 px = 1 m). The 3
 - **docs/screenshots/**: README captures; **docs/harness-*/**: AI harness trajectory studies
 - Older design/fix notes live in git history
 
-## 🚀 Current Status (v2.32.1)
+## 🚀 Current Status (v2.32.2)
 
 **Fully playable on desktop and Android**, with the 3D view as the default experience. 140+ automated tests guard the match engine.
 
 Recent highlights:
+- **v2.32.2**: ΠΡΟΣΦΥΓΙΚΑ flower-pot goals have no phantom net/post/crossbar collisions (high balls count), 2D hides the ghost frame, and parked cars got round wheels
 - **v2.32.1**: ΠΡΟΣΦΥΓΙΚΑ refinements — open court with no fence (kick-ins instead of wall bounces), dirt pitch with faded chalk lines, cheering sideline fans, aged textured facades with bullet holes/laundry/AC units, and no goal nets
 - **v2.32.0**: ΠΡΟΣΦΥΓΙΚΑ street venue — Athens refugee blocks, parked cars, flower-pot goals and ΣΩΣΤΕ ΤΑ ΠΡΟΣΦΥΓΙΚΑ banners; selectable Cage/Prosfygika street venue
 - **v2.31.0**: Antifa League 5v5 street football — separate street league + quick Street Match, cage walls/kick-ins, 1-2-1 lineups, asphalt cage venue, street-scaled AI

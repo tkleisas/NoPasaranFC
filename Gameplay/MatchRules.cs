@@ -24,6 +24,9 @@ namespace NoPasaranFC.Gameplay
         public float GoalDepth { get; init; } = 146f;     // 2 m
         public float GoalPostHeight { get; init; } = 178f; // 2.44 m
 
+        /// <summary>Real posts/crossbar/net exist. False for flower-pot goals only.</summary>
+        public bool HasGoalFrame { get; init; } = true;
+
         public int TeamSize { get; init; } = 11;
 
         /// <summary>Honor GameSettings.OffsidesEnabled (street turns it off).</summary>
@@ -63,12 +66,14 @@ namespace NoPasaranFC.Gameplay
         public static MatchRules Standard { get; } = new MatchRules();
 
         /// <summary>Fenced asphalt cage: the ball rebounds off the walls.</summary>
-        public static MatchRules Street5v5 { get; } = CreateStreet("Cage", wallBounce: true);
+        public static MatchRules Street5v5 { get; } =
+            CreateStreet("Cage", wallBounce: true, hasGoalFrame: true);
 
-        /// <summary>Open Athens neighborhood dirt court: no cage; touchline out = kick-in.</summary>
-        public static MatchRules Prosfygika5v5 { get; } = CreateStreet("Prosfygika", wallBounce: false);
+        /// <summary>Open Athens dirt court: no cage, no nets, flower-pot goals only.</summary>
+        public static MatchRules Prosfygika5v5 { get; } =
+            CreateStreet("Prosfygika", wallBounce: false, hasGoalFrame: false);
 
-        private static MatchRules CreateStreet(string venue, bool wallBounce) => new MatchRules
+        private static MatchRules CreateStreet(string venue, bool wallBounce, bool hasGoalFrame) => new MatchRules
         {
             Name = "Antifa League Street",
             Street = true,
@@ -79,6 +84,7 @@ namespace NoPasaranFC.Gameplay
             GoalWidth = 219f,     // 3 m
             GoalDepth = 110f,     // 1.5 m
             GoalPostHeight = 146f,// 2 m
+            HasGoalFrame = hasGoalFrame,
             TeamSize = 5,
             UseOffsideSetting = false,
             WallBounce = wallBounce,

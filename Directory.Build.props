@@ -5,8 +5,11 @@
   <PropertyGroup>
     <GameVersionMajor>2</GameVersionMajor>
     <GameVersionMinor>32</GameVersionMinor>
-    <GameVersionPatch>1</GameVersionPatch>
+    <GameVersionPatch>2</GameVersionPatch>
     <GameVersion>$(GameVersionMajor).$(GameVersionMinor).$(GameVersionPatch)</GameVersion>
+    <!-- We intentionally pin net9.0; newer SDKs must not fail on its EOL workload warning. -->
+    <CheckEolTargetFramework>false</CheckEolTargetFramework>
+    <CheckEolWorkloads>false</CheckEolWorkloads>
     <!-- Monotonic Android versionCode: 2.28.0 -> 22800 -->
     <GameVersionCode>$([MSBuild]::Add($([MSBuild]::Multiply($(GameVersionMajor), 10000)), $([MSBuild]::Add($([MSBuild]::Multiply($(GameVersionMinor), 100)), $(GameVersionPatch)))))</GameVersionCode>
   </PropertyGroup>

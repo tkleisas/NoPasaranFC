@@ -177,7 +177,9 @@ dotnet run --project NoPasaranFC.csproj -- server --port 7778  # same server via
   **ΠΡΟΣΦΥΓΙΚΑ** (`Venue.Prosfygika` — no fence, `WallBounce=false`, touchline out is a kick-in;
   Athens refugee housing blocks with aged bullet-scarred facade textures, balconies, laundry,
   AC units, parked cars, dense trees, flower-pot goals instead of frames and no nets, faded
-  chalk lines, cheering CourtSide fans, and ΣΩΣΤΕ ΤΑ ΠΡΟΣΦΥΓΙΚΑ banners/sign).
+  chalk lines, cheering CourtSide fans, and ΣΩΣΤΕ ΤΑ ΠΡΟΣΦΥΓΙΚΑ banners/sign). Its rules
+  set `HasGoalFrame=false`, so the engine skips net/post/crossbar collisions and height does
+  not disqualify a goal; the 2D renderer also hides the goal frame.
   Street matches auto-resume at halftime (no 11v11 substitution screen). Friendly matches play
   on cloned rosters so the live league lineup is not trimmed to five.
 - Match statistics (`Gameplay/MatchStats.cs`, engine hooks): per-player goals/assists/shots/on-target/

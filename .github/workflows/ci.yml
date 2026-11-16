@@ -32,5 +32,12 @@ jobs:
       - name: Build (dedicated server)
         run: dotnet build NoPasaranFC.Server/NoPasaranFC.Server.csproj -c Release
 
+      - name: Publish (dedicated server smoke test)
+        run: >
+          dotnet publish NoPasaranFC.Server/NoPasaranFC.Server.csproj
+          -c Release -r linux-x64 --self-contained true
+          -p:PublishSingleFile=true -p:PublishTrimmed=false -p:PublishReadyToRun=false
+          -o /tmp/nopasaran-server-publish
+
       - name: Test
         run: dotnet test NoPasaranFC.Tests/NoPasaranFC.Tests.csproj -c Release

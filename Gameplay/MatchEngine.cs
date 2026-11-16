@@ -2910,6 +2910,10 @@ namespace NoPasaranFC.Gameplay
         
         private void CheckGoalNetCollision()
         {
+            // Flower-pot goals have no net to catch the ball.
+            if (!Rules.HasGoalFrame)
+                return;
+
             // Calculate goal area boundaries
             float leftGoalLine = StadiumMargin;
             float rightGoalLine = StadiumMargin + FieldWidth;
@@ -2977,10 +2981,13 @@ namespace NoPasaranFC.Gameplay
             // Check if ball is near crossbar height (with tolerance for ricochet)
             bool ballAtCrossbarHeight = BallHeight >= GoalPostHeight - 20 && BallHeight <= GoalPostHeight + 20;
             bool ballBelowGoalHeight = BallHeight <= GoalPostHeight;
+            // Without a crossbar (flower-pot goals) height does not disqualify a goal.
+            bool goalHeightValid = !Rules.HasGoalFrame || ballBelowGoalHeight;
             
             // === CROSSBAR RICOCHET ===
             // Check if ball hits the crossbar (within goal area, at crossbar height)
-            if (((BallPosition.X >= leftGoalLine - 30 && BallPosition.X <= leftGoalLine + 30) ||
+            if (Rules.HasGoalFrame &&
+                ((BallPosition.X >= leftGoalLine - 30 && BallPosition.X <= leftGoalLine + 30) ||
                  (BallPosition.X >= rightGoalLine - 30 && BallPosition.X <= rightGoalLine + 30)) &&
                 BallPosition.Y >= goalTop && BallPosition.Y <= goalBottom &&
                 ballAtCrossbarHeight && BallVerticalVelocity < 0)
@@ -3002,7 +3009,9 @@ namespace NoPasaranFC.Gameplay
             bool nearTopPost = Math.Abs(BallPosition.Y - goalTop) < postTolerance;
             bool nearBottomPost = Math.Abs(BallPosition.Y - goalBottom) < postTolerance;
             
-            if ((nearLeftGoalLine || nearRightGoalLine) && (nearTopPost || nearBottomPost) && ballBelowGoalHeight)
+            if (Rules.HasGoalFrame &&
+                (nearLeftGoalLine || nearRightGoalLine) && (nearTopPost || nearBottomPost) &&
+                ballBelowGoalHeight)
             {
                 // Ball hit side post - bounce sideways and reverse horizontal direction
                 BallVelocity = new Vector2(-BallVelocity.X * 0.7f, -BallVelocity.Y * 0.7f); // Bounce both directions
@@ -3016,7 +3025,7 @@ namespace NoPasaranFC.Gameplay
             // Left goal - the team NOT defending it this half scores
             if (BallPosition.X < leftGoalLine &&
                 BallPosition.Y >= goalTop && BallPosition.Y <= goalBottom &&
-                ballBelowGoalHeight && !_goalScored)
+                goalHeightValid && !_goalScored)
             {
                 // The team attacking the left goal benefits - even if the last
                 // kicker was a defender (own goal), the attacking side celebrates
@@ -3034,7 +3043,7 @@ namespace NoPasaranFC.Gameplay
             // Right goal - the team NOT defending it this half scores
             else if (BallPosition.X > rightGoalLine &&
                      BallPosition.Y >= goalTop && BallPosition.Y <= goalBottom &&
-                     ballBelowGoalHeight && !_goalScored)
+                     goalHeightValid && !_goalScored)
             {
                 _scoringTeam = LeftDefendingTeam;
                 if (_scoringTeam == _homeTeam) HomeScore++; else AwayScore++;
@@ -3055,7 +3064,8 @@ namespace NoPasaranFC.Gameplay
             if (_goalScored) return;
 
             // Ball went over the crossbar (over goal posts)
-            if ((BallPosition.X < leftGoalLine || BallPosition.X > rightGoalLine) &&
+            if (Rules.HasGoalFrame &&
+                (BallPosition.X < leftGoalLine || BallPosition.X > rightGoalLine) &&
                 BallPosition.Y >= goalTop && BallPosition.Y <= goalBottom &&
                 !ballBelowGoalHeight)
             {

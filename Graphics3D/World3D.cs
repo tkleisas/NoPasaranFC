@@ -2131,7 +2131,7 @@ namespace NoPasaranFC.Graphics3D
             }
         }
 
-        /// <summary>Low-poly parked car (visual only, outside the cage).</summary>        /// <summary>Low-poly parked car (visual only, outside the cage).</summary>
+        /// <summary>Low-poly parked car (visual only, outside the cage).</summary>
         private static void AddParkedCar(List<VertexPositionColor> verts, List<int> indices,
             float x, float z, Color body)
         {
@@ -2159,14 +2159,21 @@ namespace NoPasaranFC.Graphics3D
                 new Vector3(x + 0.8f, 1.24f, z - halfW * 0.88f),
                 new Vector3(x - 1.0f, 1.24f, z - halfW * 0.88f), glass);
 
-            // Wheels
+            // Round wheels (cylinders on the Z axis, so they read as circles from the side)
+            Color hub = new Color(120, 122, 126);
             foreach (float wx in new[] { x - 1.25f, x + 1.25f })
             {
                 foreach (float wz in new[] { z - halfW, z + halfW })
                 {
-                    AddBox(verts, indices,
-                        new Vector3(wx - 0.3f, 0f, wz - 0.12f),
-                        new Vector3(wx + 0.3f, 0.55f, wz + 0.12f), tyre);
+                    AddCylinder(verts, indices,
+                        new Vector3(wx, 0.3f, wz - 0.12f),
+                        new Vector3(wx, 0.3f, wz + 0.12f),
+                        0.3f, 0.3f, tyre, 10);
+                    float outward = MathF.Sign(wz - z);
+                    AddCylinder(verts, indices,
+                        new Vector3(wx, 0.3f, wz + outward * 0.12f),
+                        new Vector3(wx, 0.3f, wz + outward * 0.135f),
+                        0.14f, 0.14f, hub, 8);
                 }
             }
 

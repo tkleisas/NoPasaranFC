@@ -216,10 +216,13 @@ namespace NoPasaranFC.Screens
                     float goalWidth = MatchEngine.GoalWidth;
                     float goalDepth = MatchEngine.GoalDepth;
                     
-                    _leftGoalNet = new GoalNet(margin - goalDepth, centerY - goalWidth / 2, 
-                        goalDepth, goalWidth, true);
-                    _rightGoalNet = new GoalNet(margin + MatchEngine.FieldWidth, centerY - goalWidth / 2, 
-                        goalDepth, goalWidth, false);
+                    if (_matchEngine.Rules.HasGoalFrame)
+                    {
+                        _leftGoalNet = new GoalNet(margin - goalDepth, centerY - goalWidth / 2, 
+                            goalDepth, goalWidth, true);
+                        _rightGoalNet = new GoalNet(margin + MatchEngine.FieldWidth, centerY - goalWidth / 2, 
+                            goalDepth, goalWidth, false);
+                    }
                     
                     _graphicsInitialized = true;
                 }
@@ -1900,6 +1903,10 @@ namespace NoPasaranFC.Screens
         
         private void DrawGoalPosts(SpriteBatch spriteBatch)
         {
+            // Flower-pot goals have no real posts or crossbar.
+            if (!_matchEngine.Rules.HasGoalFrame)
+                return;
+
             float margin = MatchEngine.StadiumMargin;
             float centerY = margin + MatchEngine.FieldHeight / 2;
             float goalWidth = MatchEngine.GoalWidth;

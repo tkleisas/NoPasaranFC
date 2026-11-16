@@ -120,6 +120,104 @@ public class StreetModeTests
     }
 
     [Fact]
+    public void Prosfygika_NoNetBounceBehindGoalLine()
+    {
+        var engine = TestHelper.MakeEngine(rules: MatchRules.Prosfygika5v5);
+        try
+        {
+            TestHelper.ReachPlaying(engine);
+            float netBack = MatchEngine.StadiumMargin - MatchEngine.GoalDepth - 20f;
+            float centerY = MatchEngine.StadiumMargin + MatchEngine.FieldHeight / 2f;
+            engine.BallHeight = 0f;
+            engine.BallVerticalVelocity = 0f;
+            engine.BallPosition = new Vector2(netBack, centerY);
+            engine.BallVelocity = new Vector2(-300f, 0f);
+
+            TestHelper.Step(engine, 0.05f);
+
+            Assert.True(engine.BallVelocity.X < 0f,
+                "the ball must keep travelling through the open flower-pot goal");
+            Assert.True(engine.BallPosition.X < netBack);
+            Assert.Equal(1, engine.HomeScore + engine.AwayScore);
+        }
+        finally
+        {
+            MatchEngine.ApplyRules(MatchRules.Standard);
+        }
+    }
+
+    [Fact]
+    public void Prosfygika_FlowerPotPostDoesNotRicochet()
+    {
+        var engine = TestHelper.MakeEngine(rules: MatchRules.Prosfygika5v5);
+        try
+        {
+            TestHelper.ReachPlaying(engine);
+            float goalTop = MatchEngine.StadiumMargin +
+                (MatchEngine.FieldHeight - MatchEngine.GoalWidth) / 2f;
+            engine.BallHeight = 0f;
+            engine.BallVerticalVelocity = 0f;
+            engine.BallPosition = new Vector2(MatchEngine.StadiumMargin + 1f, goalTop);
+            engine.BallVelocity = new Vector2(-300f, 0f);
+
+            TestHelper.Step(engine, 0.05f);
+
+            Assert.Equal(1, engine.HomeScore + engine.AwayScore);
+        }
+        finally
+        {
+            MatchEngine.ApplyRules(MatchRules.Standard);
+        }
+    }
+
+    [Fact]
+    public void Prosfygika_HighBallOverLineScoresWithoutCrossbar()
+    {
+        var engine = TestHelper.MakeEngine(rules: MatchRules.Prosfygika5v5);
+        try
+        {
+            TestHelper.ReachPlaying(engine);
+            float centerY = MatchEngine.StadiumMargin + MatchEngine.FieldHeight / 2f;
+            engine.BallHeight = MatchEngine.GoalPostHeight + 100f;
+            engine.BallVerticalVelocity = 0f;
+            engine.BallPosition = new Vector2(MatchEngine.StadiumMargin - 1f, centerY);
+            engine.BallVelocity = new Vector2(-300f, 0f);
+
+            TestHelper.Step(engine, 0.05f);
+
+            Assert.Equal(1, engine.HomeScore + engine.AwayScore);
+        }
+        finally
+        {
+            MatchEngine.ApplyRules(MatchRules.Standard);
+        }
+    }
+
+    [Fact]
+    public void Cage_HighBallOverCrossbarIsGoalKick()
+    {
+        var engine = TestHelper.MakeEngine(rules: MatchRules.Street5v5);
+        try
+        {
+            TestHelper.ReachPlaying(engine);
+            float centerY = MatchEngine.StadiumMargin + MatchEngine.FieldHeight / 2f;
+            engine.BallHeight = MatchEngine.GoalPostHeight + 100f;
+            engine.BallVerticalVelocity = 0f;
+            engine.BallPosition = new Vector2(MatchEngine.StadiumMargin + 1f, centerY);
+            engine.BallVelocity = new Vector2(-300f, 0f);
+
+            TestHelper.Step(engine, 0.05f);
+
+            Assert.Equal(0, engine.HomeScore + engine.AwayScore);
+            Assert.Equal(MatchEngine.MatchState.GoalKick, engine.CurrentState);
+        }
+        finally
+        {
+            MatchEngine.ApplyRules(MatchRules.Standard);
+        }
+    }
+
+    [Fact]
     public void StandardMatchAfterStreet_ResetsPitchAndLineup()
     {
         var streetHome = TestHelper.MakeTeam("STREET", 1);
