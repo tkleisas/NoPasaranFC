@@ -5,7 +5,7 @@
   <PropertyGroup>
     <GameVersionMajor>2</GameVersionMajor>
     <GameVersionMinor>32</GameVersionMinor>
-    <GameVersionPatch>2</GameVersionPatch>
+    <GameVersionPatch>3</GameVersionPatch>
     <GameVersion>$(GameVersionMajor).$(GameVersionMinor).$(GameVersionPatch)</GameVersion>
     <!-- We intentionally pin net9.0; newer SDKs must not fail on its EOL workload warning. -->
     <CheckEolTargetFramework>false</CheckEolTargetFramework>

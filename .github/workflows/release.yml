@@ -140,6 +140,19 @@ jobs:
         with:
           dotnet-version: 9.0.x
 
+      # The runner also ships a newer SDK; pin the Android workload to .NET 9.
+      - name: Pin .NET 9 SDK
+        run: |
+          cat > global.json <<'EOF'
+          {
+            "sdk": {
+              "version": "9.0.100",
+              "rollForward": "latestFeature"
+            }
+          }
+          EOF
+          dotnet --version
+
       - name: Setup Java 17
         uses: actions/setup-java@v4
         with:
