@@ -489,4 +489,57 @@ public class MatchEngineTests
         Assert.NotNull(engine.LastCelebrationScorer);
         Assert.Equal(engine.HomeTeam, engine.LastCelebrationScorer.Team); // NOT the stale away kicker
     }
+
+    [Fact]
+    public void LegacyFsm_LazilyMaterializes_WhenBrainIsSwitchedOff()
+    {
+        bool previous = AIController.UseUtilityBrain;
+        try
+        {
+            AIController.UseUtilityBrain = true;
+            var engine = TestHelper.MakeEngine();
+            var player = engine.HomeTeam.Players
+                .First(p => p.IsStarting && p.Position != PlayerPosition.Goalkeeper);
+            var controller = player.AIController as AIController;
+            Assert.NotNull(controller);
+
+            // Live path: no legacy FSM objects are allocated per player
+            Assert.Null(controller.GetState(AIStateType.Positioning));
+
+            AIController.UseUtilityBrain = false;
+            TestHelper.ReachPlaying(engine);
+            TestHelper.Step(engine, 0.2f);
+
+            var legacy = player.AIController as AIController;
+            Assert.NotNull(legacy);
+            Assert.NotNull(legacy.GetState(AIStateType.Positioning));
+            Assert.NotEqual("Idle", legacy.GetCurrentStateName());
+        }
+        finally
+        {
+            AIController.UseUtilityBrain = previous;
+        }
+    }
+
+    [Fact]
+    public void ActivePlayers_ObservesStartingFlagLive()
+    {
+        var engine = TestHelper.MakeEngine();
+
+        int total = 0;
+        foreach (var player in engine.ActivePlayers)
+        {
+            Assert.True(player.IsStarting);
+            total++;
+        }
+        Assert.Equal(engine.GetAllPlayers().Count, total);
+
+        // Red-card/substitution changes must be visible without rebuilding a cache
+        var benched = engine.HomeTeam.Players.First(p => p.IsStarting);
+        benched.IsStarting = false;
+        int after = 0;
+        foreach (var player in engine.ActivePlayers) after++;
+        Assert.Equal(total - 1, after);
+        benched.IsStarting = true;
+    }
 }

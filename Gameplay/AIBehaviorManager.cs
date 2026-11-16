@@ -142,16 +142,17 @@ namespace NoPasaranFC.Gameplay
 
                 // Offside awareness: a pass to an offside teammate is a turnover
                 // waiting to happen - near-veto when offsides are enforced
-                if (GameSettings.Instance.OffsidesEnabled &&
+                if (_engine.Rules.UseOffsideSetting && GameSettings.Instance.OffsidesEnabled &&
                     _engine.WouldBeOffside(player, teammate))
                     passScore -= 1500f;
 
                 // Distance scoring: value all useful distances, prefer medium but don't punish long
-                if (dist > AIConstants.MinPassDistance && dist < 800f)
+                float distanceScale = _engine.Rules.AiDistanceScale;
+                if (dist > AIConstants.MinPassDistance * distanceScale && dist < 800f * distanceScale)
                     passScore += 200f;     // Short-medium: safe option
-                else if (dist >= 800f && dist < 1500f)
+                else if (dist >= 800f * distanceScale && dist < 1500f * distanceScale)
                     passScore += 250f;     // Medium-long: through balls
-                else if (dist >= 1500f && dist < AIConstants.MaxPassDistance)
+                else if (dist >= 1500f * distanceScale && dist < AIConstants.MaxPassDistance * distanceScale)
                     passScore += 250f;     // Long: switching play / penetration
                 else
                     passScore -= 200f;     // Too close or too far
@@ -316,7 +317,8 @@ namespace NoPasaranFC.Gameplay
                 IsCoverDefender = isCoverDefender,
                 CoverPoint = coverPoint,
                 IsPassOffer = isPassOffer,
-                PassOfferOppositeSide = passOfferOppositeSide
+                PassOfferOppositeSide = passOfferOppositeSide,
+                Rules = _engine.Rules
             };
         }
         

@@ -32,8 +32,11 @@ namespace NoPasaranFC.Gameplay
         
         public void Draw(SpriteBatch spriteBatch, Texture2D pixel, MatchEngine matchEngine, Team homeTeam, Team awayTeam)
         {
-            // Draw minimap background
-            spriteBatch.Draw(pixel, _minimapRect, new Color(0, 40, 0, 200)); // Dark green, semi-transparent
+            // Draw minimap background (asphalt for street, grass otherwise)
+            Color background = matchEngine.Rules.Street
+                ? new Color(38, 38, 44, 210)
+                : new Color(0, 40, 0, 200);
+            spriteBatch.Draw(pixel, _minimapRect, background);
             
             // Draw minimap border
             DrawBorder(spriteBatch, pixel, _minimapRect, Color.White, 2);

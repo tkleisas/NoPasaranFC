@@ -6,6 +6,7 @@ using Microsoft.Xna.Framework.Input;
 using NoPasaranFC.Database;
 using NoPasaranFC.Gameplay;
 using NoPasaranFC.Models;
+using NoPasaranFC.Networking;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -16,6 +17,7 @@ namespace NoPasaranFC.Screens
     public class MatchScreen : Screen
     {
         private MatchEngine _matchEngine;
+        private bool _friendly;
         
         /// <summary>Debug console access to live match state (read-only usage).</summary>
         public MatchEngine Engine => _matchEngine;
@@ -68,11 +70,7 @@ namespace NoPasaranFC.Screens
         private Texture2D _playerSpriteBlue; // Home team sprite sheet (OLD)
         private Texture2D _ballSprite;
         private Texture2D _grassTexture;
-        private SpriteFont _playerNameFont;
         private ContentManager _content;
-        
-        // New animation system
-        private PlayerAnimationSystem _playerAnimSystem;
         
         // Optional 3D match view (null in default 2D mode)
         private Graphics3D.MatchRenderer3D _renderer3D;
@@ -80,6 +78,16 @@ namespace NoPasaranFC.Screens
         // Opt-in match recorder (Settings: RecordMatches) - harness-compatible
         // JSONL of the live match for retrospective AI-behavior analysis
         private Gameplay.MatchRecorder _recorder;
+
+        // Network match (server-ordered deterministic lockstep). Null = local match.
+        private NetworkClient _netClient;
+        private NetSide _netLocalSide;
+        private TimeSpan _netElapsed;
+        private bool _netMatchEnded;
+        private bool _netDesyncLogged;
+        private string _netError;
+        private Action _onNetworkFinished;
+        public bool IsNetworkMatch => _netClient != null;
         
         // Goal replay (3D mode): live play is recorded and the goal build-up is
         // replayed over the post-goal countdown, skippable with the shoot key
@@ -100,26 +108,51 @@ namespace NoPasaranFC.Screens
         private float _ballAnimationFrame = 0f;
         
         public MatchScreen(Team homeTeam, Team awayTeam, Match match, Championship championship, 
-            DatabaseManager database, ScreenManager screenManager,ContentManager content)
+            DatabaseManager database, ScreenManager screenManager,ContentManager content,
+            NetworkClient netClient = null, MatchStartInfo netStart = null, Action onNetworkFinished = null,
+            MatchRules rules = null, bool friendly = false)
         {
             _homeTeam = homeTeam;
             _awayTeam = awayTeam;
             _match = match;
             _championship = championship;
+            _friendly = friendly;
             _database = database;
             _screenManager = screenManager;
             _input = new Gameplay.InputHelper();
             _input.ScreenWidth = Game1.ScreenWidth;
             _input.ScreenHeight = Game1.ScreenHeight;
             _input.UpdateTouchAreas();
-            _matchEngine = new MatchEngine(homeTeam, awayTeam, Game1.ScreenWidth, Game1.ScreenHeight);
+
+            // Network matches must build the engine with the server's settings and
+            // seeds so every peer simulates the same match. This must happen BEFORE
+            // the MatchEngine constructor creates the AI controllers.
+            _netClient = netClient;
+            _onNetworkFinished = onNetworkFinished;
+            if (netStart != null)
+            {
+                _netLocalSide = netStart.LocalSide;
+                netStart.Settings.Apply();
+                NetworkMatchSetup.PrepareTeams(homeTeam, awayTeam);
+                AIController.DeterministicSeedBase = netStart.Seed;
+            }
+
+            _matchEngine = new MatchEngine(homeTeam, awayTeam, Game1.ScreenWidth, Game1.ScreenHeight, rules);
+            if (netStart != null)
+            {
+                _matchEngine.SetRandomSeed(netStart.Seed);
+                _matchEngine.CelebrationDurationOverride = NetProtocol.CelebrationDurationSeconds;
+                _matchEngine.JoinPlayer2(true);
+            }
+
             _graphicsInitialized = false;
             _minimap = new Minimap(Game1.ScreenWidth, Game1.ScreenHeight, 150, 100); // Minimap 150x100 pixels
             _content = content;
             
             // Opt-in match recording (read-only observer of the engine; a disk
-            // error must never stop a match from starting)
-            if (GameSettings.Instance.RecordMatches)
+            // error must never stop a match from starting). Network clients don't
+            // record: their view is event-driven and would not be harness-clean.
+            if (netStart == null && GameSettings.Instance.RecordMatches)
             {
                 try
                 {
@@ -165,7 +198,8 @@ namespace NoPasaranFC.Screens
                     // Optional 3D match view (additive; 2D rendering remains the default)
                     if (GameSettings.Instance.MatchViewMode == "3D")
                     {
-                        _renderer3D = new Graphics3D.MatchRenderer3D(graphicsDevice, _content);
+                        _renderer3D = new Graphics3D.MatchRenderer3D(graphicsDevice, _content,
+                            networkMode: _netClient != null, rules: _matchEngine.Rules);
                         _renderer3D.InitializeBenches(graphicsDevice, _matchEngine, _homeTeam.Id);
                     }
                     
@@ -226,7 +260,8 @@ namespace NoPasaranFC.Screens
         /// <summary>Resumed from the halftime substitution screen: AI subs, then 2nd half.</summary>
         public override void OnActivated()
         {
-            if (_matchEngine.CurrentState == MatchEngine.MatchState.HalfTime)
+            // Network matches auto-resume via the server's ForceStartSecondHalf flag.
+            if (_netClient == null && _matchEngine.CurrentState == MatchEngine.MatchState.HalfTime)
             {
                 ApplyAISubstitutions();
                 _matchEngine.StartSecondHalf();
@@ -264,14 +299,30 @@ namespace NoPasaranFC.Screens
         
         public override void Update(GameTime gameTime)
         {
+            // The server owns network match lifetime: a disconnect or MatchEnd
+            // finishes the screen even if the local sim is a few ticks behind.
+            if (_netClient != null && _netMatchEnded)
+            {
+                EndMatch();
+                return;
+            }
+
             if (_matchEngine.CurrentState == MatchEngine.MatchState.Ended)
             {
                 EndMatch();
                 return;
             }
             
-            // Halftime: push the substitution screen once (engine is frozen meanwhile)
-            if (_matchEngine.CurrentState == MatchEngine.MatchState.HalfTime && !_halftimeScreenPushed)
+            // Halftime: street friendlies auto-resume (no 11v11 substitution
+            // screen); everything else pushes the substitution screen once.
+            // Network matches auto-resume from the server's tick flag instead.
+            if (_netClient == null && _matchEngine.Rules.Street &&
+                _matchEngine.CurrentState == MatchEngine.MatchState.HalfTime && !_halftimeScreenPushed)
+            {
+                _halftimeScreenPushed = true;
+                _matchEngine.StartSecondHalf();
+            }
+            else if (_netClient == null && _matchEngine.CurrentState == MatchEngine.MatchState.HalfTime && !_halftimeScreenPushed)
             {
                 _halftimeScreenPushed = true;
                 var playerTeam = _homeTeam.IsPlayerControlled ? _homeTeam : _awayTeam;
@@ -296,70 +347,80 @@ namespace NoPasaranFC.Screens
             // Pass (Z key, B button, or touch Y)
             bool isPassKeyDown = _input.IsPassButtonDown() || touchUI.IsPassPressed;
 
-#if !ANDROID
-            // ===== Player 2 join/leave toggle (desktop local 2-player) =====
-            // Right Shift / Start on pad 2 = join the OPPOSING team (versus).
-            // Right Alt / Back on pad 2 = join P1's team (co-op).
-            // While P2 is active, any of these keys toggles them back off.
-            bool p2VersusPressed = _input.IsPlayer2JoinVersusPressed(out bool p2VersusFromKeyboard);
-            bool p2CoopPressed = _input.IsPlayer2JoinCoopPressed(out bool p2CoopFromKeyboard);
-            if (p2VersusPressed || p2CoopPressed)
+            if (_netClient != null)
             {
-                if (_matchEngine.Player2Active)
+                // Send this frame's local input; the server bundles it into a tick
+                // together with the opponent's input and sends both back.
+                UpdateNetworkSimulation(moveDirection, isShootKeyDown, isPassKeyDown);
+            }
+            else
+            {
+#if !ANDROID
+                // ===== Player 2 join/leave toggle (desktop local 2-player) =====
+                // Right Shift / Start on pad 2 = join the OPPOSING team (versus).
+                // Right Alt / Back on pad 2 = join P1's team (co-op).
+                // While P2 is active, any of these keys toggles them back off.
+                bool p2VersusPressed = _input.IsPlayer2JoinVersusPressed(out bool p2VersusFromKeyboard);
+                bool p2CoopPressed = _input.IsPlayer2JoinCoopPressed(out bool p2CoopFromKeyboard);
+                if (p2VersusPressed || p2CoopPressed)
                 {
-                    _matchEngine.LeavePlayer2();
-                    _input.Player2KeyboardActive = false;
-                }
-                else
-                {
-                    // Versus wins if both were somehow pressed on the same frame.
-                    bool p2FromKeyboard = p2VersusPressed ? p2VersusFromKeyboard : p2CoopFromKeyboard;
-                    // Prefer gamepad 2 if it's connected, even when a keyboard key was
-                    // used. Only route P2 to the keyboard if no pad 2 is attached.
-                    bool useKeyboard = p2FromKeyboard && !_input.IsGamePad2Connected();
-
-                    if (_matchEngine.JoinPlayer2(joinOpposingTeam: p2VersusPressed))
+                    if (_matchEngine.Player2Active)
                     {
-                        _input.Player2KeyboardActive = useKeyboard;
-                        _player2HasEverJoined = true;
+                        _matchEngine.LeavePlayer2();
+                        _input.Player2KeyboardActive = false;
+                    }
+                    else
+                    {
+                        // Versus wins if both were somehow pressed on the same frame.
+                        bool p2FromKeyboard = p2VersusPressed ? p2VersusFromKeyboard : p2CoopFromKeyboard;
+                        // Prefer gamepad 2 if it's connected, even when a keyboard key was
+                        // used. Only route P2 to the keyboard if no pad 2 is attached.
+                        bool useKeyboard = p2FromKeyboard && !_input.IsGamePad2Connected();
+
+                        if (_matchEngine.JoinPlayer2(joinOpposingTeam: p2VersusPressed))
+                        {
+                            _input.Player2KeyboardActive = useKeyboard;
+                            _player2HasEverJoined = true;
+                        }
                     }
                 }
-            }
 
-            // Collect P2 input if they're in the match.
-            Vector2 moveDirection2 = Vector2.Zero;
-            bool isShootKeyDown2 = false;
-            bool isPassKeyDown2 = false;
-            if (_matchEngine.Player2Active)
-            {
-                moveDirection2 = _input.GetMovementDirectionPlayer2();
-                isShootKeyDown2 = _input.IsShootButtonDownPlayer2();
-                isPassKeyDown2 = _input.IsPassButtonDownPlayer2();
-            }
+                // Collect P2 input if they're in the match.
+                Vector2 moveDirection2 = Vector2.Zero;
+                bool isShootKeyDown2 = false;
+                bool isPassKeyDown2 = false;
+                if (_matchEngine.Player2Active)
+                {
+                    moveDirection2 = _input.GetMovementDirectionPlayer2();
+                    isShootKeyDown2 = _input.IsShootButtonDownPlayer2();
+                    isPassKeyDown2 = _input.IsPassButtonDownPlayer2();
+                }
 
-            _matchEngine.Update(gameTime, moveDirection, isShootKeyDown, isPassKeyDown,
-                                moveDirection2, isShootKeyDown2, isPassKeyDown2);
+                _matchEngine.Update(gameTime, moveDirection, isShootKeyDown, isPassKeyDown,
+                                    moveDirection2, isShootKeyDown2, isPassKeyDown2);
 
-            // P2 switch player
-            if (_matchEngine.Player2Active && _input.IsSwitchPlayerPressedPlayer2())
-            {
-                _matchEngine.SwitchControlledPlayer2();
-            }
+                // P2 switch player
+                if (_matchEngine.Player2Active && _input.IsSwitchPlayerPressedPlayer2())
+                {
+                    _matchEngine.SwitchControlledPlayer2();
+                }
 
-            // Tick the join-hint timer (fades out after Player2HintDuration seconds).
-            if (_player2HintTimer > 0f)
-            {
-                _player2HintTimer -= (float)gameTime.ElapsedGameTime.TotalSeconds;
-            }
+                // Tick the join-hint timer (fades out after Player2HintDuration seconds).
+                if (_player2HintTimer > 0f)
+                {
+                    _player2HintTimer -= (float)gameTime.ElapsedGameTime.TotalSeconds;
+                }
 #else
-            _matchEngine.Update(gameTime, moveDirection, isShootKeyDown, isPassKeyDown);
+                _matchEngine.Update(gameTime, moveDirection, isShootKeyDown, isPassKeyDown);
 #endif
+            }
 
             // Match recorder: sample frames at 10 Hz from real elapsed time
             _recorder?.Update((float)gameTime.ElapsedGameTime.TotalSeconds);
 
-            // Switch player (Space, X button, or touch X)
-            if (_input.IsSwitchPlayerPressed() || touchUI.IsSwitchJustPressed)
+            // Switch player (Space, X button, or touch X). Network matches keep the
+            // server-assigned player fixed so both peers stay deterministic.
+            if (_netClient == null && (_input.IsSwitchPlayerPressed() || touchUI.IsSwitchJustPressed))
             {
                 _matchEngine.SwitchControlledPlayer();
             }
@@ -368,6 +429,7 @@ namespace NoPasaranFC.Screens
             if (_input.IsBackPressed() || touchUI.IsBackJustPressed)
             {
                 StopRecorder();
+                CloseNetwork();
                 IsFinished = true;
             }
             
@@ -378,8 +440,9 @@ namespace NoPasaranFC.Screens
                 _debugOverlayEnabled = !_debugOverlayEnabled;
             }
             
-            // Debug keys for triggering set pieces (only when debug overlay is enabled)
-            if (_debugOverlayEnabled)
+            // Debug keys for triggering set pieces (only when debug overlay is enabled).
+            // Never in a network match: they would desync the peers.
+            if (_debugOverlayEnabled && _netClient == null)
             {
                 // F5 = Throw-in
                 if (currentKeyboardState.IsKeyDown(Keys.F5) && _previousKeyboardState.IsKeyUp(Keys.F5))
@@ -417,14 +480,18 @@ namespace NoPasaranFC.Screens
             // Update 3D renderer (camera follow, ball roll, billboard animations)
             if (_renderer3D != null)
             {
-                _renderer3D.SetCutsceneSkipKey(isShootKeyDown);
+                // Card-cutscene skip mutates engine state; in network mode the
+                // cutscene must run its deterministic length on every peer.
+                _renderer3D.SetCutsceneSkipKey(_netClient == null && isShootKeyDown);
                 _renderer3D.Update(gameTime, _matchEngine);
             }
             
             // Goal replay: record live play AND the first second after the goal
             // (the payoff), capture when the celebration hands over to the
-            // countdown; holding the shoot key skips it
-            if (_renderer3D != null)
+            // countdown; holding the shoot key skips it.
+            // Disabled for network matches: SetCountdownRemaining mutates engine
+            // state locally and would desync the deterministic tick stream.
+            if (_renderer3D != null && _netClient == null)
             {
                 _lastDeltaTime = (float)gameTime.ElapsedGameTime.TotalSeconds;
                 var matchState = _matchEngine.CurrentState;
@@ -476,6 +543,80 @@ namespace NoPasaranFC.Screens
             }
         }
         
+        /// <summary>
+        /// Network path: sends local input and consumes server-ordered ticks. Each
+        /// tick is simulated with a fixed delta, exactly like the server.
+        /// </summary>
+        private void UpdateNetworkSimulation(Vector2 move, bool shoot, bool pass)
+        {
+            _netClient.SendInput(new NetInput(move.X, move.Y, shoot, pass));
+
+            while (_netClient.TryDequeue(out var evt))
+            {
+                switch (evt.Kind)
+                {
+                    case NetEventKind.Tick:
+                        ApplyNetworkTick(evt.Tick);
+                        break;
+
+                    case NetEventKind.MatchEnd:
+                        _netMatchEnded = true;
+                        break;
+
+                    case NetEventKind.Disconnected:
+                        _netError = evt.Message ?? "Connection lost";
+                        _netMatchEnded = true;
+                        break;
+
+                    case NetEventKind.Error:
+                        _netError = evt.Message ?? "Network error";
+                        _netMatchEnded = true;
+                        break;
+                }
+            }
+        }
+
+        private void ApplyNetworkTick(TickInfo tick)
+        {
+            if (tick.ForceStartSecondHalf &&
+                _matchEngine.CurrentState == MatchEngine.MatchState.HalfTime)
+            {
+                _matchEngine.StartSecondHalf();
+            }
+
+            _netElapsed += NetProtocol.FixedDelta;
+            _matchEngine.Update(new GameTime(_netElapsed, NetProtocol.FixedDelta),
+                tick.HomeInput.Move, tick.HomeInput.Shoot, tick.HomeInput.Pass,
+                tick.AwayInput.Move, tick.AwayInput.Shoot, tick.AwayInput.Pass);
+
+            // The server's status is part of every tick. A mismatch means the two
+            // simulations have drifted (different runtime/math); log it once so a
+            // desync is diagnosable instead of silently producing two scorelines.
+            if (!_netDesyncLogged &&
+                (Math.Abs(_matchEngine.MatchTime - tick.MatchTime) > 0.1f ||
+                 _matchEngine.HomeScore != tick.HomeScore ||
+                 _matchEngine.AwayScore != tick.AwayScore ||
+                 _matchEngine.CurrentState != tick.State))
+            {
+                _netDesyncLogged = true;
+                System.Diagnostics.Debug.WriteLine(
+                    $"NETWORK DESYNC tick {tick.Tick}: local time={_matchEngine.MatchTime:F2} " +
+                    $"score={_matchEngine.HomeScore}-{_matchEngine.AwayScore} state={_matchEngine.CurrentState} | " +
+                    $"server time={tick.MatchTime:F2} score={tick.HomeScore}-{tick.AwayScore} state={tick.State}");
+            }
+        }
+
+        private void CloseNetwork()
+        {
+            if (_netClient == null) return;
+            try { _netClient.Dispose(); } catch { /* ignore */ }
+            _netClient = null;
+            try { _onNetworkFinished?.Invoke(); } catch { /* ignore */ }
+            _onNetworkFinished = null;
+            // Network setup pinned AI seeds; don't leak that into later local matches.
+            AIController.DeterministicSeedBase = null;
+        }
+
         private void UpdatePlayerAnimations(GameTime gameTime)
         {
             float deltaTime = (float)gameTime.ElapsedGameTime.TotalSeconds;
@@ -573,7 +714,11 @@ namespace NoPasaranFC.Screens
                             // If throw animation just finished, execute the throw
                             if (player.CurrentAnimationState == "throw_in_throw" && _matchEngine.RestartPlayer == player)
                             {
-                                _matchEngine.ExecuteThrowIn();
+                                // Network peers must release the throw from the
+                                // engine's deterministic timer, not from a local
+                                // render animation finishing.
+                                if (_netClient == null)
+                                    _matchEngine.ExecuteThrowIn();
                             }
                             
                             // Reset to walk/idle
@@ -734,6 +879,25 @@ namespace NoPasaranFC.Screens
         private void EndMatch()
         {
             StopRecorder();
+
+            // Friendly matches (e.g. street) don't touch the championship/season.
+            if (_friendly)
+            {
+                IsFinished = true;
+                return;
+            }
+
+            // Network matches are friendlies: no championship/season persistence,
+            // no AI matchweek simulation. Server owns the final result.
+            if (_netClient != null)
+            {
+                if (!string.IsNullOrEmpty(_netError))
+                    System.Diagnostics.Debug.WriteLine($"Network match ended: {_netError}");
+                CloseNetwork();
+                IsFinished = true;
+                return;
+            }
+
             _match.HomeScore = _matchEngine.HomeScore;
             _match.AwayScore = _matchEngine.AwayScore;
             _match.IsPlayed = true;
@@ -1213,13 +1377,15 @@ namespace NoPasaranFC.Screens
                 }
                 
                 // Shot power bar above the controlled player's head while charging
-                if (player.IsControlled && _matchEngine.IsChargingShot())
+                bool isP2Charging = player == _matchEngine.ControlledPlayer2;
+                bool charging = isP2Charging ? _matchEngine.IsChargingShot2() : _matchEngine.IsChargingShot();
+                if (player.IsControlled && charging)
                 {
                     // ~2.2m above ground in engine px (73 px/m); ground-level in TopDown
                     var head = _renderer3D.WorldToScreen(player.FieldPosition, topDown ? 0f : 140f);
                     if (head.HasValue)
                     {
-                        float power = _matchEngine.GetShotPower();
+                        float power = isP2Charging ? _matchEngine.GetShotPower2() : _matchEngine.GetShotPower();
                         int barWidth = 60;
                         int barHeight = 8;
                         int barX = (int)(head.Value.X - barWidth / 2);
@@ -1319,7 +1485,7 @@ namespace NoPasaranFC.Screens
             }
         }
         
-        /// <summary>Yellow/red card banner with the booked player's name (fouls & cards).</summary>
+        /// <summary>Yellow/red card banner with the booked player's name (fouls &amp; cards).</summary>
         private void DrawCardBanner(SpriteBatch spriteBatch, SpriteFont font, MatchEngine.CardEvent card)
         {
             var loc = Localization.Instance;
@@ -1906,6 +2072,12 @@ namespace NoPasaranFC.Screens
                 if (_matchEngine.Player2Active)
                 {
                     string label = isPlayer2 ? "P2" : "P1";
+                    if (_netClient != null)
+                    {
+                        bool localIsHome = _netLocalSide == NetSide.Home;
+                        bool isLocal = localIsHome ? !isPlayer2 : isPlayer2;
+                        if (isLocal) label = "YOU";
+                    }
                     Vector2 labelSize = font.MeasureString(label);
                     Vector2 labelPos = new Vector2(pos.X - labelSize.X / 2, pos.Y - renderSize / 2 - 52 - labelSize.Y);
                     spriteBatch.DrawString(font, label, labelPos + new Vector2(2, 2), Color.Black);

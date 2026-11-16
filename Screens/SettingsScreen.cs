@@ -43,6 +43,7 @@ namespace NoPasaranFC.Screens
             TimeOfDay,
             Weather,
             Venue,
+            StreetVenue,
             BallControl,
             Offsides,
             AIDecisionInterval,
@@ -77,6 +78,7 @@ namespace NoPasaranFC.Screens
             settings.Add(SettingType.TimeOfDay);
             settings.Add(SettingType.Weather);
             settings.Add(SettingType.Venue);
+            settings.Add(SettingType.StreetVenue);
             settings.Add(SettingType.BallControl);
             settings.Add(SettingType.Offsides);
             settings.Add(SettingType.AIDecisionInterval);
@@ -106,6 +108,7 @@ namespace NoPasaranFC.Screens
             settings.Add(SettingType.TimeOfDay);
             settings.Add(SettingType.Weather);
             settings.Add(SettingType.Venue);
+            settings.Add(SettingType.StreetVenue);
             settings.Add(SettingType.BallControl);
             settings.Add(SettingType.Offsides);
             settings.Add(SettingType.AIDecisionInterval);
@@ -146,6 +149,7 @@ namespace NoPasaranFC.Screens
                     SettingType.TimeOfDay => loc.Get("settings.timeOfDay"),
                     SettingType.Weather => loc.Get("settings.weather"),
                     SettingType.Venue => loc.Get("settings.venue"),
+                    SettingType.StreetVenue => loc.Get("settings.streetVenue"),
                     SettingType.BallControl => loc.Get("settings.ballControl"),
                     SettingType.Offsides => loc.Get("settings.offsides"),
                     SettingType.AIDecisionInterval => loc.Get("settings.aiDecisionInterval"),
@@ -170,6 +174,7 @@ namespace NoPasaranFC.Screens
         private static readonly string[] _timeOfDayOptions = new[] { "Day", "Sunset", "Night", "Random" };
         private static readonly string[] _weatherOptions = new[] { "Clear", "Rain", "Random" };
         private static readonly string[] _venueOptions = new[] { "Bahramis", "Sperchogeia", "Sfageia", "Kerasoulia", "Soulinari", "Random" };
+        private static readonly string[] _streetVenueOptions = new[] { "Cage", "Prosfygika", "Random" };
         private static readonly string[] _ballControlOptions = new[] { "Easy", "Classic" };
         
         private static string CycleOption(string current, string[] options, int direction)
@@ -386,6 +391,11 @@ namespace NoPasaranFC.Screens
                     _database.SaveSettings(_settings);
                     break;
 
+                case SettingType.StreetVenue:
+                    _settings.StreetVenue = CycleOption(_settings.StreetVenue, _streetVenueOptions, direction);
+                    _database.SaveSettings(_settings);
+                    break;
+
                 case SettingType.BallControl:
                     _settings.BallControl = CycleOption(_settings.BallControl, _ballControlOptions, direction);
                     _database.SaveSettings(_settings);
@@ -477,6 +487,11 @@ namespace NoPasaranFC.Screens
 
                 case SettingType.Venue:
                     _settings.Venue = CycleOption(_settings.Venue, _venueOptions, 1);
+                    _database.SaveSettings(_settings);
+                    break;
+
+                case SettingType.StreetVenue:
+                    _settings.StreetVenue = CycleOption(_settings.StreetVenue, _streetVenueOptions, 1);
                     _database.SaveSettings(_settings);
                     break;
 
@@ -610,6 +625,7 @@ namespace NoPasaranFC.Screens
                 SettingType.TimeOfDay => loc.Get("settings.timeOfDay." + (_settings.TimeOfDay ?? "Day").ToLowerInvariant()),
                 SettingType.Weather => loc.Get("settings.weather." + (_settings.Weather ?? "Clear").ToLowerInvariant()),
                 SettingType.Venue => loc.Get("settings.venue." + (_settings.Venue ?? "Bahramis").ToLowerInvariant()),
+                SettingType.StreetVenue => loc.Get("settings.streetVenue." + (_settings.StreetVenue ?? "Prosfygika").ToLowerInvariant()),
                 SettingType.BallControl => loc.Get("settings.ballControl." + (_settings.BallControl ?? "Easy").ToLowerInvariant()),
                 SettingType.Offsides => _settings.OffsidesEnabled ? on : off,
                 SettingType.RecordMatches => _settings.RecordMatches ? on : off,

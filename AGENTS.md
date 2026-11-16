@@ -14,8 +14,20 @@ The game has TWO match view modes, selectable in Settings:
 ```bash
 dotnet build NoPasaranFC.csproj          # desktop (net9.0)
 dotnet run --project NoPasaranFC.csproj  # run desktop
-dotnet test NoPasaranFC.Tests/NoPasaranFC.Tests.csproj  # xUnit suite (60+ tests, serialized)
+dotnet test NoPasaranFC.Tests/NoPasaranFC.Tests.csproj  # xUnit suite (140+ tests, serialized)
 dotnet build NoPasaranFC.Android/NoPasaranFC.Android.csproj  # Android (needs android workload)
+# If XA5300 (SDK/JDK not auto-detected), point at Android Studio's SDK/JBR:
+#   dotnet build NoPasaranFC.Android/NoPasaranFC.Android.csproj \
+#     -p:AndroidSdkDirectory="$HOME/Android/Sdk" \
+#     -p:JavaSdkDirectory="$HOME/Apps/android-studio/jbr"
+# Linux/Wayland: Program.cs re-execs once with SDL_VIDEODRIVER=wayland because
+# MonoGame/SDL's XWayland present loop can block after frame 1 (invisible window,
+# audio keeps playing). Override with SDL_VIDEODRIVER=x11 if needed. MonoGame is
+# pinned to 3.8.6.1 - don't go back to floating 3.8.* (SDL behavior can change).
+# F11 / Alt+Enter toggles windowed (decorated) <-> borderless fullscreen and
+# persists the setting; windowed mode sets Window.Title.
+dotnet run --project NoPasaranFC.Server/NoPasaranFC.Server.csproj -- --port 7778  # dedicated network server
+dotnet run --project NoPasaranFC.csproj -- server --port 7778  # same server via the game exe
 ```
 
 - Do NOT build the solution file locally without the Android workload installed — build projects individually.
@@ -76,8 +88,12 @@ dotnet build NoPasaranFC.Android/NoPasaranFC.Android.csproj  # Android (needs an
 
 - `Models/` — Player, Team, Match, Championship, GameSettings, Localization, Version
 - `Database/` — SQLite manager + JSON seeders (`teams_seed.json`, `championships_seed.json`)
-- `Gameplay/` — MatchEngine (simulation, no drawing!), utility AI (`UtilityAI/`, the live path) +
-  legacy FSM (`AIStates/`), celebrations (`Celebrations/`), Camera (2D), Minimap, audio
+- `Networking/` — LAN/online multiplayer: binary protocol, `NetworkClient`, authoritative
+  `MatchServer`, `ServerHost`, lobby/match-setup helpers. `NoPasaranFC.Server/` is the
+  headless console entry point (the game can also host in-process from the Multiplayer menu).
+- `Gameplay/` — MatchEngine (simulation, no drawing!), `MatchRules` (11v11 standard / 5v5 street
+  pitch+goals+team size), utility AI (`UtilityAI/`, the live path) + legacy FSM (`AIStates/`),
+  celebrations (`Celebrations/`), Camera (2D), Minimap, audio
 - `Graphics3D/` — the 3D renderer: Camera3D, World3D (venue geometry), Ball3D, MatchRenderer3D,
   PlayerAnimator, FanSection, FoxWalker, GoalNet3D, TeamBench, MatchOfficials, ReplayBuffer,
   FaceComposer, MatchEnvironment (lighting/weather), RainSystem,
@@ -88,13 +104,21 @@ dotnet build NoPasaranFC.Android/NoPasaranFC.Android.csproj  # Android (needs an
   screen when `IsChampionshipOver()`; stacked dismiss screens re-arm via `Screen.DismissReArmed`
   so a held key can't fall through and pop the screen underneath.
 - `Debugging/` — DebugInput (input seam), DebugServer (TCP), ScreenCapture
-- `Content/Models3D/` — GLB models + atlases + `.blend` sources (Player, PlayerF, Knight, Rogue, Fox, SoccerBall)
+- `Content/Models3D/` — GLB models + atlases + `.blend` sources (Player, PlayerF, Knight, Rogue, Fox, Dog, Cat, SoccerBall)
 
 ## Conventions
 
 - **World scale**: 73 px = 1 meter everywhere (engine px ↔ 3D meters via `Graphics3D/WorldUnits.cs`).
 - **Sim/render split**: `MatchEngine` is pure simulation (Vector2, ball height simulated separately).
   Renderers read engine state; never the reverse. Keep it that way.
+- **Network determinism**: network matches use server-ordered deterministic lockstep. The
+  server owns the 60 Hz tick clock, bundles both players' inputs and broadcasts them; every
+  peer runs the same seeded `MatchEngine` (home = P1, away = P2) and applies the bundled
+  inputs with a fixed `1/60` delta. Keep all gameplay knobs in `NetworkSettings`, never let
+  the renderer write engine state in network mode (officials sync and easter-egg mutations
+  are disabled there), and leave `CelebrationDurationOverride` identical on all peers.
+  `NetworkingTests.Loopback_*` is the guard: it runs a real server + two clients and asserts
+  identical tick streams and identical simulated state.
 - **Sides switch at halftime** (`MatchEngine.Half` 1→2). NEVER hardcode home=left/away=right.
   Use `MatchEngine.AttackSign(team)` (+1 attacks right), `GetOwnGoalCenter`/`GetOpponentGoalCenter`,
   `DefendedGoalLineX`/`AttackedGoalLineX`, `LeftDefendingTeam`/`RightDefendingTeam`.
@@ -143,6 +167,19 @@ dotnet build NoPasaranFC.Android/NoPasaranFC.Android.csproj  # Android (needs an
 ## Feature summary
 
 - Championship: round-robin fixtures, match simulation for non-player matches, standings, round results, seasons
+- Street football (Antifa League): a separate 8-team 5v5 league (`Championship.Mode="street"`,
+  `TeamSize=5`, DB migration 14) plus a quick **Street Match** menu friendly. The 5v5 rules
+  (`MatchRules.Street5v5` / `Prosfygika5v5`, resolved by `ForStreetVenue` / `ForChampionship`)
+  shrink the pitch to 44x24 m and goals to 3 m, use a 1-2-1 auto-lineup (GK, CB, 2 CM, ST),
+  disable offside, turn high out-of-play into kick-ins, and scale the utility AI's shoot/pass
+  ranges. Two street venues are selectable via `GameSettings.StreetVenue` (migration 15):
+  the asphalt **Cage** (`Venue.Street`, walled — low balls rebound) and the open dirt
+  **ΠΡΟΣΦΥΓΙΚΑ** (`Venue.Prosfygika` — no fence, `WallBounce=false`, touchline out is a kick-in;
+  Athens refugee housing blocks with aged bullet-scarred facade textures, balconies, laundry,
+  AC units, parked cars, dense trees, flower-pot goals instead of frames and no nets, faded
+  chalk lines, cheering CourtSide fans, and ΣΩΣΤΕ ΤΑ ΠΡΟΣΦΥΓΙΚΑ banners/sign).
+  Street matches auto-resume at halftime (no 11v11 substitution screen). Friendly matches play
+  on cloned rosters so the live league lineup is not trimmed to five.
 - Match statistics (`Gameplay/MatchStats.cs`, engine hooks): per-player goals/assists/shots/on-target/
   passes/completion/tackles/fouls/saves/offsides/cards + per-team possession/corners/throw-ins/free kicks/
   penalties; post-match `MatchStatsScreen` (before round results); season accumulation (migration 12:
@@ -190,8 +227,9 @@ dotnet build NoPasaranFC.Android/NoPasaranFC.Android.csproj  # Android (needs an
   (+ children, Palestinian flags; placement per venue via FanSection.FanPlacement), corner flags,
   rain, day/sunset/night,
   easter eggs (`EasterEggManager`, per-match rolls): fox (10%), ball-chasing dog (5% —
-  `Dog.glb`, fox mesh with a repainted atlas; faster than players, dribbles the ball
-  toward NO PASARAN's goal until one is scored, bark sample), crow flock (10%, craw.wav),
+  `Dog.glb`, bespoke stockier/short-tail proportions derived from the fox rig with a
+  runtime-recolored coat; faster than players, dribbles the ball toward NO PASARAN's goal
+  until one is scored, bark sample), crow flock (10%, craw.wav),
   seagull flock (50% at Sfageia, seagulls.wav), giant whirlwind (5% in rain — approaches
   from afar, roams the pitch all match, shoves players, whirlwind.wav), bees (5% — swarm
   harasses players, sting = 30s confusion wobble), fog (2% — Carpenter "The Fog" gray
@@ -205,14 +243,18 @@ dotnet build NoPasaranFC.Android/NoPasaranFC.Android.csproj  # Android (needs an
   with a rotating ring of blinking lights, then accelerates away, ufo.wav), floodlight
   blackout (2% at night — the lights flicker and die for 5-8s, then flicker back;
   `MatchEnvironment.BlackoutFactor`/`SetBlackout`, driven by `BlackoutFx`), cat invasion
-  (3% — a clowder of 4-6 cats, fox mesh at cat size with repainted gray/black/ginger/cream
-  atlases, mills about for ~a minute then leaves),
+  (3% — a clowder of 4-6 cats, `Cat.glb` with a slimmer body, big head, flat muzzle and
+  long thin tail + runtime gray/black/ginger/cream coats, mills about for ~a minute then leaves),
   celebration camera, goal replays (build-up at 1.4x from a high sideline camera, then the last 2s of
   footage in 0.5x slow motion from a goal-side camera with live cloth-net deformation, over the
   extended post-goal countdown, hold X to skip;
   recording in `Graphics3D/ReplayBuffer.cs`, playback in `MatchRenderer3D.DrawReplay`)
 - 2D mode: sprite players with kit sheets, scrolling camera, minimap (minimap present in both modes)
 - Local co-op: Player 2 can join (distinct indicators)
+- LAN/online multiplayer: deterministic server-ordered lockstep. Menu → Multiplayer hosts an
+  in-process server or joins an address; the dedicated `NoPasaranFC.Server` runs headless with
+  `--port/--seed/--home/--away`. Friendly matches only for now (fixed controlled player, no
+  halftime subs); port-forward for internet play, same build on both peers.
 - Settings: video/audio/gameplay/camera/language, persisted; debug console for automation
 
 ## Next steps (candidates)

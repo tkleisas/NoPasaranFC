@@ -9,6 +9,7 @@ namespace NoPasaranFC.Gameplay
     public class AIController
     {
         private Player _player;
+        private readonly MatchEngine _engine;
         private AIState _currentState;
         private Dictionary<AIStateType, AIState> _states;
         private AIContext _context;
@@ -35,6 +36,7 @@ namespace NoPasaranFC.Gameplay
         public AIController(Player player, MatchEngine engine)
         {
             _player = player;
+            _engine = engine;
             _context = new AIContext();
 
             // Create unique random instance based on player ID (ensures different behavior per player)
@@ -43,33 +45,53 @@ namespace NoPasaranFC.Gameplay
                     + Database.TeamSeeder.StableNameHash(player.Team?.Name ?? string.Empty))
                 : new Random(player.Id * 12345 + Environment.TickCount);
             
-            // Initialize all states - use role-specific positioning state
-            _states = new Dictionary<AIStateType, AIState>
-            {
-                { AIStateType.Idle, new IdleState() },
-                { AIStateType.Positioning, CreatePositioningStateForPlayer(player) },
-                { AIStateType.ChasingBall, new ChasingBallState() },
-                { AIStateType.Dribbling, new DribblingState() },
-                { AIStateType.AvoidingSideline, new AvoidingSidelineState() },
-                { AIStateType.Passing, new PassingState(engine) },
-                { AIStateType.Shooting, new ShootingState(engine) },
-                { AIStateType.Celebration, new CelebrationRunState() },
-                { AIStateType.CelebrationChase, new CelebrationChaseState() }
-            };
-            
-            // Set initial state
-            _currentState = _states[AIStateType.Idle];
-            _currentState.Enter(_player, _context);
-            
             // Utility brain: create eagerly so its lifetime kick counters can be
             // carried over when kickoff resets recreate the controller (the
-            // callbacks are late-bound fields, so pre-registration is safe)
+            // callbacks are late-bound fields, so pre-registration is safe).
+            // The legacy FSM is only materialized when it is actually used, so
+            // the live utility path allocates no FSM states per player.
             if (UseUtilityBrain)
             {
                 _utilityBrain = new UtilityAI.UtilityBrain(_playerRandom,
                     (p, target, power) => _passCallback?.Invoke(target, power),
                     (p, target, power) => _shootCallback?.Invoke(target, power));
             }
+            else
+            {
+                EnsureLegacyStates();
+            }
+        }
+
+        /// <summary>
+        /// Lazily builds the legacy state machine. Called by the constructor when
+        /// <see cref="UseUtilityBrain"/> is false, or on the first legacy update if
+        /// the flag was toggled at runtime (harness A/B runs).
+        /// </summary>
+        private void EnsureLegacyStates()
+        {
+            if (_states != null) return;
+
+            _states = new Dictionary<AIStateType, AIState>
+            {
+                { AIStateType.Idle, new IdleState() },
+                { AIStateType.Positioning, CreatePositioningStateForPlayer(_player) },
+                { AIStateType.ChasingBall, new ChasingBallState() },
+                { AIStateType.Dribbling, new DribblingState() },
+                { AIStateType.AvoidingSideline, new AvoidingSidelineState() },
+                { AIStateType.Passing, new PassingState(_engine) },
+                { AIStateType.Shooting, new ShootingState(_engine) },
+                { AIStateType.Celebration, new CelebrationRunState() },
+                { AIStateType.CelebrationChase, new CelebrationChaseState() }
+            };
+
+            _currentState = _states[AIStateType.Idle];
+            _currentState.Enter(_player, _context);
+
+            // Callbacks may have been registered before the FSM was materialized
+            if (_passCallback != null && _states[AIStateType.Passing] is PassingState passing)
+                passing.OnPassBall += _passCallback;
+            if (_shootCallback != null && _states[AIStateType.Shooting] is ShootingState shooting)
+                shooting.OnShootBall += _shootCallback;
         }
         
         private AIState CreatePositioningStateForPlayer(Player player)
@@ -108,7 +130,8 @@ namespace NoPasaranFC.Gameplay
                 return;
             }
             
-            // Legacy state machine path
+            // Legacy state machine path (materialized on demand)
+            EnsureLegacyStates();
             AIStateType nextState = _currentState.Update(_player, _context, deltaTime);
             
             // Check for state transition
@@ -128,7 +151,7 @@ namespace NoPasaranFC.Gameplay
         public void RegisterPassCallback(PassingState.PassBallHandler callback)
         {
             _passCallback = callback;
-            if (_states[AIStateType.Passing] is PassingState passingState)
+            if (_states != null && _states[AIStateType.Passing] is PassingState passingState)
             {
                 passingState.OnPassBall += callback;
             }
@@ -137,7 +160,7 @@ namespace NoPasaranFC.Gameplay
         public void RegisterShootCallback(ShootingState.ShootBallHandler callback)
         {
             _shootCallback = callback;
-            if (_states[AIStateType.Shooting] is ShootingState shootingState)
+            if (_states != null && _states[AIStateType.Shooting] is ShootingState shootingState)
             {
                 shootingState.OnShootBall += callback;
             }
@@ -147,7 +170,7 @@ namespace NoPasaranFC.Gameplay
         {
             if (UseUtilityBrain)
                 return _utilityBrain?.CurrentActionName ?? "Idle";
-            return _currentState.Type.ToString();
+            return _currentState?.Type.ToString() ?? "Idle";
         }
         
         /// <summary>Lifetime kick counters from the utility brain (0 for FSM mode).</summary>
@@ -160,7 +183,7 @@ namespace NoPasaranFC.Gameplay
 
         public void ForceTransitionTo(AIStateType newState)
         {
-            if (_states.ContainsKey(newState))
+            if (_states != null && _states.ContainsKey(newState))
             {
                 TransitionTo(newState);
             }
@@ -168,7 +191,7 @@ namespace NoPasaranFC.Gameplay
 
         public AIState GetState(AIStateType stateType)
         {
-            if (_states.ContainsKey(stateType))
+            if (_states != null && _states.ContainsKey(stateType))
             {
                 return _states[stateType];
             }

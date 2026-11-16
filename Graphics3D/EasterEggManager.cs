@@ -35,6 +35,7 @@ namespace NoPasaranFC.Graphics3D
         private readonly Random _random;
         private readonly GraphicsDevice _device;
         private readonly SkinnedModel _foxModel;
+        private SkinnedModel _catModel; // lazily loaded Cat.glb
         private readonly Venue _venue;
         private readonly bool _isRaining;
         private readonly MatchEnvironment _environment;
@@ -167,23 +168,24 @@ namespace NoPasaranFC.Graphics3D
                     break;
                 case Kind.Dog:
                 {
-                    // Purpose-built Dog.glb (fox mesh with a repainted dog atlas).
-                    // Falls back to a texture-recolored fox when it's missing.
+                    // Purpose-built Dog.glb (bespoke proportions derived from the
+                    // fox rig). Recolor the base atlas so it reads as a dog even
+                    // though the underlying texture is the fox's.
                     SkinnedModel dogModel = _device != null ? ModelCache.TryGet(_device, "Dog.glb") : null;
+                    var model = dogModel ?? _foxModel;
                     Texture2D dogTexture = null;
-                    if (dogModel == null && _device != null && _foxModel != null)
+                    if (model != null && _device != null)
                     {
                         var dogColor = _random.NextDouble() < 0.5
                             ? new Color(140, 85, 45)    // brown
                             : new Color(240, 235, 225); // white
-                        var baseTexture = _foxModel.Parts[0].Texture;
+                        var baseTexture = model.Parts[0].Texture;
                         dogTexture = KitTextureFactory.GetKitTexture(_device, baseTexture,
                             dogColor, new Rectangle(0, 0, baseTexture.Width, baseTexture.Height));
                     }
-                    var model = dogModel ?? _foxModel;
                     if (model != null)
                     {
-                        _dog = new FoxWalker(model, dogTexture, scale: 0.0075f, tailScale: 0.35f,
+                        _dog = new FoxWalker(model, dogTexture, scale: 0.0075f, tailScale: 1f,
                             chaseBall: true);
                         _walkers.Add(_dog);
                         _lastScore = -1; // dog stays until it scores (any goal), cap 150s
@@ -260,8 +262,8 @@ namespace NoPasaranFC.Graphics3D
         }
 
         /// <summary>
-        /// A cat: the fox model at cat size with a repainted moggy atlas
-        /// (gray, black, ginger or cream), same trick as the dog.
+        /// A cat: purpose-built Cat.glb (slimmer body, big head, flat muzzle,
+        /// long thin tail) with a repainted moggy atlas.
         /// </summary>
         private FoxWalker SpawnCat()
         {
@@ -272,11 +274,15 @@ namespace NoPasaranFC.Graphics3D
                 new Color(198, 128, 58),  // ginger
                 new Color(225, 218, 205), // cream
             };
-            var baseTexture = _foxModel.Parts[0].Texture;
+
+            if (_catModel == null && _device != null)
+                _catModel = ModelCache.TryGet(_device, "Cat.glb");
+            var model = _catModel ?? _foxModel;
+            var baseTexture = model.Parts[0].Texture;
             var texture = KitTextureFactory.GetKitTexture(_device, baseTexture,
                 palette[_random.Next(palette.Length)],
                 new Rectangle(0, 0, baseTexture.Width, baseTexture.Height));
-            return new FoxWalker(_foxModel, texture, scale: 0.004f);
+            return new FoxWalker(model, texture, scale: 0.004f, tailScale: 1f, cat: true);
         }
 
         public void Update(float dt, MatchEngine engine)

@@ -59,19 +59,23 @@ public static class TestHelper
     }
 
     /// <summary>Seeded engine with programmatic teams (no DB, no content).</summary>
-    public static MatchEngine MakeEngine(int seed = 42, bool playerControlled = true)
+    public static MatchEngine MakeEngine(int seed = 42, bool playerControlled = true,
+        MatchRules rules = null)
     {
         AIController.DeterministicSeedBase = seed;
         var home = MakeTeam("HOME", 1, playerControlled);
         var away = MakeTeam("AWAY", 2, false);
-        var engine = new MatchEngine(home, away, 1280, 720);
+        var engine = new MatchEngine(home, away, 1280, 720, rules);
         engine.SetRandomSeed(seed);
+        // Headless tests step without rendering; finish goal celebrations at once
+        // (matches the pre-refactor behavior and keeps suite runtime bounded).
+        engine.CelebrationDurationOverride = 0f;
         return engine;
     }
 
     /// <summary>Seeded engine with the REAL rosters from teams_seed.json
     /// (NO PASARAN home vs the next team). Mirrors the harness setup.</summary>
-    public static MatchEngine MakeEngineFromSeedJson(int seed = 42)
+    public static MatchEngine MakeEngineFromSeedJson(int seed = 42, MatchRules rules = null)
     {
         string jsonPath = FindRepoFile(Path.Combine("Database", "teams_seed.json"));
         Database.TeamSeeder.DeterministicRosterSeed = seed;
@@ -79,8 +83,9 @@ public static class TestHelper
         var home = teams.First(t => t.Name.Contains("NO PASARAN"));
         var away = teams.First(t => t != home);
         AIController.DeterministicSeedBase = seed;
-        var engine = new MatchEngine(home, away, 1280, 720);
+        var engine = new MatchEngine(home, away, 1280, 720, rules);
         engine.SetRandomSeed(seed);
+        engine.CelebrationDurationOverride = 0f;
         return engine;
     }
 

@@ -57,7 +57,7 @@ namespace NoPasaranFC.Graphics3D
             yield return (_linesmanSouth.Name, _linesmanSouth.Position);
         }
         
-        public void Update(float dt, MatchEngine engine)
+        public void Update(float dt, MatchEngine engine, bool syncEnginePosition = true)
         {
             Vector3 ballWorld = WorldUnits.ToWorld(engine.BallPosition, engine.BallHeight);
             Vector3 refTarget;
@@ -108,9 +108,14 @@ namespace NoPasaranFC.Graphics3D
             }
 
             MoveOfficial(_referee, refTarget, dt, refSpeed, refFace);
-            engine.RefereePosition = new Vector2(
-                WorldUnits.MToPx(_referee.Position.X) + MatchEngine.StadiumMargin + MatchEngine.FieldWidth / 2f,
-                WorldUnits.MToPx(_referee.Position.Z) + MatchEngine.StadiumMargin + MatchEngine.FieldHeight / 2f);
+            // In network matches every peer must see the same engine state, so the
+            // renderer must not feed its own referee position back into the sim.
+            if (syncEnginePosition)
+            {
+                engine.RefereePosition = new Vector2(
+                    WorldUnits.MToPx(_referee.Position.X) + MatchEngine.StadiumMargin + MatchEngine.FieldWidth / 2f,
+                    WorldUnits.MToPx(_referee.Position.Z) + MatchEngine.StadiumMargin + MatchEngine.FieldHeight / 2f);
+            }
 
             // Linesmen: track the OFFSIDE LINE (second-last defender of the team
             // defending their half), not raw ball X. Sprint when it moves fast.
@@ -129,7 +134,9 @@ namespace NoPasaranFC.Graphics3D
                 : null;
             if (flagLinesman != null)
             {
-                flagLinesman.Instance.Play("Wave");
+                // The KayKit library has no "Wave" clip; Cheer (arms raised) is the
+                // closest authored signal and reads clearly from the broadcast camera.
+                flagLinesman.Instance.Play("Cheer");
                 flagLinesman.Yaw = flagLinesman.Position.Z > 0 ? (float)Math.PI : 0f;
                 flagLinesman.Instance.Update(dt);
             }

@@ -1,0 +1,15 @@
+<Project>
+  <!-- Generate the Version constants from Directory.Build.props so the desktop
+       and Android builds (and any docs/CI reading GameVersion) never drift. -->
+  <Target Name="GenerateGameVersion"
+          BeforeTargets="BeforeBuild"
+          Condition="'$(MSBuildProjectName)' == 'NoPasaranFC' Or '$(MSBuildProjectName)' == 'NoPasaranFC.Android'">
+    <WriteLinesToFile
+      File="$(IntermediateOutputPath)Version.g.cs"
+      Overwrite="true"
+      Lines="namespace NoPasaranFC.Models%0A{%0A    public static partial class Version%0A    {%0A        public const string MAJOR = &quot;$(GameVersionMajor)&quot;%3B%0A        public const string MINOR = &quot;$(GameVersionMinor)&quot;%3B%0A        public const string PATCH = &quot;$(GameVersionPatch)&quot;%3B%0A    }%0A}" />
+    <ItemGroup>
+      <Compile Include="$(IntermediateOutputPath)Version.g.cs" />
+    </ItemGroup>
+  </Target>
+</Project>

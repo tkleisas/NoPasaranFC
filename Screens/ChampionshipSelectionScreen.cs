@@ -147,6 +147,8 @@ namespace NoPasaranFC.Screens
             // Game1._championship) pick up the new data automatically.
             _activeChampionship.Id = newChampionship.Id;
             _activeChampionship.Name = newChampionship.Name;
+            _activeChampionship.Mode = newChampionship.Mode;
+            _activeChampionship.TeamSize = newChampionship.TeamSize;
             _activeChampionship.CurrentMatchweek = 0;
             _activeChampionship.Teams = newChampionship.Teams;
             _activeChampionship.Matches = newChampionship.Matches;
@@ -198,6 +200,8 @@ namespace NoPasaranFC.Screens
                 if (selected)
                 {
                     string sub = string.Format(Localization.Instance.Get("championship.teamCount"), def.Teams.Count);
+                    if (def.TeamSize == 5 || string.Equals(def.Mode, "street", StringComparison.OrdinalIgnoreCase))
+                        sub += " · " + Localization.Instance.Get("championship.street");
                     Vector2 subSize = font.MeasureString(sub) * (scale * 0.75f);
                     Vector2 subPos = new Vector2((screenWidth - subSize.X) / 2, pos.Y + size.Y);
                     spriteBatch.DrawString(font, sub, subPos, Color.LightGray,

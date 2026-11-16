@@ -35,7 +35,7 @@ public class EditorTests
         var names = team.Players.Select(p => p.Name).ToList();
         Assert.Equal(names.Count, names.Distinct().Count()); // all unique
         Assert.Equal(11, team.Players.Count(p => p.IsStarting));
-        Assert.NotEmpty(team.Players.Where(p => p.IsStarting && p.Position == PlayerPosition.Goalkeeper));
+        Assert.Contains(team.Players, p => p.IsStarting && p.Position == PlayerPosition.Goalkeeper);
     }
 
     [Fact]
@@ -144,8 +144,8 @@ public class EditorTests
         Assert.Equal(1, custom.HairColor);
         Assert.Equal(FaceComposer.Expression.Sad, custom.Expr);
         Assert.Equal(FaceComposer.Feature.Beard, custom.Feat);
-        Assert.NotEqual(auto.SkinTone == custom.SkinTone && auto.Expr == custom.Expr
-            && auto.HairColor == custom.HairColor && auto.Feat == custom.Feat, true);
+        Assert.False(auto.SkinTone == custom.SkinTone && auto.Expr == custom.Expr
+            && auto.HairColor == custom.HairColor && auto.Feat == custom.Feat);
     }
 
     [Fact]

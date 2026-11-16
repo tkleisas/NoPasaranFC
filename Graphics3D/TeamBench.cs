@@ -20,6 +20,8 @@ namespace NoPasaranFC.Graphics3D
             public Vector3 Position;
             public bool Seated;
             public string Name;
+            public float ActionTimer;
+            public float ActionCooldown;
         }
         
         private readonly List<BenchMember> _members = new List<BenchMember>();
@@ -29,13 +31,17 @@ namespace NoPasaranFC.Graphics3D
         private readonly Random _random = new Random();
         private readonly Team _team;
         private float _coachHomeX;
-        private bool _coachMoving;
 
         // Coach event reactions (goal for/against, card against, losing late)
         private float _reactionUntil = -1f;
         private string _reactionClip;
         private bool _celebrationHandled;
         private Player _lastCardReactedTo;
+
+        // Shared reaction for the seated substitutes (goal/card)
+        private float _subReactionUntil;
+        private string _subReactionClip;
+        private bool _wasSubReacting;
 
         public TeamBench(GraphicsDevice device, Team team, Vector2 center, SkinnedModel playerModel,
             SkinnedModel femaleModel, Texture2D baseAtlas, Color shirt, int homeTeamId)
@@ -64,6 +70,7 @@ namespace NoPasaranFC.Graphics3D
                     Instance = instance,
                     Position = new Vector3(center.X - 1.5f + i * 0.6f, 0.45f, center.Y),
                     Seated = true,
+                    ActionCooldown = 4f + (float)_random.NextDouble() * 14f,
                 });
             }
             
@@ -169,6 +176,7 @@ namespace NoPasaranFC.Graphics3D
                 _celebrationHandled = true;
                 bool ours = engine.LastCelebratingTeam == _team;
                 StartReaction(ours ? "Cheer" : "Hit_Reaction", ours ? 5f : 3f);
+                StartSubReaction(ours ? "Cheer" : "Hit_Reaction", ours ? 4.5f : 2.5f);
             }
             if (engine.CurrentState != MatchEngine.MatchState.GoalCelebration)
                 _celebrationHandled = false;
@@ -178,6 +186,7 @@ namespace NoPasaranFC.Graphics3D
             {
                 _lastCardReactedTo = card.Player;
                 StartReaction("Hit_Reaction", 2.5f);
+                StartSubReaction("Hit_Reaction", 2f);
             }
 
             bool losingLate = engine.MatchTime > 75f &&
@@ -187,9 +196,44 @@ namespace NoPasaranFC.Graphics3D
             float ballWorldX = WorldUnits.ToWorld(engine.BallPosition).X;
             bool ballInOurThird = engine.IsBallInHalf(_team.Name);
 
+            if (_subReactionUntil > 0f)
+                _subReactionUntil -= dt;
+            bool subReacting = _subReactionUntil > 0f;
+
             foreach (var member in _members)
             {
-                if (!member.Seated)
+                if (member.Seated)
+                {
+                    // Substitutes: shared goal/card reaction, otherwise ambient life
+                    if (subReacting)
+                    {
+                        member.Instance.Play(_subReactionClip);
+                    }
+                    else if (_wasSubReacting)
+                    {
+                        member.Instance.Play("Sit_Chair_Idle");
+                        member.ActionCooldown = 5f + (float)_random.NextDouble() * 14f;
+                    }
+                    else if (member.ActionTimer > 0f)
+                    {
+                        member.ActionTimer -= dt;
+                        if (member.ActionTimer <= 0f)
+                        {
+                            member.Instance.Play("Sit_Chair_Idle");
+                            member.ActionCooldown = 8f + (float)_random.NextDouble() * 16f;
+                        }
+                    }
+                    else
+                    {
+                        member.ActionCooldown -= dt;
+                        if (member.ActionCooldown <= 0f)
+                        {
+                            member.Instance.Play(_random.NextDouble() < 0.5 ? "Cheer" : "Interact");
+                            member.ActionTimer = 1.0f + (float)_random.NextDouble() * 1.4f;
+                        }
+                    }
+                }
+                else
                 {
                     if (_reactionUntil > 0f)
                     {
@@ -220,23 +264,29 @@ namespace NoPasaranFC.Graphics3D
                             member.Instance.Play("Walking_A");
                             float step = Math.Sign(delta) * Math.Min(1.2f * dt, Math.Abs(delta));
                             member.Position += new Vector3(step, 0f, 0f);
-                            _coachMoving = true;
                         }
                         else
                         {
                             member.Instance.Play(ballInOurThird ? "Spellcasting" : "Idle");
-                            _coachMoving = false;
                         }
                     }
                 }
                 member.Instance.Update(dt);
             }
+
+            _wasSubReacting = subReacting;
         }
 
         private void StartReaction(string clip, float seconds)
         {
             _reactionClip = clip;
             _reactionUntil = seconds;
+        }
+
+        private void StartSubReaction(string clip, float seconds)
+        {
+            _subReactionClip = clip;
+            _subReactionUntil = seconds;
         }
         
         public void Draw(GraphicsDevice device, Matrix view, Matrix projection, MatchEnvironment environment)

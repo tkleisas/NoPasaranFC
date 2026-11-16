@@ -87,7 +87,7 @@ namespace NoPasaranFC.Gameplay.Celebrations
 
         /// <summary>
         /// Optional: Get camera zoom multiplier for this celebration
-        /// Return 1.0 for default zoom out (0.65), >1.0 to zoom in more, <1.0 to zoom out more
+        /// Return 1.0 for default zoom out (0.65), &gt;1.0 to zoom in more, &lt;1.0 to zoom out more
         /// Return null to use default celebration zoom behavior
         /// </summary>
         public virtual float? GetCameraZoomMultiplier()

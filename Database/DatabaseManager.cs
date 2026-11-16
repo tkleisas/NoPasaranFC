@@ -8,8 +8,31 @@ namespace NoPasaranFC.Database
 {
     public class DatabaseManager
     {
-        private const int CurrentSchemaVersion = 4; // Increment when adding migrations
-        
+        /// <summary>
+        /// Ordered migrations, each applied once when the stored schema version is
+        /// lower. Add new migrations at the end; <see cref="CurrentSchemaVersion"/>
+        /// is derived from the last entry so it cannot drift.
+        /// </summary>
+        private static readonly (int Version, Action<SqliteConnection> Apply)[] Migrations =
+        {
+            (2, ApplyMigration2_AddPlayerPicture),
+            (3, ApplyMigration3_AddChampionshipMetadata),
+            (4, ApplyMigration4_AddMatchViewMode),
+            (5, ApplyMigration5_Add3DViewSettings),
+            (6, ApplyMigration6_AddAIDecisionInterval),
+            (7, ApplyMigration7_AddVenue),
+            (8, ApplyMigration8_AddBallControl),
+            (9, ApplyMigration9_AddOffsidesEnabled),
+            (10, ApplyMigration10_AddTeamKit),
+            (11, ApplyMigration11_AddPlayerAppearance),
+            (12, ApplyMigration12_AddSeasonStats),
+            (13, ApplyMigration13_AddMatchRecording),
+            (14, ApplyMigration14_AddChampionshipMode),
+            (15, ApplyMigration15_AddStreetVenue),
+        };
+
+        internal static int CurrentSchemaVersion => Migrations[Migrations.Length - 1].Version;
+
         private static string GetDatabasePath()
         {
             // Use platform-specific path for cross-platform compatibility
@@ -139,114 +162,41 @@ namespace NoPasaranFC.Database
             connection.Open();
             
             int currentVersion = GetSchemaVersion(connection);
-            
-            // Apply migrations in order
+
+            // Migration 1 is the initial schema (created by InitializeDatabase).
             if (currentVersion < 1)
             {
-                // Migration 1: Initial schema (already created by InitializeDatabase)
                 SetSchemaVersion(connection, 1);
                 currentVersion = 1;
             }
-            
-            if (currentVersion < 2)
-            {
-                // Migration 2: Add PlayerPicture column to Players table
-                ApplyMigration2_AddPlayerPicture(connection);
-                SetSchemaVersion(connection, 2);
-                currentVersion = 2;
-            }
 
-            if (currentVersion < 3)
+            foreach (var (version, apply) in Migrations)
             {
-                // Migration 3: Add ChampionshipId/ChampionshipName columns to Championship table
-                ApplyMigration3_AddChampionshipMetadata(connection);
-                SetSchemaVersion(connection, 3);
-                currentVersion = 3;
-            }
-
-            if (currentVersion < 4)
-            {
-                // Migration 4: Add MatchViewMode column to Settings table
-                ApplyMigration4_AddMatchViewMode(connection);
-                SetSchemaVersion(connection, 4);
-                currentVersion = 4;
-            }
-
-            if (currentVersion < 5)
-            {
-                // Migration 5: Add CameraMode/TimeOfDay/Weather columns to Settings table
-                ApplyMigration5_Add3DViewSettings(connection);
-                SetSchemaVersion(connection, 5);
-                currentVersion = 5;
-            }
-
-            // Add future migrations here:
-            if (currentVersion < 6)
-            {
-                // Migration 6: Add AIDecisionInterval column to Settings table
-                ApplyMigration6_AddAIDecisionInterval(connection);
-                SetSchemaVersion(connection, 6);
-                currentVersion = 6;
-            }
-
-            if (currentVersion < 7)
-            {
-                // Migration 7: Add Venue column to Settings table
-                ApplyMigration7_AddVenue(connection);
-                SetSchemaVersion(connection, 7);
-                currentVersion = 7;
-            }
-            
-            if (currentVersion < 8)
-            {
-                // Migration 8: Add BallControl column to Settings table
-                ApplyMigration8_AddBallControl(connection);
-                SetSchemaVersion(connection, 8);
-                currentVersion = 8;
-            }
-            
-            if (currentVersion < 9)
-            {
-                // Migration 9: Add OffsidesEnabled column to Settings table
-                ApplyMigration9_AddOffsidesEnabled(connection);
-                SetSchemaVersion(connection, 9);
-                currentVersion = 9;
-            }
-
-            if (currentVersion < 10)
-            {
-                // Migration 10: Add editable kit columns to Teams table
-                ApplyMigration10_AddTeamKit(connection);
-                SetSchemaVersion(connection, 10);
-                currentVersion = 10;
-            }
-
-            if (currentVersion < 11)
-            {
-                // Migration 11: Add appearance override columns to Players table
-                ApplyMigration11_AddPlayerAppearance(connection);
-                SetSchemaVersion(connection, 11);
-                currentVersion = 11;
-            }
-
-            if (currentVersion < 12)
-            {
-                // Migration 12: Add season statistics columns to Players table
-                ApplyMigration12_AddSeasonStats(connection);
-                SetSchemaVersion(connection, 12);
-                currentVersion = 12;
-            }
-
-            if (currentVersion < 13)
-            {
-                // Migration 13: Add RecordMatches/RecordVerbose columns to Settings table
-                ApplyMigration13_AddMatchRecording(connection);
-                SetSchemaVersion(connection, 13);
-                currentVersion = 13;
+                if (currentVersion >= version) continue;
+                apply(connection);
+                SetSchemaVersion(connection, version);
+                currentVersion = version;
             }
         }
 
-        private void ApplyMigration13_AddMatchRecording(SqliteConnection connection)
+        private static void ApplyMigration15_AddStreetVenue(SqliteConnection connection)
+        {
+            AddColumnIfMissing(connection, "Settings", "StreetVenue TEXT DEFAULT 'Prosfygika'");
+        }
+
+        private static void ApplyMigration14_AddChampionshipMode(SqliteConnection connection)
+        {
+            foreach (var col in new[] { "Mode TEXT DEFAULT 'standard'", "TeamSize INTEGER DEFAULT 11" })
+                AddColumnIfMissing(connection, "Championship", col);
+
+            // Existing Antifa League saves predate the mode columns; backfill them.
+            var update = connection.CreateCommand();
+            update.CommandText = "UPDATE Championship SET Mode='street', TeamSize=5 " +
+                                 "WHERE ChampionshipId='antifa_league'";
+            update.ExecuteNonQuery();
+        }
+
+        private static void ApplyMigration13_AddMatchRecording(SqliteConnection connection)
         {
             foreach (var col in new[]
             {
@@ -255,7 +205,7 @@ namespace NoPasaranFC.Database
                 AddColumnIfMissing(connection, "Settings", col);
         }
 
-        private void ApplyMigration12_AddSeasonStats(SqliteConnection connection)
+        private static void ApplyMigration12_AddSeasonStats(SqliteConnection connection)
         {
             foreach (var col in new[]
             {
@@ -282,7 +232,7 @@ namespace NoPasaranFC.Database
             alter.ExecuteNonQuery();
         }
 
-        private void ApplyMigration10_AddTeamKit(SqliteConnection connection)
+        private static void ApplyMigration10_AddTeamKit(SqliteConnection connection)
         {
             foreach (var col in new[]
             {
@@ -313,7 +263,7 @@ namespace NoPasaranFC.Database
             }
         }
 
-        private void ApplyMigration11_AddPlayerAppearance(SqliteConnection connection)
+        private static void ApplyMigration11_AddPlayerAppearance(SqliteConnection connection)
         {
             foreach (var col in new[]
             {
@@ -324,7 +274,7 @@ namespace NoPasaranFC.Database
                 AddColumnIfMissing(connection, "Players", col);
         }
         
-        private void ApplyMigration9_AddOffsidesEnabled(SqliteConnection connection)
+        private static void ApplyMigration9_AddOffsidesEnabled(SqliteConnection connection)
         {
             var checkCommand = connection.CreateCommand();
             checkCommand.CommandText = "PRAGMA table_info(Settings)";
@@ -350,7 +300,7 @@ namespace NoPasaranFC.Database
             }
         }
         
-        private void ApplyMigration8_AddBallControl(SqliteConnection connection)
+        private static void ApplyMigration8_AddBallControl(SqliteConnection connection)
         {
             var checkCommand = connection.CreateCommand();
             checkCommand.CommandText = "PRAGMA table_info(Settings)";
@@ -376,7 +326,7 @@ namespace NoPasaranFC.Database
             }
         }
         
-        private void ApplyMigration7_AddVenue(SqliteConnection connection)
+        private static void ApplyMigration7_AddVenue(SqliteConnection connection)
         {
             var checkCommand = connection.CreateCommand();
             checkCommand.CommandText = "PRAGMA table_info(Settings)";
@@ -402,7 +352,7 @@ namespace NoPasaranFC.Database
             }
         }
         
-        private void ApplyMigration6_AddAIDecisionInterval(SqliteConnection connection)
+        private static void ApplyMigration6_AddAIDecisionInterval(SqliteConnection connection)
         {
             var checkCommand = connection.CreateCommand();
             checkCommand.CommandText = "PRAGMA table_info(Settings)";
@@ -454,7 +404,7 @@ namespace NoPasaranFC.Database
             command.ExecuteNonQuery();
         }
         
-        private void ApplyMigration4_AddMatchViewMode(SqliteConnection connection)
+        private static void ApplyMigration4_AddMatchViewMode(SqliteConnection connection)
         {
             // Check if column already exists
             var checkCommand = connection.CreateCommand();
@@ -481,7 +431,7 @@ namespace NoPasaranFC.Database
             }
         }
 
-        private void ApplyMigration5_Add3DViewSettings(SqliteConnection connection)
+        private static void ApplyMigration5_Add3DViewSettings(SqliteConnection connection)
         {
             // Check which columns already exist
             var checkCommand = connection.CreateCommand();
@@ -523,7 +473,7 @@ namespace NoPasaranFC.Database
             }
         }
 
-        private void ApplyMigration3_AddChampionshipMetadata(SqliteConnection connection)
+        private static void ApplyMigration3_AddChampionshipMetadata(SqliteConnection connection)
         {
             // Check which columns already exist on the Championship table
             var checkCommand = connection.CreateCommand();
@@ -556,7 +506,7 @@ namespace NoPasaranFC.Database
             }
         }
 
-        private void ApplyMigration2_AddPlayerPicture(SqliteConnection connection)
+        private static void ApplyMigration2_AddPlayerPicture(SqliteConnection connection)
         {
             // Check if column already exists
             var checkCommand = connection.CreateCommand();
@@ -913,14 +863,18 @@ namespace NoPasaranFC.Database
             // Save current matchweek + championship metadata
             var command = connection.CreateCommand();
             command.CommandText = @"
-                INSERT OR REPLACE INTO Championship (Id, CurrentMatchweek, ChampionshipId, ChampionshipName)
-                VALUES (1, @currentMatchweek, @championshipId, @championshipName);
+                INSERT OR REPLACE INTO Championship
+                    (Id, CurrentMatchweek, ChampionshipId, ChampionshipName, Mode, TeamSize)
+                VALUES (1, @currentMatchweek, @championshipId, @championshipName, @mode, @teamSize);
             ";
             command.Parameters.AddWithValue("@currentMatchweek", championship.CurrentMatchweek);
             command.Parameters.AddWithValue("@championshipId",
                 string.IsNullOrEmpty(championship.Id) ? (object)DBNull.Value : championship.Id);
             command.Parameters.AddWithValue("@championshipName",
                 string.IsNullOrEmpty(championship.Name) ? (object)DBNull.Value : championship.Name);
+            command.Parameters.AddWithValue("@mode",
+                string.IsNullOrEmpty(championship.Mode) ? "standard" : championship.Mode);
+            command.Parameters.AddWithValue("@teamSize", championship.TeamSize);
             command.ExecuteNonQuery();
             
             // Save all teams
@@ -949,7 +903,7 @@ namespace NoPasaranFC.Database
             
             // Load current matchweek + championship metadata
             var command = connection.CreateCommand();
-            command.CommandText = "SELECT CurrentMatchweek, ChampionshipId, ChampionshipName FROM Championship WHERE Id = 1";
+            command.CommandText = "SELECT CurrentMatchweek, ChampionshipId, ChampionshipName, Mode, TeamSize FROM Championship WHERE Id = 1";
             using (var reader = command.ExecuteReader())
             {
                 if (reader.Read())
@@ -957,7 +911,17 @@ namespace NoPasaranFC.Database
                     championship.CurrentMatchweek = reader.IsDBNull(0) ? 0 : reader.GetInt32(0);
                     championship.Id = reader.IsDBNull(1) ? string.Empty : reader.GetString(1);
                     championship.Name = reader.IsDBNull(2) ? string.Empty : reader.GetString(2);
+                    championship.Mode = reader.IsDBNull(3) ? "standard" : reader.GetString(3);
+                    championship.TeamSize = reader.IsDBNull(4) ? 11 : reader.GetInt32(4);
                 }
+            }
+
+            // Defensive backfill for saves created before the mode columns existed.
+            if (string.Equals(championship.Id, "antifa_league", System.StringComparison.OrdinalIgnoreCase) &&
+                !championship.IsStreet)
+            {
+                championship.Mode = "street";
+                championship.TeamSize = 5;
             }
             
             // Load teams and matches
@@ -996,7 +960,7 @@ namespace NoPasaranFC.Database
                     ShowMinimap, ShowPlayerNames, ShowStamina,
                     CameraZoom, CameraSpeed, Language, MatchViewMode,
                     CameraMode, TimeOfDay, Weather, AIDecisionInterval, Venue, BallControl, OffsidesEnabled,
-                    RecordMatches, RecordVerbose
+                    RecordMatches, RecordVerbose, StreetVenue
                 ) VALUES (
                     1, @resWidth, @resHeight, @fullscreen, @vsync,
                     @masterVol, @musicVol, @sfxVol, @muteAll,
@@ -1004,7 +968,7 @@ namespace NoPasaranFC.Database
                     @showMap, @showNames, @showStamina,
                     @camZoom, @camSpeed, @language, @matchViewMode,
                     @cameraMode, @timeOfDay, @weather, @aiDecisionInterval, @venue, @ballControl, @offsides,
-                    @recordMatches, @recordVerbose
+                    @recordMatches, @recordVerbose, @streetVenue
                 );
             ";
             
@@ -1035,6 +999,7 @@ namespace NoPasaranFC.Database
             command.Parameters.AddWithValue("@offsides", settings.OffsidesEnabled ? 1 : 0);
             command.Parameters.AddWithValue("@recordMatches", settings.RecordMatches ? 1 : 0);
             command.Parameters.AddWithValue("@recordVerbose", settings.RecordVerbose ? 1 : 0);
+            command.Parameters.AddWithValue("@streetVenue", settings.StreetVenue ?? "Prosfygika");
             
             command.ExecuteNonQuery();
         }
@@ -1078,7 +1043,8 @@ namespace NoPasaranFC.Database
                     BallControl = reader.FieldCount > 24 && !reader.IsDBNull(24) ? reader.GetString(24) : "Easy",
                     OffsidesEnabled = reader.FieldCount > 25 && !reader.IsDBNull(25) && reader.GetInt32(25) == 1,
                     RecordMatches = reader.FieldCount > 26 && !reader.IsDBNull(26) && reader.GetInt32(26) == 1,
-                    RecordVerbose = reader.FieldCount > 27 && !reader.IsDBNull(27) && reader.GetInt32(27) == 1
+                    RecordVerbose = reader.FieldCount > 27 && !reader.IsDBNull(27) && reader.GetInt32(27) == 1,
+                    StreetVenue = reader.FieldCount > 28 && !reader.IsDBNull(28) ? reader.GetString(28) : "Prosfygika"
                 };
                 return settings;
             }

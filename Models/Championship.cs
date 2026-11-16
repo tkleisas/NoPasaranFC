@@ -11,6 +11,13 @@ namespace NoPasaranFC.Models
         public List<Match> Matches { get; set; }
         public int CurrentMatchweek { get; set; }
 
+        /// <summary>"standard" (11v11) or "street" (5v5 cage).</summary>
+        public string Mode { get; set; } = "standard";
+        public int TeamSize { get; set; } = 11;
+
+        public bool IsStreet =>
+            TeamSize == 5 || string.Equals(Mode, "street", System.StringComparison.OrdinalIgnoreCase);
+
         public Championship()
         {
             Id = string.Empty;
@@ -18,6 +25,8 @@ namespace NoPasaranFC.Models
             Teams = new List<Team>();
             Matches = new List<Match>();
             CurrentMatchweek = 0;
+            Mode = "standard";
+            TeamSize = 11;
         }
         
         public void GenerateFixtures()

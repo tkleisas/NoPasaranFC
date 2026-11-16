@@ -20,6 +20,10 @@
     <EmbeddedResource Remove="NoPasaranFC.Android\**" />
     <None Remove="NoPasaranFC.Android\**" />
     <Compile Remove="NoPasaranFC.Tests\**" />
+    <Compile Remove="NoPasaranFC.Server\**" />
+    <Content Remove="NoPasaranFC.Server\**" />
+    <EmbeddedResource Remove="NoPasaranFC.Server\**" />
+    <None Remove="NoPasaranFC.Server\**" />
   </ItemGroup>
 
   <!-- The test assembly may see internal members -->
@@ -55,8 +59,8 @@
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.Data.Sqlite" Version="9.0.10" />
-    <PackageReference Include="MonoGame.Framework.DesktopGL" Version="3.8.*" />
-    <PackageReference Include="MonoGame.Content.Builder.Task" Version="3.8.*" />
+    <PackageReference Include="MonoGame.Framework.DesktopGL" Version="3.8.6.1" />
+    <PackageReference Include="MonoGame.Content.Builder.Task" Version="3.8.6.1" />
     <PackageReference Include="SharpGLTF.Toolkit" Version="1.0.6" />
   </ItemGroup>
   <ItemGroup>

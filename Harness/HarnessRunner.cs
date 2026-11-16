@@ -98,6 +98,9 @@ namespace NoPasaranFC.Harness
             AIController.DeterministicSeedBase = seed;
             var engine = new MatchEngine(homeTeam, awayTeam, 1280, 720);
             engine.SetRandomSeed(seed);
+            // Headless runs are driven by zero input: end celebrations immediately
+            // so a goal doesn't eat 60s of the sampled window (pre-existing behavior).
+            engine.CelebrationDurationOverride = 0f;
 
             var gameTime = new GameTime();
             void Step()

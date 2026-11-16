@@ -23,9 +23,13 @@ namespace NoPasaranFC.Graphics3D
             public float Scale;
             public bool Seated;
             public string IdleClip;
+            public string ActionClip;
+            public float ActionTimer;
+            public float ActionCooldown;
         }
         
         private readonly List<Fan> _fans = new List<Fan>();
+        private readonly Random _random = new Random(4242);
         private bool _wasCelebrating;
         
         // Waving flags held by some standing fans
@@ -47,7 +51,7 @@ namespace NoPasaranFC.Graphics3D
         private const float StandStepHeight = 0.4f;
         private const int Rows = 3;
 
-        public enum FanPlacement { Stand, Fence, Bleacher }
+        public enum FanPlacement { Stand, Fence, Bleacher, CourtSide }
 
         /// <summary>Raised-platform layout (Soulinari bleacher, Kerasoulia terrace).</summary>
         public struct PlatformMetrics
@@ -59,11 +63,14 @@ namespace NoPasaranFC.Graphics3D
         public FanSection(GraphicsDevice device, SkinnedModel playerModel, SkinnedModel femaleModel = null,
             FanPlacement placement = FanPlacement.Stand, PlatformMetrics? platform = null)
         {
-            var rng = new Random(4242);
+            var rng = _random;
             bool alongFence = placement == FanPlacement.Fence;
+            bool courtSide = placement == FanPlacement.CourtSide;
             bool onBleacher = placement == FanPlacement.Bleacher && platform.HasValue;
             var pm = platform.GetValueOrDefault();
-            int rowCount = onBleacher ? pm.Rows : Rows;
+            int rowCount = onBleacher ? pm.Rows : (courtSide ? 2 : Rows);
+            float courtHalfLength = WorldUnits.PitchLengthMeters / 2f;
+            float courtFrontZ = -WorldUnits.PitchWidthMeters / 2f - 1.4f;
 
             // NO PASARAN supporters: mostly red shirts, some white/black, kids too
             Color[] shirtColors =
@@ -80,28 +87,35 @@ namespace NoPasaranFC.Graphics3D
             {
                 float stepTopY = onBleacher
                     ? pm.FirstRowY + row * pm.RowRise
-                    : alongFence ? 0f : (row + 1) * StandStepHeight;
+                    : (alongFence || courtSide) ? 0f : (row + 1) * StandStepHeight;
                 float rowZ = onBleacher
                     ? pm.FrontZ - row * pm.RowDepth - 0.25f
-                    : alongFence
-                        ? StandFrontZ - 0.4f - row * 0.9f
-                        : StandFrontZ - 0.45f - row * StandStepDepth;
+                    : courtSide
+                        ? courtFrontZ - row * 0.9f
+                        : alongFence
+                            ? StandFrontZ - 0.4f - row * 0.9f
+                            : StandFrontZ - 0.45f - row * StandStepDepth;
 
-                int seatsInRow = onBleacher ? 7 + rng.Next(3) : alongFence ? 8 + rng.Next(3) : 5 + rng.Next(3);
+                int seatsInRow = onBleacher ? 7 + rng.Next(3)
+                    : courtSide ? 12 + rng.Next(5)
+                    : alongFence ? 8 + rng.Next(3) : 5 + rng.Next(3);
                 for (int s = 0; s < seatsInRow; s++)
                 {
                     float x = onBleacher
                         ? pm.CenterX - pm.HalfWidth + 1f + s * 2.2f + (float)rng.NextDouble() * 0.7f
-                        : alongFence
-                            ? -18f + fanCount * 2.1f + (float)rng.NextDouble() * 0.8f
-                            : -12f + fanCount * 2.1f + (float)rng.NextDouble() * 0.8f;
+                        : courtSide
+                            ? -courtHalfLength + 2f + s * 2.1f + (float)rng.NextDouble() * 0.8f
+                            : alongFence
+                                ? -18f + fanCount * 2.1f + (float)rng.NextDouble() * 0.8f
+                                : -12f + fanCount * 2.1f + (float)rng.NextDouble() * 0.8f;
                     float maxX = onBleacher
                         ? pm.CenterX + pm.HalfWidth - 1f
+                        : courtSide ? courtHalfLength - 2f
                         : alongFence ? 19f : 13f;
                     if (x > maxX) continue;
 
                     bool isChild = rng.NextDouble() < 0.25;
-                    bool seated = !alongFence && !onBleacher && row > 0; // stand/bleacher fans stand
+                    bool seated = !courtSide && !alongFence && !onBleacher && row > 0; // street/court fans stand
                     // ~40% female fans when the female model is available
                     var fanModel = femaleModel != null && rng.NextDouble() < 0.4 ? femaleModel : playerModel;
                     var atlas = fanModel.Parts[0].Texture;
@@ -115,6 +129,9 @@ namespace NoPasaranFC.Graphics3D
                         Scale = isChild ? 0.55f : 0.72f + (float)rng.NextDouble() * 0.06f,
                         Seated = seated,
                         IdleClip = seated ? "Sit_Chair_Idle" : "Idle",
+                        // Periodic ambient reactions so the crowd isn't a wax museum
+                        ActionClip = seated ? "Sit_Chair_Pose" : "Cheer",
+                        ActionCooldown = 3f + (float)rng.NextDouble() * 18f,
                     };
                     
                     // Team-colored casual clothes
@@ -203,6 +220,29 @@ namespace NoPasaranFC.Graphics3D
                 else if (!celebrating && _wasCelebrating)
                 {
                     fan.Instance.Play(fan.IdleClip);
+                    fan.ActionCooldown = 4f + (float)_random.NextDouble() * 14f;
+                }
+                else if (!celebrating)
+                {
+                    // Ambient life: occasional cheers/gestures while play continues
+                    if (fan.ActionTimer > 0f)
+                    {
+                        fan.ActionTimer -= dt;
+                        if (fan.ActionTimer <= 0f)
+                        {
+                            fan.Instance.Play(fan.IdleClip);
+                            fan.ActionCooldown = 8f + (float)_random.NextDouble() * 18f;
+                        }
+                    }
+                    else
+                    {
+                        fan.ActionCooldown -= dt;
+                        if (fan.ActionCooldown <= 0f)
+                        {
+                            fan.Instance.Play(fan.ActionClip);
+                            fan.ActionTimer = 1.0f + (float)_random.NextDouble() * 1.6f;
+                        }
+                    }
                 }
                 fan.Instance.Update(dt);
             }

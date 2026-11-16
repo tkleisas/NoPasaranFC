@@ -65,6 +65,7 @@ Broadcast / High / TopDown cameras in 3D, plus the original 2D sprite mode:
 
 ### 🎮 Core Gameplay
 - **Championship Mode**: Full round-robin league season with all 8 teams, standings, round results, seasons
+- **Antifa League Street Football (5v5)**: a separate street league plus a quick **Street Match** menu friendly — 1-2-1 lineups, kick-ins, no offside, 3 m goals, and two street venues: the walled asphalt **Cage** and the open dirt **ΠΡΟΣΦΥΓΙΚΑ** court (Athens refugee housing blocks, aged bullet-scarred facades, parked cars, flower-pot goals, sideline fans, faded chalk lines and ΣΩΣΤΕ ΤΑ ΠΡΟΣΦΥΓΙΚΑ banners)
 - **Match Statistics**: Detailed per-player and per-team stats (goals, assists, shots, on target, passes and accuracy, tackles, fouls, saves, cards, possession, corners, offsides) with a post-match screen; season-long top scorers with assists and cards (TAB in Standings) — simulated matches attribute goals too
 - **Two view modes**: full 3D (default) and classic top-down 2D, selectable in Settings
 - **Ball Physics**: Velocity, friction, bouncing, and aerial trajectories (height simulated separately)
@@ -82,6 +83,7 @@ Broadcast / High / TopDown cameras in 3D, plus the original 2D sprite mode:
 - **Difficulty System**: Easy/Normal/Hard affects AI reaction speed and accuracy
 - **Match Duration**: Configurable 1-10 minutes
 - **Local Co-op**: Player 2 can join mid-match (distinct indicators)
+- **LAN / Online multiplayer**: host from the Multiplayer menu or run the dedicated headless server; deterministic server-ordered lockstep keeps both peers in sync
 
 ### 🏟️ 3D Mode
 - **Rigged, animated players**: skinned GLB models (male + female bodies) with the KayKit clip library — running, walking, tackling, celebrations, knockdowns
@@ -128,6 +130,7 @@ Broadcast / High / TopDown cameras in 3D, plus the original 2D sprite mode:
 - **Gameplay**: Difficulty, match duration, player speed (0.5x-4.0x), AI decision interval, ball control (Easy/Classic), offsides (on/off)
 - **Display**: Minimap, player names, stamina bars
 - **View**: 3D/2D mode, camera mode (Broadcast/High/TopDown), zoom, follow speed
+- **Street venue**: Cage / Prosfygika / Random (5v5 mode)
 - **Atmosphere**: Venue (Bahramis/Sperchogeia/Sfageia/Random), time of day (Day/Sunset/Night/Random), weather (Clear/Rain/Random)
 - **Language**: English / Ελληνικά (Greek default on first run)
 
@@ -148,12 +151,31 @@ dotnet build NoPasaranFC.csproj
 dotnet run --project NoPasaranFC.csproj
 ```
 > Build the project, not the solution, unless you have the Android workload installed.
+> On Linux/Wayland the game automatically uses SDL's native Wayland driver (XWayland can
+> show an invisible window while audio plays). Set `SDL_VIDEODRIVER=x11` to override.
+> The game starts windowed (decorated/movable) and remembers the choice; press **F11** or
+> **Alt+Enter** at any time to toggle borderless fullscreen.
 
 ### Android
 ```bash
 dotnet build NoPasaranFC.Android/NoPasaranFC.Android.csproj -t:Install -c Debug
 ```
 Or use `clean-and-build-android.ps1` / `build-apk.ps1` on Windows. The APK can be sideloaded onto any Android device.
+
+### Multiplayer server
+```bash
+# Dedicated headless server (TCP, default port 7778)
+dotnet run --project NoPasaranFC.Server/NoPasaranFC.Server.csproj -- --port 7778
+# or through the game executable
+dotnet run --project NoPasaranFC.csproj -- server --port 7778
+```
+Then in-game: **Menu → MULTIPLAYER → HOST MATCH** (spins up an in-process server) or **JOIN MATCH**
+and enter the host's IP. The server prints the local IPv4 addresses to share. For internet play,
+forward the TCP port and use the host's public IP. Both peers must run the same build.
+
+> Network matches are **friendlies** for now: fixed controlled player (no mid-match switching),
+> no halftime substitution screen, and no championship/season persistence. The simulation runs
+> deterministic lockstep at 60 Hz; see `AGENTS.md` for the architecture and `NetworkingTests`.
 
 ## 🎮 Controls
 
@@ -173,6 +195,7 @@ Or use `clean-and-build-android.ps1` / `build-apk.ps1` on Windows. The APK can b
 | Shoot (hold to charge) | X | A | A Button |
 | Switch Player | Space | X | X Button |
 | Skip celebration / replay | X (after 5s) | A | A Button |
+| Toggle fullscreen / windowed | F11 or Alt+Enter | — | — |
 | Pause/Exit | Escape | B | B Button |
 | Player 2 join (local co-op) | Right Shift / Right Alt | — | — |
 
@@ -184,7 +207,7 @@ See **GAMEPAD_SUPPORT.md** for controller details.
 NoPasaranFC/
 ├── Models/             # Player, Team, Match, Championship, GameSettings, Localization, Version
 ├── Database/           # SQLite manager + JSON seeders
-├── Gameplay/           # MatchEngine (pure simulation!), AI (UtilityAI/), celebrations, 2D camera, audio
+├── Gameplay/           # MatchEngine (pure simulation!), MatchRules (11v11/street), AI, celebrations, camera, audio
 ├── Graphics3D/         # 3D renderer: Camera3D, World3D (venues), Ball3D, MatchRenderer3D,
 │                       # PlayerAnimator, GoalNet3D, FanSection, TeamBench, MatchOfficials,
 │                       # ReplayBuffer, MatchEnvironment, RainSystem, Skinning/ (GLB loader)
@@ -212,11 +235,21 @@ Key architectural rule: `MatchEngine` is pure 2D simulation (73 px = 1 m). The 3
 - **docs/screenshots/**: README captures; **docs/harness-*/**: AI harness trajectory studies
 - Older design/fix notes live in git history
 
-## 🚀 Current Status (v2.13.0)
+## 🚀 Current Status (v2.32.1)
 
-**Fully playable on desktop and Android**, with the 3D view as the default experience. 60+ automated tests guard the match engine.
+**Fully playable on desktop and Android**, with the 3D view as the default experience. 140+ automated tests guard the match engine.
 
 Recent highlights:
+- **v2.32.1**: ΠΡΟΣΦΥΓΙΚΑ refinements — open court with no fence (kick-ins instead of wall bounces), dirt pitch with faded chalk lines, cheering sideline fans, aged textured facades with bullet holes/laundry/AC units, and no goal nets
+- **v2.32.0**: ΠΡΟΣΦΥΓΙΚΑ street venue — Athens refugee blocks, parked cars, flower-pot goals and ΣΩΣΤΕ ΤΑ ΠΡΟΣΦΥΓΙΚΑ banners; selectable Cage/Prosfygika street venue
+- **v2.31.0**: Antifa League 5v5 street football — separate street league + quick Street Match, cage walls/kick-ins, 1-2-1 lineups, asphalt cage venue, street-scaled AI
+- **v2.30.0**: Environment art pass — organic trees with baked shading/ground shadows, proper 3D bird models, living crowd/bench animations, purpose-built Dog/Cat models
+- **v2.29.1**: Linux/Wayland invisible-window fix (SDL driver re-exec), windowed mode with title + F11/Alt+Enter toggle; MonoGame pinned to 3.8.6.1
+- **v2.29.0**: LAN/online multiplayer + dedicated headless server (deterministic lockstep, 60 Hz)
+- **v2.28.0**: 3D champion award screen; refactored AI/engine hot paths, versioned DB migrations, CI
+- **v2.27.0**: Parameter search v5 adoption + penalty crash fix
+- **v2.26.0**: Team-level coordination (cover defender, pass-offer runs, attacking shape)
+- **v2.25.0**: Unified action-commitment layer for the utility AI
 - **v2.13.0**: Offsides (optional, linesman flag), teams switch sides at halftime (+ second-half kickoff to the other team), big GOAL/FOUL/OFFSIDE/PENALTY banners, card cutscene (ref walk-over, close-up, sad/surprised face), celebration attribution fix
 - **v2.12.0**: Fouls, free kicks with defensive walls, yellow/red cards, penalty kicks with GK dive
 - **v2.11.0**: Halftime substitutions, appearance system (expressions, facial hair), test suite

@@ -64,6 +64,9 @@ namespace NoPasaranFC.Gameplay
 
     public class AIContext
     {
+        /// <summary>Active pitch/ruleset (street vs standard).</summary>
+        public MatchRules Rules { get; set; } = MatchRules.Standard;
+
         public Vector2 BallPosition { get; set; }
         public Vector2 BallVelocity { get; set; }
         public Player NearestOpponent { get; set; }

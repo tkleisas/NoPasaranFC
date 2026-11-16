@@ -2,9 +2,8 @@ namespace NoPasaranFC.Models
 {
     public static partial class Version
     {
-        public const string MAJOR = "2";
-        public const string MINOR = "27";
-        public const string PATCH = "0";
+        // MAJOR/MINOR/PATCH are generated from Directory.Build.props (Version.g.cs),
+        // and COMMIT_HASH from the build's git revision (GitCommitHash.cs).
         
         // COMMIT_HASH is defined in the auto-generated GitCommitHash.cs file
         

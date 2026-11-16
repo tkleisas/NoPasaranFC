@@ -53,6 +53,9 @@ namespace NoPasaranFC.Models
         
         // Match venue
         public string Venue { get; set; } = "Bahramis";
+
+        /// <summary>Street venue: "Cage", "Prosfygika" or "Random".</summary>
+        public string StreetVenue { get; set; } = "Prosfygika";
         
         /// <summary>Dribbling feel: Easy (ball stays glued to the controlled player) or Classic (loose ball).</summary>
         public string BallControl { get; set; } = "Easy";

@@ -1,0 +1,36 @@
+name: CI
+
+on:
+  push:
+    branches: [ master, main ]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    name: Build & test
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET 9
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 9.0.x
+
+      - name: Build (desktop)
+        run: dotnet build NoPasaranFC.csproj -c Release
+
+      - name: Build (dedicated server)
+        run: dotnet build NoPasaranFC.Server/NoPasaranFC.Server.csproj -c Release
+
+      - name: Test
+        run: dotnet test NoPasaranFC.Tests/NoPasaranFC.Tests.csproj -c Release

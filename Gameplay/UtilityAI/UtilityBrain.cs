@@ -661,6 +661,7 @@ namespace NoPasaranFC.Gameplay.UtilityAI
             ScoreCarrierActions(Player player, AIContext ctx)
         {
             float distToGoal = Vector2.Distance(player.FieldPosition, ctx.OpponentGoalCenter);
+            float distanceScale = ctx.Rules.AiDistanceScale;
             float pressure = ctx.NearestOpponent != null
                 ? Vector2.Distance(player.FieldPosition, ctx.NearestOpponent.FieldPosition)
                 : float.MaxValue;
@@ -675,15 +676,15 @@ namespace NoPasaranFC.Gameplay.UtilityAI
                 _ => 0.85f,
             };
             float shootScore = 0f;
-            float shootRangeNear = UtilityTuning.ShootRangeNear * _thresholdJitter;
-            float shootRangeFar = UtilityTuning.ShootRangeFar * _thresholdJitter;
+            float shootRangeNear = UtilityTuning.ShootRangeNear * distanceScale * _thresholdJitter;
+            float shootRangeFar = UtilityTuning.ShootRangeFar * distanceScale * _thresholdJitter;
             if (distToGoal < shootRangeNear) shootScore = UtilityTuning.ShootScoreNear * roleAttack;
             else if (distToGoal < shootRangeFar) shootScore = UtilityTuning.ShootScoreFar * roleAttack;
-            if (pressure < 250f) shootScore -= UtilityTuning.ShootPressurePenalty;
+            if (pressure < 250f * distanceScale) shootScore -= UtilityTuning.ShootPressurePenalty;
             
             // CLEAR: own third + pressure = boot it
             float clearScore = 0f;
-            if (ctx.IsInOwnThird(player) && pressure < 300f)
+            if (ctx.IsInOwnThird(player) && pressure < 300f * distanceScale)
                 clearScore = UtilityTuning.ClearScore;
             
             // PASS: from the context's pass-target scoring, plus pressure urgency
@@ -691,12 +692,12 @@ namespace NoPasaranFC.Gameplay.UtilityAI
             if (ctx.BestPassTarget != null && ctx.BestPassScore > 0)
             {
                 passScore = UtilityTuning.PassBaseScore + ctx.BestPassScore * UtilityTuning.PassScoreScale;
-                if (pressure < 300f) passScore += UtilityTuning.PassPressureBonus; // under pressure: release the ball
-                if (distToGoal > 1200f) passScore += UtilityTuning.PassFarBonus; // too far to shoot: move it on
+                if (pressure < 300f * distanceScale) passScore += UtilityTuning.PassPressureBonus; // under pressure: release the ball
+                if (distToGoal > 1200f * distanceScale) passScore += UtilityTuning.PassFarBonus; // too far to shoot: move it on
                 
                 // Cross opportunity: carrier wide in the attacking third -> feed the box
                 float centerY = MatchEngine.StadiumMargin + MatchEngine.FieldHeight / 2f;
-                if (distToGoal < 2200f &&
+                if (distToGoal < 2200f * distanceScale &&
                     Math.Abs(player.FieldPosition.Y - centerY) > MatchEngine.FieldHeight * 0.2f)
                 {
                     passScore += UtilityTuning.CrossBonus;
@@ -1366,7 +1367,8 @@ namespace NoPasaranFC.Gameplay.UtilityAI
                 // Offside awareness: hold the line instead of camping offside.
                 // The run target is clamped to the onside side of the offside
                 // line (second-last defender) when it matters (ahead of the ball)
-                if (GameSettings.Instance.OffsidesEnabled && ctx.Opponents != null && ctx.Opponents.Count > 1)
+                if (ctx.Rules.UseOffsideSetting && GameSettings.Instance.OffsidesEnabled &&
+                    ctx.Opponents != null && ctx.Opponents.Count > 1)
                 {
                     // Second-last defender by distance to the goal line (loop idiom)
                     float goalLineX = ctx.OpponentGoalCenter.X;
@@ -1461,8 +1463,6 @@ namespace NoPasaranFC.Gameplay.UtilityAI
         /// </summary>
         private static Vector2 GetDribblePoint(Player player, AIContext ctx)
         {
-            float centerY = MatchEngine.StadiumMargin + MatchEngine.FieldHeight / 2f;
-            
             // Count opponents ahead-center vs ahead on each flank
             int centerBlock = 0, leftOpen = 0, rightOpen = 0;
             Vector2 toGoal = ctx.OpponentGoalCenter - player.FieldPosition;

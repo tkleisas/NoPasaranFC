@@ -77,6 +77,56 @@ jobs:
           name: ${{ matrix.artifact }}
           path: ${{ matrix.artifact }}.zip
 
+  build-server:
+    needs: test
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            rid: linux-x64
+            artifact: NoPasaranFC-server-linux-x64
+          - os: windows-latest
+            rid: win-x64
+            artifact: NoPasaranFC-server-windows-x64
+
+    runs-on: ${{ matrix.os }}
+    name: Server (${{ matrix.rid }})
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET 9
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 9.0.x
+
+      - name: Publish
+        run: >
+          dotnet publish NoPasaranFC.Server/NoPasaranFC.Server.csproj
+          -c Release
+          -r ${{ matrix.rid }}
+          --self-contained true
+          -p:PublishSingleFile=true
+          -p:PublishTrimmed=false
+          -p:PublishReadyToRun=false
+          -o publish
+
+      - name: Zip artifact (Windows)
+        if: matrix.rid == 'win-x64'
+        shell: pwsh
+        run: Compress-Archive -Path publish/* -DestinationPath ${{ matrix.artifact }}.zip
+
+      - name: Zip artifact (Linux)
+        if: matrix.rid != 'win-x64'
+        run: cd publish && zip -r ../${{ matrix.artifact }}.zip .
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: ${{ matrix.artifact }}.zip
+
   build-android:
     needs: test
     runs-on: ubuntu-latest
@@ -149,7 +199,7 @@ jobs:
           path: NoPasaranFC.apk
 
   create-release:
-    needs: [build-desktop, build-android]
+    needs: [build-desktop, build-server, build-android]
     runs-on: ubuntu-latest
     name: Create Release
 
@@ -173,4 +223,6 @@ jobs:
             artifacts/NoPasaranFC-linux-x64/*.zip \
             artifacts/NoPasaranFC-macos-x64/*.zip \
             artifacts/NoPasaranFC-macos-arm64/*.zip \
+            artifacts/NoPasaranFC-server-linux-x64/*.zip \
+            artifacts/NoPasaranFC-server-windows-x64/*.zip \
             artifacts/NoPasaranFC-android/*.apk

@@ -12,13 +12,13 @@ namespace NoPasaranFC.Graphics3D
     {
         public const float PixelsPerMeter = 73f;
         
-        // Field dimensions in meters (7665/73 = 105, 4964/73 = 68)
-        public static readonly float PitchLengthMeters = MatchEngine.FieldWidth / PixelsPerMeter;
-        public static readonly float PitchWidthMeters = MatchEngine.FieldHeight / PixelsPerMeter;
-        public static readonly float StadiumMarginMeters = MatchEngine.StadiumMargin / PixelsPerMeter;
+        // Field dimensions in meters (computed from the active match rules)
+        public static float PitchLengthMeters => MatchEngine.FieldWidth / PixelsPerMeter;
+        public static float PitchWidthMeters => MatchEngine.FieldHeight / PixelsPerMeter;
+        public static float StadiumMarginMeters => MatchEngine.StadiumMargin / PixelsPerMeter;
         
         // Pitch center in engine pixel coordinates (field starts at StadiumMargin)
-        private static readonly Vector2 PitchCenterPx = new Vector2(
+        private static Vector2 PitchCenterPx => new Vector2(
             MatchEngine.StadiumMargin + MatchEngine.FieldWidth / 2f,
             MatchEngine.StadiumMargin + MatchEngine.FieldHeight / 2f);
         

@@ -19,6 +19,8 @@
       "id": "antifa_league",
       "name": "ANTIFA LEAGUE",
       "playerTeam": "NO PASARAN!",
+      "mode": "street",
+      "teamSize": 5,
       "teams": [
         { "name": "NO PASARAN!" },
         { "name": "ΑΣΑΛΑΓΗΤΟΣ", "kitName": "asalagitos_kit", "logo": "asalagitos_logo.png" },

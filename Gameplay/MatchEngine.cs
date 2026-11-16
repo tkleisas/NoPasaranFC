@@ -108,7 +108,7 @@ namespace NoPasaranFC.Gameplay
             _pendingKickKind = null;
 
             // Offside snapshot: which of the kicker's teammates are offside NOW
-            if (GameSettings.Instance.OffsidesEnabled && CurrentState == MatchState.Playing)
+            if (Rules.UseOffsideSetting && GameSettings.Instance.OffsidesEnabled && CurrentState == MatchState.Playing)
                 SnapshotOffsideCandidates(player);
         }
         
@@ -193,7 +193,7 @@ namespace NoPasaranFC.Gameplay
                     OffsideFlagRaised = false;
             }
             
-            if (!GameSettings.Instance.OffsidesEnabled || _offsideCandidates.Count == 0) return;
+            if (!Rules.UseOffsideSetting || !GameSettings.Instance.OffsidesEnabled || _offsideCandidates.Count == 0) return;
             if (CurrentState != MatchState.Playing)
             {
                 _offsideCandidates.Clear();
@@ -419,6 +419,7 @@ namespace NoPasaranFC.Gameplay
         public Vector2 RestartDirection { get; private set; } = Vector2.Zero;
         public float ThrowInPowerCharge { get; private set; } = 0f; // 0.0 to 1.0
         private bool _throwInAnimationStarted = false; // Track if throw animation is playing
+        private bool _isKickIn; // street restart: kick instead of throw
         private float _throwInAnimTimer = 0f; // Engine-side release timing (mode-independent)
         private float _timeSinceSetPiece = 0f; // Tracks time since set piece was executed
         private bool _cornerKickRunUp = false; // Track if player is running up to kick corner
@@ -492,19 +493,40 @@ namespace NoPasaranFC.Gameplay
         /// <summary>Team defending the right goal this half.</summary>
         public Team RightDefendingTeam => Half == 1 ? _awayTeam : _homeTeam;
 
-        // Field dimensions scaled to player size
-        // Player sprite (128px rendered) ≈ 1.75m tall → 73 pixels per meter
-        // FIFA standard pitch: 105m × 68m
-        public const float FieldWidth = 7665f;  // 105m × 73px/m
-        public const float FieldHeight = 4964f; // 68m × 73px/m
-        public const float StadiumMargin = 400f; // Space for stadium stands
-        public const float TotalWidth = FieldWidth + (StadiumMargin * 2);
-        public const float TotalHeight = FieldHeight + (StadiumMargin * 2);
-        
-        // Goal dimensions (FIFA standard: 7.32m wide × 2.44m high × 2m deep)
-        public const float GoalWidth = 534f; // 7.32m × 73px/m
-        public const float GoalDepth = 146f;  // 2m × 73px/m (actual goal depth)
-        public const float GoalPostHeight = 178f; // 2.44m × 73px/m (crossbar height)
+        // Active pitch/ruleset. One match runs at a time, so the dimensions are
+        // process-wide; every MatchEngine constructor re-applies its rules.
+        public static MatchRules ActiveRules { get; private set; } = MatchRules.Standard;
+        public MatchRules Rules { get; private set; } = MatchRules.Standard;
+
+        // Field dimensions scaled to player size (73 px = 1 m).
+        public static float FieldWidth { get; private set; } = 7665f;  // 105 m
+        public static float FieldHeight { get; private set; } = 4964f; // 68 m
+        public static float StadiumMargin { get; private set; } = 400f;
+        public static float TotalWidth => FieldWidth + (StadiumMargin * 2);
+        public static float TotalHeight => FieldHeight + (StadiumMargin * 2);
+
+        // Goal dimensions (standard: 7.32 m × 2.44 m high × 2 m deep)
+        public static float GoalWidth { get; private set; } = 534f;
+        public static float GoalDepth { get; private set; } = 146f;
+        public static float GoalPostHeight { get; private set; } = 178f;
+
+        /// <summary>
+        /// Applies a ruleset to the engine's static dimensions. Must be called
+        /// before constructing the engine/renderer for a match.
+        /// </summary>
+        public static void ApplyRules(MatchRules rules)
+        {
+            ActiveRules = rules ?? MatchRules.Standard;
+            var r = ActiveRules;
+            FieldWidth = r.FieldWidth;
+            FieldHeight = r.FieldHeight;
+            StadiumMargin = r.StadiumMargin;
+            GoalWidth = r.GoalWidth;
+            GoalDepth = r.GoalDepth;
+            GoalPostHeight = r.GoalPostHeight;
+            // The GK positioning heuristic follows the goal size.
+            AIConstants.GKGoalWidth = r.GoalWidth;
+        }
         
         // Ball physics
         private const float BallFriction = 0.95f;
@@ -544,8 +566,11 @@ namespace NoPasaranFC.Gameplay
         private Microsoft.Xna.Framework.Graphics.SpriteFont _font;
         private Microsoft.Xna.Framework.Graphics.GraphicsDevice _graphicsDevice;
         
-        public MatchEngine(Team homeTeam, Team awayTeam, int viewportWidth, int viewportHeight)
+        public MatchEngine(Team homeTeam, Team awayTeam, int viewportWidth, int viewportHeight,
+            MatchRules rules = null)
         {
+            ApplyRules(rules);
+            Rules = ActiveRules;
             _homeTeam = homeTeam;
             _awayTeam = awayTeam;
             _random = new Random();
@@ -561,7 +586,7 @@ namespace NoPasaranFC.Gameplay
                 player.Team = awayTeam;
             }
             
-            // Filter to only use starting players (if they exist, otherwise use first 11)
+            // Filter to only use starting players (auto-fill the active team size)
             EnsureStartingLineup(homeTeam);
             EnsureStartingLineup(awayTeam);
             HomeScore = 0;
@@ -716,7 +741,7 @@ namespace NoPasaranFC.Gameplay
             var startingPlayers = team.Players.Where(p => p.IsStarting)
                 .OrderBy(p => p.Position)
                 .ToList();
-            if (startingPlayers.Count < 11) return;
+            if (startingPlayers.Count < Rules.TeamSize) return;
             
             float xOffset = StadiumMargin;
             float yOffset = StadiumMargin;
@@ -731,45 +756,80 @@ namespace NoPasaranFC.Gameplay
             float midfieldX = defendsLeft ? xOffset + FieldWidth * 0.4f : xOffset + FieldWidth * 0.6f;
             float attackX = defendsLeft ? xOffset + FieldWidth * 0.6f : xOffset + FieldWidth * 0.4f;
             float goalX = defendsLeft ? xOffset + 50f : xOffset + FieldWidth - 50f;
-            
-            // Goalkeeper — also set Position to ensure AIController creates GoalkeeperState
-            startingPlayers[0].FieldPosition = new Vector2(goalX, centerY);
-            startingPlayers[0].HomePosition = new Vector2(goalX, centerY);
-            startingPlayers[0].Position = PlayerPosition.Goalkeeper;
-            startingPlayers[0].Role = PlayerRole.Goalkeeper;
-            
-            // Defenders (4) - spread vertically with specific roles
-            float[] defenderY = { 0.2f, 0.4f, 0.6f, 0.8f };
-            PlayerRole[] defenderRoles = { PlayerRole.LeftBack, PlayerRole.CenterBack, PlayerRole.CenterBack, PlayerRole.RightBack };
-            for (int i = 0; i < 4; i++)
+
+            if (Rules.TeamSize == 5)
             {
-                startingPlayers[1 + i].FieldPosition = new Vector2(defenseX, yOffset + FieldHeight * defenderY[i]);
-                startingPlayers[1 + i].HomePosition = new Vector2(defenseX, yOffset + FieldHeight * defenderY[i]);
-                startingPlayers[1 + i].Position = PlayerPosition.Defender;
-                startingPlayers[1 + i].Role = defenderRoles[i];
+                // Street 1-2-1: GK, centre-back, two central mids, striker.
+                float streetDefenseX = defendsLeft ? xOffset + FieldWidth * 0.28f : xOffset + FieldWidth * 0.72f;
+                float streetMidX = xOffset + FieldWidth * 0.50f;
+                float streetAttackX = defendsLeft ? xOffset + FieldWidth * 0.72f : xOffset + FieldWidth * 0.28f;
+
+                startingPlayers[0].FieldPosition = new Vector2(goalX, centerY);
+                startingPlayers[0].HomePosition = new Vector2(goalX, centerY);
+                startingPlayers[0].Position = PlayerPosition.Goalkeeper;
+                startingPlayers[0].Role = PlayerRole.Goalkeeper;
+
+                startingPlayers[1].FieldPosition = new Vector2(streetDefenseX, centerY);
+                startingPlayers[1].HomePosition = new Vector2(streetDefenseX, centerY);
+                startingPlayers[1].Position = PlayerPosition.Defender;
+                startingPlayers[1].Role = PlayerRole.CenterBack;
+
+                startingPlayers[2].FieldPosition = new Vector2(streetMidX, yOffset + FieldHeight * 0.33f);
+                startingPlayers[2].HomePosition = new Vector2(streetMidX, yOffset + FieldHeight * 0.33f);
+                startingPlayers[2].Position = PlayerPosition.Midfielder;
+                startingPlayers[2].Role = PlayerRole.CentralMidfielder;
+
+                startingPlayers[3].FieldPosition = new Vector2(streetMidX, yOffset + FieldHeight * 0.67f);
+                startingPlayers[3].HomePosition = new Vector2(streetMidX, yOffset + FieldHeight * 0.67f);
+                startingPlayers[3].Position = PlayerPosition.Midfielder;
+                startingPlayers[3].Role = PlayerRole.CentralMidfielder;
+
+                startingPlayers[4].FieldPosition = new Vector2(streetAttackX, centerY);
+                startingPlayers[4].HomePosition = new Vector2(streetAttackX, centerY);
+                startingPlayers[4].Position = PlayerPosition.Forward;
+                startingPlayers[4].Role = PlayerRole.Striker;
             }
-            
-            // Midfielders (4) with specific roles
-            float[] midfielderY = { 0.2f, 0.4f, 0.6f, 0.8f };
-            PlayerRole[] midfielderRoles = { PlayerRole.LeftMidfielder, PlayerRole.CentralMidfielder, PlayerRole.CentralMidfielder, PlayerRole.RightMidfielder };
-            for (int i = 0; i < 4; i++)
+            else
             {
-                startingPlayers[5 + i].FieldPosition = new Vector2(midfieldX, yOffset + FieldHeight * midfielderY[i]);
-                startingPlayers[5 + i].HomePosition = new Vector2(midfieldX, yOffset + FieldHeight * midfielderY[i]);
-                startingPlayers[5 + i].Position = PlayerPosition.Midfielder;
-                startingPlayers[5 + i].Role = midfielderRoles[i];
+                // Goalkeeper — also set Position to ensure AIController creates GoalkeeperState
+                startingPlayers[0].FieldPosition = new Vector2(goalX, centerY);
+                startingPlayers[0].HomePosition = new Vector2(goalX, centerY);
+                startingPlayers[0].Position = PlayerPosition.Goalkeeper;
+                startingPlayers[0].Role = PlayerRole.Goalkeeper;
+
+                // Defenders (4) - spread vertically with specific roles
+                float[] defenderY = { 0.2f, 0.4f, 0.6f, 0.8f };
+                PlayerRole[] defenderRoles = { PlayerRole.LeftBack, PlayerRole.CenterBack, PlayerRole.CenterBack, PlayerRole.RightBack };
+                for (int i = 0; i < 4; i++)
+                {
+                    startingPlayers[1 + i].FieldPosition = new Vector2(defenseX, yOffset + FieldHeight * defenderY[i]);
+                    startingPlayers[1 + i].HomePosition = new Vector2(defenseX, yOffset + FieldHeight * defenderY[i]);
+                    startingPlayers[1 + i].Position = PlayerPosition.Defender;
+                    startingPlayers[1 + i].Role = defenderRoles[i];
+                }
+
+                // Midfielders (4) with specific roles
+                float[] midfielderY = { 0.2f, 0.4f, 0.6f, 0.8f };
+                PlayerRole[] midfielderRoles = { PlayerRole.LeftMidfielder, PlayerRole.CentralMidfielder, PlayerRole.CentralMidfielder, PlayerRole.RightMidfielder };
+                for (int i = 0; i < 4; i++)
+                {
+                    startingPlayers[5 + i].FieldPosition = new Vector2(midfieldX, yOffset + FieldHeight * midfielderY[i]);
+                    startingPlayers[5 + i].HomePosition = new Vector2(midfieldX, yOffset + FieldHeight * midfielderY[i]);
+                    startingPlayers[5 + i].Position = PlayerPosition.Midfielder;
+                    startingPlayers[5 + i].Role = midfielderRoles[i];
+                }
+
+                // Forwards (2)
+                startingPlayers[9].FieldPosition = new Vector2(attackX, yOffset + FieldHeight * 0.33f);
+                startingPlayers[9].HomePosition = new Vector2(attackX, yOffset + FieldHeight * 0.33f);
+                startingPlayers[9].Position = PlayerPosition.Forward;
+                startingPlayers[9].Role = PlayerRole.Striker;
+
+                startingPlayers[10].FieldPosition = new Vector2(attackX, yOffset + FieldHeight * 0.67f);
+                startingPlayers[10].HomePosition = new Vector2(attackX, yOffset + FieldHeight * 0.67f);
+                startingPlayers[10].Position = PlayerPosition.Forward;
+                startingPlayers[10].Role = PlayerRole.Striker;
             }
-            
-            // Forwards (2)
-            startingPlayers[9].FieldPosition = new Vector2(attackX, yOffset + FieldHeight * 0.33f);
-            startingPlayers[9].HomePosition = new Vector2(attackX, yOffset + FieldHeight * 0.33f);
-            startingPlayers[9].Position = PlayerPosition.Forward;
-            startingPlayers[9].Role = PlayerRole.Striker;
-            
-            startingPlayers[10].FieldPosition = new Vector2(attackX, yOffset + FieldHeight * 0.67f);
-            startingPlayers[10].HomePosition = new Vector2(attackX, yOffset + FieldHeight * 0.67f);
-            startingPlayers[10].Position = PlayerPosition.Forward;
-            startingPlayers[10].Role = PlayerRole.Striker;
             
             // Initialize AI controllers for all starting players
             foreach (var player in startingPlayers)
@@ -1046,7 +1106,7 @@ namespace NoPasaranFC.Gameplay
                     // Update restart player animation (idle/aiming)
                     if (CurrentState == MatchState.ThrowIn)
                     {
-                        RestartPlayer.IsThrowingIn = true;
+                        RestartPlayer.IsThrowingIn = !_isKickIn;
                         RestartPlayer.Velocity = Vector2.Zero; // Ensure stationary
                     }
                     else
@@ -1088,8 +1148,8 @@ namespace NoPasaranFC.Gameplay
                             }
                             else if (_wasShootButtonDown)
                             {
-                                // Released - start throw animation (ball will be released when animation finishes)
-                                RestartPlayer.CurrentAnimationState = "throw_in_throw";
+                                // Released - start the throw/kick animation (ball releases when it finishes)
+                                RestartPlayer.CurrentAnimationState = _isKickIn ? "shoot" : "throw_in_throw";
                                 _throwInAnimationStarted = true;
                                 _throwInAnimTimer = 0.65f; // Engine-side release timing
                                 _wasShootButtonDown = false;
@@ -1216,10 +1276,10 @@ namespace NoPasaranFC.Gameplay
                             
                             RestartDirection = Vector2.Normalize(target - RestartPlayer.FieldPosition);
                             
-                            // Play throw animation for AI throw-ins, start run-up for corners
+                            // Play throw/kick animation for AI restarts, start run-up for corners
                             if (CurrentState == MatchState.ThrowIn)
                             {
-                                RestartPlayer.CurrentAnimationState = "throw_in_throw";
+                                RestartPlayer.CurrentAnimationState = _isKickIn ? "shoot" : "throw_in_throw";
                                 _throwInAnimationStarted = true;
                                 _throwInAnimTimer = 0.65f; // Engine-side release timing
                             }
@@ -1262,7 +1322,7 @@ namespace NoPasaranFC.Gameplay
             UpdatePlayers(deltaTime, moveDirection, isShootKeyDown, isPassKeyDown);
 
             // Bee-sting confusion: drunk wobble for 30s (stop-and-stare moments too)
-            foreach (var player in GetAllPlayers())
+            foreach (var player in ActivePlayers)
             {
                 if (player.CharcoalRemaining > 0f)
                     player.CharcoalRemaining -= deltaTime;
@@ -1278,11 +1338,10 @@ namespace NoPasaranFC.Gameplay
             }
             
             // Ensure only the controlled player(s) have IsControlled = true (safeguard)
-            foreach (var player in _homeTeam.Players.Concat(_awayTeam.Players))
-            {
-                player.IsControlled = (player == _controlledPlayer) ||
-                                     (Player2Active && player == _controlledPlayer2);
-            }
+            for (int i = 0; i < _homeTeam.Players.Count; i++)
+                RefreshControlledFlag(_homeTeam.Players[i]);
+            for (int i = 0; i < _awayTeam.Players.Count; i++)
+                RefreshControlledFlag(_awayTeam.Players[i]);
             
             // Check for collisions between players
             CheckPlayerCollisions(deltaTime);
@@ -1300,7 +1359,7 @@ namespace NoPasaranFC.Gameplay
             {
                 Player nearestToBall = null;
                 float nearestSq = 250f * 250f;
-                foreach (var p in GetAllPlayers())
+                foreach (var p in ActivePlayers)
                 {
                     float dSq = Vector2.DistanceSquared(p.FieldPosition, BallPosition);
                     if (dSq < nearestSq) { nearestSq = dSq; nearestToBall = p; }
@@ -1342,7 +1401,7 @@ namespace NoPasaranFC.Gameplay
         private void UpdatePlayersPhysics(float deltaTime)
         {
             // Update player positions based on their velocities (set by CelebrationManager)
-            foreach (var player in _homeTeam.Players.Where(p => p.IsStarting).Concat(_awayTeam.Players.Where(p => p.IsStarting)))
+            foreach (var player in ActivePlayers)
             {
                 // Apply velocity to position
                 player.FieldPosition += player.Velocity * deltaTime;
@@ -1376,7 +1435,7 @@ namespace NoPasaranFC.Gameplay
             }
 
             // Update AI players (only starting players)
-            foreach (var player in _homeTeam.Players.Where(p => p.IsStarting).Concat(_awayTeam.Players.Where(p => p.IsStarting)))
+            foreach (var player in ActivePlayers)
             {
                 // During celebration, update ALL players including controlled player(s)
                 if (!celebrationActive && (player == _controlledPlayer ||
@@ -1384,6 +1443,12 @@ namespace NoPasaranFC.Gameplay
 
                 UpdateAIPlayer(player, deltaTime);
             }
+        }
+
+        private void RefreshControlledFlag(Player player)
+        {
+            player.IsControlled = (player == _controlledPlayer) ||
+                                  (Player2Active && player == _controlledPlayer2);
         }
 
         /// <summary>
@@ -2564,6 +2629,12 @@ namespace NoPasaranFC.Gameplay
 
         /// <summary>Snow easter egg: everything is slippery this match.</summary>
         public bool IsSnowing { get; set; }
+
+        /// <summary>
+        /// Deterministic celebration length for headless/network matches. Null keeps
+        /// the celebration-specific duration (what a rendered local match uses).
+        /// </summary>
+        public float? CelebrationDurationOverride { get; set; }
         
         internal bool IsBallInHalf(string teamName)
         {
@@ -2781,6 +2852,61 @@ namespace NoPasaranFC.Gameplay
             // Note: The ball can now travel beyond the field boundaries
             // which is correct behavior for football
         }
+
+        /// <summary>
+        /// Street cage walls: reflect the ball off the touchline/end walls while
+        /// it is below wall height. Higher balls clear the cage and are restarted
+        /// with a kick-in by the normal out-of-bounds path.
+        /// </summary>
+        private void UpdateStreetWalls()
+        {
+            if (!Rules.WallBounce || BallHeight > Rules.WallHeight)
+                return;
+
+            Vector2 pos = BallPosition;
+            Vector2 vel = BallVelocity;
+            float top = StadiumMargin;
+            float bottom = StadiumMargin + FieldHeight;
+            float left = StadiumMargin;
+            float right = StadiumMargin + FieldWidth;
+            bool bounced = false;
+
+            if (pos.Y < top)
+            {
+                pos.Y = top;
+                if (vel.Y < 0f) { vel.Y = -vel.Y * 0.7f; bounced = true; }
+            }
+            else if (pos.Y > bottom)
+            {
+                pos.Y = bottom;
+                if (vel.Y > 0f) { vel.Y = -vel.Y * 0.7f; bounced = true; }
+            }
+
+            // End walls: leave the goal mouth open so shots can enter the net.
+            float goalTop = StadiumMargin + (FieldHeight - GoalWidth) / 2f;
+            float goalBottom = goalTop + GoalWidth;
+            bool inGoalMouth = pos.Y >= goalTop && pos.Y <= goalBottom &&
+                               BallHeight <= GoalPostHeight;
+            if (!inGoalMouth)
+            {
+                if (pos.X < left)
+                {
+                    pos.X = left;
+                    if (vel.X < 0f) { vel.X = -vel.X * 0.7f; bounced = true; }
+                }
+                else if (pos.X > right)
+                {
+                    pos.X = right;
+                    if (vel.X > 0f) { vel.X = -vel.X * 0.7f; bounced = true; }
+                }
+            }
+
+            BallPosition = pos;
+            BallVelocity = vel;
+
+            if (bounced)
+                AudioManager.Instance.PlaySoundEffect("kick_ball", 0.35f, allowRetrigger: false);
+        }
         
         private void CheckGoalNetCollision()
         {
@@ -2828,6 +2954,10 @@ namespace NoPasaranFC.Gameplay
                 return;
             }
             
+            // Street cage: reflect the ball off the walls before goal/out checks.
+            if (Rules.WallBounce)
+                UpdateStreetWalls();
+
             float goalTop = StadiumMargin + (FieldHeight - GoalWidth) / 2;
             float goalBottom = goalTop + GoalWidth;
             float leftGoalLine = StadiumMargin;
@@ -3021,11 +3151,11 @@ namespace NoPasaranFC.Gameplay
         
         private void HandleBallOutSideline(float xPosition, bool topSide)
         {
-            // Place ball for throw-in
+            // Place ball for a throw-in (or a street kick-in)
             float xPos = Math.Clamp(xPosition, StadiumMargin + 50, StadiumMargin + FieldWidth - 50);
             float yPos = topSide ? StadiumMargin + 20 : StadiumMargin + FieldHeight - 20;
             
-            // Determine which team gets the throw-in (opposite of who touched it last)
+            // Determine which team gets the restart (opposite of who touched it last)
             bool giveToHomeTeam = true; // default
             
             if (_lastPlayerTouchedBall != null)
@@ -3036,12 +3166,16 @@ namespace NoPasaranFC.Gameplay
             }
 
             Stats.For(giveToHomeTeam ? _homeTeam : _awayTeam).ThrowIns++;
-            EmitMatchEvent("throw_in", giveToHomeTeam ? _homeTeam : _awayTeam, null, Vector2.Zero, 0f);
-            PlaceBallForRestart(new Vector2(xPos, yPos), giveToHomeTeam, MatchState.ThrowIn);
+            EmitMatchEvent(Rules.KickIns ? "kick_in" : "throw_in",
+                giveToHomeTeam ? _homeTeam : _awayTeam, null, Vector2.Zero, 0f);
+            PlaceBallForRestart(new Vector2(xPos, yPos), giveToHomeTeam, MatchState.ThrowIn,
+                kickIn: Rules.KickIns);
         }
         
-        private void PlaceBallForRestart(Vector2 position, bool? preferHomeTeam = null, MatchState restartState = MatchState.Playing)
+        private void PlaceBallForRestart(Vector2 position, bool? preferHomeTeam = null,
+            MatchState restartState = MatchState.Playing, bool kickIn = false)
         {
+            _isKickIn = kickIn;
             BallPosition = position;
             BallVelocity = Vector2.Zero;
             BallHeight = 0f;
@@ -3146,15 +3280,25 @@ namespace NoPasaranFC.Gameplay
             
             if (CurrentState == MatchState.ThrowIn)
             {
-                // Power ranges from 200f (minimum) to 500f (maximum) based on charge
-                float minPower = 200f;
-                float maxPower = 500f;
                 float chargeAmount = Math.Max(0.1f, ThrowInPowerCharge); // Minimum 10% charge
-                power = minPower + (maxPower - minPower) * chargeAmount;
-                
-                // Height scales with power (short throws are flatter, long throws arc higher)
-                height = 40f + 120f * chargeAmount;
-                
+                if (_isKickIn)
+                {
+                    // Street kick-in: a real kicked restart, not a throw.
+                    float minPower = 450f;
+                    float maxPower = 1200f;
+                    power = minPower + (maxPower - minPower) * chargeAmount;
+                    height = 60f + 180f * chargeAmount;
+                }
+                else
+                {
+                    // Power ranges from 200f (minimum) to 500f (maximum) based on charge
+                    float minPower = 200f;
+                    float maxPower = 500f;
+                    power = minPower + (maxPower - minPower) * chargeAmount;
+                    // Height scales with power (short throws are flatter, long throws arc higher)
+                    height = 40f + 120f * chargeAmount;
+                }
+
                 float volume = 0.4f + 0.3f * chargeAmount;
                 AudioManager.Instance.PlaySoundEffect("kick_ball", volume);
             }
@@ -3242,6 +3386,7 @@ namespace NoPasaranFC.Gameplay
             // Reset state
             CurrentState = MatchState.Playing;
             RestartPlayer = null;
+            _isKickIn = false;
         }
         
         private Player FindNearestTeammate(Player player)
@@ -3404,18 +3549,13 @@ namespace NoPasaranFC.Gameplay
                 CelebrationManager.StartCelebration(scorer, teammates, opponents);
             }
 
-            // Start visual celebration (ball animation and text) - must be after CelebrationManager.StartCelebration
-            // so we can get the custom duration from the active celebration
-            float? customDuration = CelebrationManager.CurrentCelebration?.GetCelebrationDuration();
-            if (_font != null && _graphicsDevice != null)
-            {
-                string goalText = Models.Localization.Instance.Get("match.goal");
-                GoalCelebration.Start(goalText, _font, _graphicsDevice, customDuration);
-            }
-            else
-            {
-                GoalCelebration.Start(); // Fallback to empty
-            }
+            // The celebration timer is part of the simulation (it gates the kickoff
+            // restart), so it must run identically headless and rendered. Start the
+            // duration even without a font/device; particles simply stay empty.
+            float? customDuration = CelebrationDurationOverride
+                ?? CelebrationManager.CurrentCelebration?.GetCelebrationDuration();
+            string goalText = Models.Localization.Instance.Get("match.goal");
+            GoalCelebration.Start(goalText, _font, _graphicsDevice, customDuration);
         }
         
         private bool CanPlayerKickBall(Player player, Vector2 playerDirection, float maxDistance)
@@ -3792,21 +3932,146 @@ namespace NoPasaranFC.Gameplay
         
         public List<Player> GetAllPlayers()
         {
-            return _homeTeam.Players.Where(p => p.IsStarting).Concat(_awayTeam.Players.Where(p => p.IsStarting)).ToList();
+            var result = new List<Player>(_homeTeam.Players.Count + _awayTeam.Players.Count);
+            for (int i = 0; i < _homeTeam.Players.Count; i++)
+            {
+                var player = _homeTeam.Players[i];
+                if (player.IsStarting) result.Add(player);
+            }
+            for (int i = 0; i < _awayTeam.Players.Count; i++)
+            {
+                var player = _awayTeam.Players[i];
+                if (player.IsStarting) result.Add(player);
+            }
+            return result;
+        }
+
+        /// <summary>
+        /// Allocation-free view over both teams' starting players, for hot
+        /// per-frame paths. Unlike a cached list it observes <see cref="Player.IsStarting"/>
+        /// live, so red cards and halftime substitutions are respected.
+        /// </summary>
+        public ActivePlayersEnumerable ActivePlayers =>
+            new ActivePlayersEnumerable(_homeTeam.Players, _awayTeam.Players);
+
+        public readonly struct ActivePlayersEnumerable
+        {
+            private readonly List<Player> _home;
+            private readonly List<Player> _away;
+
+            public ActivePlayersEnumerable(List<Player> home, List<Player> away)
+            {
+                _home = home;
+                _away = away;
+            }
+
+            public Enumerator GetEnumerator() => new Enumerator(_home, _away);
+
+            public struct Enumerator
+            {
+                private readonly List<Player> _home;
+                private readonly List<Player> _away;
+                private int _index;
+                private Player _current;
+
+                public Enumerator(List<Player> home, List<Player> away)
+                {
+                    _home = home;
+                    _away = away;
+                    _index = -1;
+                    _current = null;
+                }
+
+                public Player Current => _current;
+
+                public bool MoveNext()
+                {
+                    while (true)
+                    {
+                        _index++;
+                        if (_index < _home.Count)
+                        {
+                            var player = _home[_index];
+                            if (player.IsStarting)
+                            {
+                                _current = player;
+                                return true;
+                            }
+                            continue;
+                        }
+
+                        int awayIndex = _index - _home.Count;
+                        if (awayIndex < _away.Count)
+                        {
+                            var player = _away[awayIndex];
+                            if (player.IsStarting)
+                            {
+                                _current = player;
+                                return true;
+                            }
+                            continue;
+                        }
+
+                        return false;
+                    }
+                }
+            }
         }
         
         private void EnsureStartingLineup(Team team)
         {
             var startingPlayers = team.Players.Where(p => p.IsStarting).ToList();
-            
-            // If no starting players marked, mark the first 11 as starting
-            if (startingPlayers.Count == 0 && team.Players.Count >= 11)
+
+            // A team carried over from an 11v11 season may still have 11 starters:
+            // trim to the street five so only 5v5 players take the court.
+            if (Rules.TeamSize <= 5 && startingPlayers.Count > Rules.TeamSize)
             {
-                for (int i = 0; i < 11 && i < team.Players.Count; i++)
+                SelectStreetLineup(team);
+                return;
+            }
+
+            if (startingPlayers.Count != 0 || team.Players.Count < Rules.TeamSize) return;
+
+            if (Rules.TeamSize <= 5)
+            {
+                SelectStreetLineup(team);
+                return;
+            }
+
+            for (int i = 0; i < Rules.TeamSize && i < team.Players.Count; i++)
+                team.Players[i].IsStarting = true;
+        }
+
+        /// <summary>Deterministic auto-lineup for 5v5: GK, CB, two CMs, striker.</summary>
+        private static void SelectStreetLineup(Team team)
+        {
+            foreach (var player in team.Players)
+                player.IsStarting = false;
+
+            var chosen = new List<Player>();
+            void Take(PlayerPosition position, int count)
+            {
+                foreach (var player in team.Players)
                 {
-                    team.Players[i].IsStarting = true;
+                    if (chosen.Count >= 5) return;
+                    if (player.Position != position || chosen.Contains(player)) continue;
+                    chosen.Add(player);
+                    if (--count <= 0) return;
                 }
             }
+
+            Take(PlayerPosition.Goalkeeper, 1);
+            Take(PlayerPosition.Defender, 1);
+            Take(PlayerPosition.Midfielder, 2);
+            Take(PlayerPosition.Forward, 1);
+
+            foreach (var player in team.Players)
+            {
+                if (chosen.Count >= 5) break;
+                if (!chosen.Contains(player)) chosen.Add(player);
+            }
+            foreach (var player in chosen)
+                player.IsStarting = true;
         }
         
         // Stamina effects

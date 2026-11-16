@@ -10,7 +10,8 @@ namespace NoPasaranFC.Graphics3D
     /// Easter egg: a fox wandering casually around the pitch apron.
     /// Uses the Khronos Fox.glb (Survey/Walk/Run clips). Waypoint wandering
     /// with idle pauses; stays outside the playing area.
-    /// With a tint and shrunken tail bones it doubles as a dog.
+    /// The same walker drives the purpose-built Dog.glb/Cat.glb variants
+    /// (derived from the fox rig but with bespoke proportions).
     /// </summary>
     public class FoxWalker
     {
@@ -18,6 +19,11 @@ namespace NoPasaranFC.Graphics3D
         private readonly SkinnedModelInstance _instance;
         private readonly Random _random = new Random();
         private readonly float _scale;
+
+        // Soft radial ground shadow (center dark, rim transparent)
+        private BasicEffect _shadowEffect;
+        private VertexPositionColor[] _shadowVertices;
+        private int[] _shadowIndices;
 
         // Fox.glb is huge (~155 units long); scale to a small dog size
         private const float Scale = 0.007f;
@@ -33,6 +39,7 @@ namespace NoPasaranFC.Graphics3D
         private bool _atBall;         // contact hysteresis: push < 0.5m, chase > 0.7m
         private bool _waypointIdle;   // stand-still hysteresis at the waypoint
         private float _pushCooldown;  // dribble pulses, not per-frame shoves
+        private readonly bool _cat;   // cats stroll slower and pause longer
 
         /// <summary>Goal the dog pushes toward: +1 right, -1 left, 0 = nearest.</summary>
         public int GoalSign { get; set; }
@@ -41,12 +48,14 @@ namespace NoPasaranFC.Graphics3D
         public bool IsGone { get; private set; }
 
         public FoxWalker(SkinnedModel model, Texture2D textureOverride = null, float scale = Scale,
-            float tailScale = 1f, bool chaseBall = false)
+            float tailScale = 1f, bool chaseBall = false, bool cat = false)
         {
             _model = model;
             _scale = scale;
             _chaseBall = chaseBall;
+            _cat = cat;
             _instance = new SkinnedModelInstance(model);
+            _instance.PlaybackSpeed = cat ? 0.8f : (chaseBall ? 1.15f : 1f);
             if (textureOverride != null)
             {
                 foreach (var part in model.Parts)
@@ -219,9 +228,9 @@ namespace NoPasaranFC.Graphics3D
             }
             else if (distance > 0.3f)
             {
-                // Walking toward the waypoint
+                // Walking toward the waypoint (cats amble)
                 Vector3 direction = toTarget / distance;
-                _position += direction * WalkSpeed * dt;
+                _position += direction * WalkSpeed * (_cat ? 0.65f : 1f) * dt;
                 _yaw = (float)Math.Atan2(direction.X, direction.Z);
                 _instance.Play("Walk");
             }
@@ -232,7 +241,7 @@ namespace NoPasaranFC.Graphics3D
                 if (_idleTimer <= 0f)
                 {
                     _target = PickWaypoint();
-                    _idleTimer = 3f + (float)_random.NextDouble() * 5f;
+                    _idleTimer = (_cat ? 5f : 3f) + (float)_random.NextDouble() * (_cat ? 7f : 5f);
                 }
                 else
                 {
@@ -243,8 +252,58 @@ namespace NoPasaranFC.Graphics3D
             _instance.Update(dt);
         }
 
+        private void EnsureShadow(GraphicsDevice device)
+        {
+            if (_shadowEffect != null) return;
+
+            _shadowEffect = new BasicEffect(device)
+            {
+                VertexColorEnabled = true,
+                TextureEnabled = false,
+                LightingEnabled = false
+            };
+
+            const int segments = 14;
+            _shadowVertices = new VertexPositionColor[segments + 1];
+            _shadowIndices = new int[segments * 3];
+            Color center = new Color(0, 0, 0, 95);
+            Color rim = new Color(0, 0, 0, 0);
+            _shadowVertices[0] = new VertexPositionColor(Vector3.Zero, center);
+            for (int i = 0; i < segments; i++)
+            {
+                float a = MathHelper.TwoPi * i / segments;
+                _shadowVertices[i + 1] = new VertexPositionColor(
+                    new Vector3((float)Math.Cos(a), 0f, (float)Math.Sin(a)), rim);
+                _shadowIndices[i * 3] = 0;
+                _shadowIndices[i * 3 + 1] = 1 + i;
+                _shadowIndices[i * 3 + 2] = 1 + (i + 1) % segments;
+            }
+        }
+
         public void Draw(GraphicsDevice device, Matrix view, Matrix projection, MatchEnvironment environment)
         {
+            EnsureShadow(device);
+
+            // Ground shadow first (soft radial fade), then the animal on top.
+            environment.ApplyTo(_shadowEffect, false);
+            _shadowEffect.View = view;
+            _shadowEffect.Projection = projection;
+            _shadowEffect.World =
+                Matrix.CreateScale(_scale * 85f, 1f, _scale * 60f) *
+                Matrix.CreateTranslation(new Vector3(_position.X, 0.03f, _position.Z));
+            device.BlendState = BlendState.AlphaBlend;
+            device.DepthStencilState = DepthStencilState.DepthRead;
+            device.RasterizerState = RasterizerState.CullNone;
+            foreach (var pass in _shadowEffect.CurrentTechnique.Passes)
+            {
+                pass.Apply();
+                device.DrawUserIndexedPrimitives(PrimitiveType.TriangleList,
+                    _shadowVertices, 0, _shadowVertices.Length,
+                    _shadowIndices, 0, _shadowIndices.Length / 3);
+            }
+            device.BlendState = BlendState.Opaque;
+            device.DepthStencilState = DepthStencilState.Default;
+
             _instance.Environment = environment;
             Matrix world = Matrix.CreateScale(_scale)
                 * Matrix.CreateRotationY(_yaw)

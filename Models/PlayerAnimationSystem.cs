@@ -7,8 +7,6 @@ namespace NoPasaranFC.Models
 {
     public class PlayerAnimationSystem
     {
-        private Dictionary<string, SpriteAnimation> _animations;
-        private Dictionary<string, Texture2D> _spriteSheets;
         private SpriteAnimation _currentAnimation;
         private float _animationTimer;
         private int _currentFrameIndex;

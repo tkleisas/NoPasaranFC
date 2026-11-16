@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using NoPasaranFC.Debugging;
 using System.Linq;
 using Microsoft.Xna.Framework;
@@ -6,6 +7,7 @@ using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
 using NoPasaranFC.Models;
 using NoPasaranFC.Database;
+using NoPasaranFC.Gameplay;
 using Microsoft.Xna.Framework.Content;
 
 namespace NoPasaranFC.Screens
@@ -27,6 +29,8 @@ namespace NoPasaranFC.Screens
             {
                 loc.Get("menu.standings"),
                 loc.Get("menu.nextMatch"),
+                loc.Get("menu.streetMatch"),
+                loc.Get("menu.multiplayer"),
                 loc.Get("menu.newSeason"),
                 loc.Get("menu.settings"),
                 loc.Get("menu.exit")
@@ -266,6 +270,48 @@ namespace NoPasaranFC.Screens
             }
         }
         
+        /// <summary>Quick 5v5 street friendly: player's team vs the next team in the league.</summary>
+        private void StartStreetFriendly()
+        {
+            var playerTeam = _championship.Teams.Find(t => t.IsPlayerControlled)
+                ?? _championship.Teams.FirstOrDefault();
+            if (playerTeam == null) return;
+
+            var opponent = _championship.Teams.FirstOrDefault(t => t != playerTeam);
+            if (opponent == null) return;
+
+            // Friendly: play on clones so trimming to the street five does not
+            // mutate the live championship roster/lineup.
+            string teamsJson = TeamSeeder.SerializeTeams(new List<Team> { playerTeam, opponent });
+            var clones = TeamSeeder.LoadTeamsFromJsonString(teamsJson);
+            if (clones.Count < 2) return;
+
+            var home = clones[0];
+            var away = clones[1];
+            home.Id = playerTeam.Id;
+            away.Id = opponent.Id;
+            int playerId = 1;
+            foreach (var player in home.Players)
+            {
+                player.TeamId = home.Id;
+                player.Id = playerId++;
+            }
+            foreach (var player in away.Players)
+            {
+                player.TeamId = away.Id;
+                player.Id = playerId++;
+            }
+
+            var match = new Match(home.Id, away.Id);
+            var streetRules = MatchRules.ForStreetVenue(GameSettings.Instance.StreetVenue);
+            var screen = new MatchScreen(home, away, match, _championship,
+                _database, _screenManager, _contentManager,
+                rules: streetRules, friendly: true);
+            if (_graphicsDevice != null)
+                screen.SetGraphicsDevice(_graphicsDevice);
+            _screenManager.PushScreen(screen);
+        }
+
         private void HandleSelection()
         {
             int option = _selectedOption;
@@ -286,11 +332,13 @@ namespace NoPasaranFC.Screens
                         {
                             var homeTeam = _championship.Teams.Find(t => t.Id == nextMatch.HomeTeamId);
                             var awayTeam = _championship.Teams.Find(t => t.Id == nextMatch.AwayTeamId);
+                            var rules = MatchRules.ForChampionship(_championship);
                             
                             if (homeTeam != null && awayTeam != null)
                             {
-                                // Show lineup screen before match if it's the player's team
-                                if (playerTeam.Id == homeTeam.Id || playerTeam.Id == awayTeam.Id)
+                                // Show the 11v11 lineup screen; street matches use the
+                                // deterministic 5v5 auto-lineup instead.
+                                if (!rules.Street && (playerTeam.Id == homeTeam.Id || playerTeam.Id == awayTeam.Id))
                                 {
                                     var lineupScreen = new LineupScreen(playerTeam, nextMatch, _championship, 
                                         _database, _screenManager, _contentManager, _graphicsDevice);
@@ -298,8 +346,8 @@ namespace NoPasaranFC.Screens
                                 }
                                 else
                                 {
-                                    // Non-player match - go directly to match screen
-                                    var matchScreen = new MatchScreen(homeTeam, awayTeam, nextMatch, _championship, _database, _screenManager,_contentManager);
+                                    var matchScreen = new MatchScreen(homeTeam, awayTeam, nextMatch, _championship,
+                                        _database, _screenManager, _contentManager, rules: rules);
                                     if (_graphicsDevice != null)
                                     {
                                         matchScreen.SetGraphicsDevice(_graphicsDevice);
@@ -324,17 +372,26 @@ namespace NoPasaranFC.Screens
                     }
                     break;
                 
-                case 2: // New Season — pick a championship (can be the same or a different mode)
+                case 2: // Street friendly (5v5 cage)
+                    StartStreetFriendly();
+                    break;
+
+                case 3: // Multiplayer (LAN/online friendly)
+                    _screenManager.PushScreen(new MultiplayerScreen(
+                        _championship, _database, _screenManager, _contentManager, _graphicsDevice));
+                    break;
+
+                case 4: // New Season — pick a championship (can be the same or a different mode)
                     _screenManager.PushScreen(new ChampionshipSelectionScreen(
                         _championship, _database, _screenManager, canCancel: true));
                     break;
                     
-                case 3: // Options
+                case 5: // Options
                     var settingsScreen = new SettingsScreen(_database, (Game1)_screenManager.Game, _contentManager, _graphicsDevice);
                     _screenManager.PushScreen(settingsScreen);
                     break;
                     
-                case 4: // Exit
+                case 6: // Exit
                     ShouldExit = true;
                     break;
             }

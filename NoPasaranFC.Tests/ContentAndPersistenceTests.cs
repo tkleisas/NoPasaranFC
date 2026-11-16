@@ -67,6 +67,7 @@ public class ContentAndPersistenceTests : IDisposable
             AIDecisionInterval = 0.33f,
             TimeOfDay = "Night",
             Weather = "Rain",
+            StreetVenue = "Cage",
         };
         db.SaveSettings(settings);
 
@@ -78,6 +79,7 @@ public class ContentAndPersistenceTests : IDisposable
         Assert.Equal(0.33f, loaded.AIDecisionInterval, 3);
         Assert.Equal("Night", loaded.TimeOfDay);
         Assert.Equal("Rain", loaded.Weather);
+        Assert.Equal("Cage", loaded.StreetVenue);
     }
 
     [Fact]
@@ -86,8 +88,9 @@ public class ContentAndPersistenceTests : IDisposable
         // Fresh DB: migrations must bring it to the latest schema
         var db = new DatabaseManager(_tempDb);
         var loaded = db.LoadSettings(); // must not throw on missing columns
-        Assert.Equal("Bahramis", loaded.Venue);     // migration 7 default
-        Assert.Equal("Easy", loaded.BallControl);   // migration 8 default
+        Assert.Equal("Bahramis", loaded.Venue);       // migration 7 default
+        Assert.Equal("Easy", loaded.BallControl);     // migration 8 default
+        Assert.Equal("Prosfygika", loaded.StreetVenue); // migration 15 default
     }
 
     // ---------- Face composer (pure pixels) ----------

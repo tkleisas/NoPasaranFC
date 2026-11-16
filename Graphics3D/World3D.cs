@@ -8,7 +8,7 @@ using NoPasaranFC.Gameplay;
 namespace NoPasaranFC.Graphics3D
 {
     /// <summary>Match venue: the generic bowl stadium, the Bahramis municipal ground, the Sperchogeia ground, or the seaside Sfageia ground.</summary>
-    public enum Venue { Bowl, Bahramis, Sperchogeia, Sfageia, Kerasoulia, Soulinari }
+    public enum Venue { Bowl, Bahramis, Sperchogeia, Sfageia, Kerasoulia, Soulinari, Street, Prosfygika }
     
     /// <summary>
     /// Static 3D world geometry for the match view: pitch, field markings,
@@ -29,6 +29,26 @@ namespace NoPasaranFC.Graphics3D
         // Textured pitch plane
         private VertexPositionTexture[] _pitchVertices;
         private int[] _pitchIndices;
+
+        // Soft ground shadows under trees (alpha-blended pass)
+        private BasicEffect _shadowEffect;
+        private VertexPositionColor[] _shadowVertices;
+        private int[] _shadowIndices;
+        private readonly List<VertexPositionColor> _shadowVertList = new List<VertexPositionColor>();
+        private readonly List<int> _shadowIndexList = new List<int>();
+        private const float ShadowY = 0.03f;
+
+        // Prosfygika: aged plaster facade atlas (textured front walls)
+        private BasicEffect _facadeEffect;
+        private Texture2D _facadeTexture;
+        private readonly List<VertexPositionTexture> _facadeVertList = new List<VertexPositionTexture>();
+        private readonly List<int> _facadeIndexList = new List<int>();
+        private VertexPositionTexture[] _facadeVertices;
+        private int[] _facadeIndices;
+
+        // Static baked key-light for the low-poly world (matches the day sun).
+        private static readonly Vector3 BakeSunDir =
+            Vector3.Normalize(new Vector3(0.35f, 0.8f, -0.25f));
         
         // Crowd (animated stand fronts, tiled texture) - Bowl venue only
         private BasicEffect _crowdEffect;
@@ -101,8 +121,20 @@ namespace NoPasaranFC.Graphics3D
                 _fenceHeight = 3.4f;
                 _goalFrameColor = new Color(30, 60, 200);
             }
+            else if (venue == Venue.Street || venue == Venue.Prosfygika)
+            {
+                _fenceHeight = venue == Venue.Street ? 4.2f : 3.2f;
+                _goalFrameColor = new Color(225, 225, 225);
+            }
 
             _colorEffect = new BasicEffect(device)
+            {
+                VertexColorEnabled = true,
+                TextureEnabled = false,
+                LightingEnabled = false
+            };
+
+            _shadowEffect = new BasicEffect(device)
             {
                 VertexColorEnabled = true,
                 TextureEnabled = false,
@@ -146,6 +178,7 @@ namespace NoPasaranFC.Graphics3D
                     Venue.Sfageia => "ΓΗΠΕΔΟ ΣΦΑΓΕΙΩΝ",
                     Venue.Kerasoulia => "ΣΤΑΔΙΟ ΚΕΡΑΣΟΥΛΙΑΣ",
                     Venue.Soulinari => "ΓΗΠΕΔΟ ΣΟΥΛΗΝΑΡΙΟΥ",
+                    Venue.Prosfygika => "ΣΩΣΤΕ ΤΑ ΠΡΟΣΦΥΓΙΚΑ",
                     _ => "ΠΑΝΑΓΙΩΤΗΣ ΜΠΑΧΡΑΜΗΣ",
                 };
                 _scoreboardTexture = CachedTexture($"scoreboard:{signText}", () => CreateScoreboardTexture(device, content, signText));
@@ -179,10 +212,27 @@ namespace NoPasaranFC.Graphics3D
                     Texture = _fanBannerTexture,
                     LightingEnabled = false
                 };
+
+                if (_venue == Venue.Prosfygika)
+                {
+                    _facadeTexture = CachedTexture("prosfygika_facade", () => CreateProsfygikaFacadeAtlas(device));
+                    _facadeEffect = new BasicEffect(device)
+                    {
+                        VertexColorEnabled = false,
+                        TextureEnabled = true,
+                        Texture = _facadeTexture,
+                        LightingEnabled = false
+                    };
+                }
             }
             
             BuildPitch();
             BuildOpaqueGeometry();
+
+            _shadowVertices = _shadowVertList.ToArray();
+            _shadowIndices = _shadowIndexList.ToArray();
+            _facadeVertices = _facadeVertList.ToArray();
+            _facadeIndices = _facadeIndexList.ToArray();
             
             if (_venue == Venue.Bowl)
             {
@@ -211,6 +261,8 @@ namespace NoPasaranFC.Graphics3D
         {
             environment.ApplyTo(_colorEffect, false);
             environment.ApplyTo(_pitchEffect, false);
+            environment.ApplyTo(_shadowEffect, false);
+            if (_facadeEffect != null) environment.ApplyTo(_facadeEffect, false);
             if (_crowdEffect != null) environment.ApplyTo(_crowdEffect, false);
             if (_fenceEffect != null) environment.ApplyTo(_fenceEffect, false);
             if (_scoreboardEffect != null) environment.ApplyTo(_scoreboardEffect, false);
@@ -261,6 +313,47 @@ namespace NoPasaranFC.Graphics3D
                     _opaqueVertices, 0, _opaqueVertices.Length,
                     _opaqueIndices, 0, _opaqueIndices.Length / 3);
             }
+
+            // Aged plaster facades on the Prosfygika blocks (behind windows/balconies)
+            if (_facadeVertices != null && _facadeVertices.Length > 0)
+            {
+                _facadeEffect.View = view;
+                _facadeEffect.Projection = projection;
+                _facadeEffect.World = Matrix.Identity;
+                device.BlendState = BlendState.Opaque;
+                device.DepthStencilState = DepthStencilState.Default;
+                device.RasterizerState = RasterizerState.CullNone;
+                device.SamplerStates[0] = SamplerState.LinearClamp;
+                foreach (var pass in _facadeEffect.CurrentTechnique.Passes)
+                {
+                    pass.Apply();
+                    device.DrawUserIndexedPrimitives(PrimitiveType.TriangleList,
+                        _facadeVertices, 0, _facadeVertices.Length,
+                        _facadeIndices, 0, _facadeIndices.Length / 3);
+                }
+            }
+
+            // Soft tree shadows on the ground/apron. Drawn after the opaque pass
+            // with depth-read/no-write: the shadow is slightly above the ground,
+            // so it blends over it, while trunks/stands in front occlude it.
+            if (_shadowVertices != null && _shadowVertices.Length > 0)
+            {
+                _shadowEffect.View = view;
+                _shadowEffect.Projection = projection;
+                _shadowEffect.World = Matrix.Identity;
+                device.BlendState = BlendState.AlphaBlend;
+                device.DepthStencilState = DepthStencilState.DepthRead;
+                device.RasterizerState = RasterizerState.CullNone;
+                foreach (var pass in _shadowEffect.CurrentTechnique.Passes)
+                {
+                    pass.Apply();
+                    device.DrawUserIndexedPrimitives(PrimitiveType.TriangleList,
+                        _shadowVertices, 0, _shadowVertices.Length,
+                        _shadowIndices, 0, _shadowIndices.Length / 3);
+                }
+                device.BlendState = BlendState.Opaque;
+                device.DepthStencilState = DepthStencilState.Default;
+            }
             
             if (_venue == Venue.Bowl)
             {
@@ -280,17 +373,20 @@ namespace NoPasaranFC.Graphics3D
             }
             else
             {
-                // Scoreboard panel with the rendered name texture
-                _scoreboardEffect.View = view;
-                _scoreboardEffect.Projection = projection;
-                _scoreboardEffect.World = Matrix.Identity;
-                device.SamplerStates[0] = SamplerState.LinearClamp;
-                foreach (var pass in _scoreboardEffect.CurrentTechnique.Passes)
+                // Scoreboard panel with the rendered name texture (street has none)
+                if (_scoreboardVertices != null)
                 {
-                    pass.Apply();
-                    device.DrawUserIndexedPrimitives(PrimitiveType.TriangleList,
-                        _scoreboardVertices, 0, _scoreboardVertices.Length,
-                        _scoreboardIndices, 0, _scoreboardIndices.Length / 3);
+                    _scoreboardEffect.View = view;
+                    _scoreboardEffect.Projection = projection;
+                    _scoreboardEffect.World = Matrix.Identity;
+                    device.SamplerStates[0] = SamplerState.LinearClamp;
+                    foreach (var pass in _scoreboardEffect.CurrentTechnique.Passes)
+                    {
+                        pass.Apply();
+                        device.DrawUserIndexedPrimitives(PrimitiveType.TriangleList,
+                            _scoreboardVertices, 0, _scoreboardVertices.Length,
+                            _scoreboardIndices, 0, _scoreboardIndices.Length / 3);
+                    }
                 }
                 
                 // Sponsor banners on the fence (Sperchogeia only)
@@ -324,22 +420,26 @@ namespace NoPasaranFC.Graphics3D
                 }
                 
                 // See-through chain-link fence (alpha-blended wires, no depth
-                // write: transparent texels must not hide players drawn later)
-                _fenceEffect.View = view;
-                _fenceEffect.Projection = projection;
-                _fenceEffect.World = Matrix.Identity;
-                device.BlendState = BlendState.AlphaBlend;
-                device.DepthStencilState = DepthStencilState.DepthRead;
-                device.SamplerStates[0] = SamplerState.LinearWrap;
-                foreach (var pass in _fenceEffect.CurrentTechnique.Passes)
+                // write: transparent texels must not hide players drawn later).
+                // Prosfygika is an open court and has no fence.
+                if (_fenceEffect != null && _fenceVertices != null && _fenceVertices.Length > 0)
                 {
-                    pass.Apply();
-                    device.DrawUserIndexedPrimitives(PrimitiveType.TriangleList,
-                        _fenceVertices, 0, _fenceVertices.Length,
-                        _fenceIndices, 0, _fenceIndices.Length / 3);
+                    _fenceEffect.View = view;
+                    _fenceEffect.Projection = projection;
+                    _fenceEffect.World = Matrix.Identity;
+                    device.BlendState = BlendState.AlphaBlend;
+                    device.DepthStencilState = DepthStencilState.DepthRead;
+                    device.SamplerStates[0] = SamplerState.LinearWrap;
+                    foreach (var pass in _fenceEffect.CurrentTechnique.Passes)
+                    {
+                        pass.Apply();
+                        device.DrawUserIndexedPrimitives(PrimitiveType.TriangleList,
+                            _fenceVertices, 0, _fenceVertices.Length,
+                            _fenceIndices, 0, _fenceIndices.Length / 3);
+                    }
+                    device.BlendState = BlendState.Opaque;
+                    device.DepthStencilState = DepthStencilState.Default;
                 }
-                device.BlendState = BlendState.Opaque;
-                device.DepthStencilState = DepthStencilState.Default;
             }
         }
         
@@ -347,6 +447,11 @@ namespace NoPasaranFC.Graphics3D
         
         private Texture2D CreateGrassTexture(GraphicsDevice device)
         {
+            if (_venue == Venue.Prosfygika)
+                return CreateDirtCourtTexture(device);
+            if (IsStreetCourt)
+                return CreateStreetCourtTexture(device);
+
             // Mowing stripes: 5m wide stripes across the 105m length
             const int size = 512;
             const int stripeCount = 21; // 105m / 5m
@@ -435,6 +540,20 @@ namespace NoPasaranFC.Graphics3D
                 AddGroundQuad(verts, indices, -64f, -46f, -59.5f, 46f, -0.005f, dirt); // West (-X)
                 AddGroundQuad(verts, indices, 59.5f, -46f, 64f, 46f, -0.005f, dirt);   // East (+X)
             }
+            else if (_venue == Venue.Prosfygika)
+            {
+                // Packed dirt/gravel neighborhood lot and road
+                AddGroundQuad(verts, indices, -70f, -50f, 70f, 50f, -0.014f, new Color(120, 104, 82));
+                AddGroundQuad(verts, indices, -50f, -36f, 50f, 36f, -0.010f, new Color(136, 118, 94));
+                AddGroundQuad(verts, indices, -100f, -70f, 100f, 70f, -0.018f, new Color(92, 82, 68));
+            }
+            else if (_venue == Venue.Street)
+            {
+                // Asphalt lot around the cage, a sidewalk band and a darker road beyond
+                AddGroundQuad(verts, indices, -70f, -50f, 70f, 50f, -0.014f, new Color(58, 58, 64));
+                AddGroundQuad(verts, indices, -50f, -36f, 50f, 36f, -0.010f, new Color(70, 70, 76));
+                AddGroundQuad(verts, indices, -100f, -70f, 100f, 70f, -0.018f, new Color(45, 45, 50));
+            }
             else if (_venue == Venue.Sfageia)
             {
                 // Inland side: dry grass/dirt like the other grounds
@@ -455,16 +574,25 @@ namespace NoPasaranFC.Graphics3D
                 AddGroundQuad(verts, indices, -300f, -95f, 300f, -91f, -1.3f, new Color(90, 150, 165));
             }
             
-            // Green apron around the pitch
-            float apron = 6f;
+            // Apron around the pitch (street courts are asphalt, not grass)
+            float apron = IsStreetCourt ? 3f : 6f;
+            Color apronColor = _venue == Venue.Prosfygika
+                ? new Color(128, 112, 88)
+                : _venue == Venue.Street
+                    ? new Color(64, 64, 70)
+                    : new Color(24, 100, 24);
             AddGroundQuad(verts, indices,
                 -_halfLength - apron, -_halfWidth - apron,
                 _halfLength + apron, _halfWidth + apron,
-                0f, new Color(24, 100, 24));
+                0f, apronColor);
             
             BuildFieldMarkings(verts, indices);
-            BuildGoals(verts, indices);
-            BuildCornerFlags(verts, indices);
+            if (_venue == Venue.Prosfygika)
+                BuildProsfygikaGoals(verts, indices);
+            else
+                BuildGoals(verts, indices);
+            if (!IsStreetCourt)
+                BuildCornerFlags(verts, indices);
             
             if (_venue == Venue.Bowl)
             {
@@ -486,6 +614,14 @@ namespace NoPasaranFC.Graphics3D
             else if (_venue == Venue.Kerasoulia)
             {
                 BuildKerasouliaVenue(verts, indices);
+            }
+            else if (_venue == Venue.Street)
+            {
+                BuildStreetVenue(verts, indices);
+            }
+            else if (_venue == Venue.Prosfygika)
+            {
+                BuildProsfygikaVenue(verts, indices);
             }
             else
             {
@@ -540,13 +676,32 @@ namespace NoPasaranFC.Graphics3D
         
         private void BuildFieldMarkings(List<VertexPositionColor> verts, List<int> indices)
         {
-            Color lineColor = Color.White;
+            // Chalk wears into the dirt at Prosfygika.
+            Color lineColor = _venue == Venue.Prosfygika
+                ? new Color(196, 188, 170)
+                : Color.White;
             
             // Outer boundary (touchlines + goal lines)
             AddRectOutline(verts, indices, -_halfLength, -_halfWidth, _halfLength, _halfWidth, LineWidth, lineColor);
             
             // Halfway line
             AddLineQuad(verts, indices, new Vector2(0, -_halfWidth), new Vector2(0, _halfWidth), LineWidth, lineColor);
+            
+            if (IsStreetCourt)
+            {
+                // Street court: small centre circle and compact goal boxes, no
+                // penalty areas or corner arcs.
+                AddRing(verts, indices, Vector2.Zero, 3.5f, LineWidth, 28, lineColor);
+                AddGroundQuad(verts, indices, -0.15f, -0.15f, 0.15f, 0.15f, LineY, lineColor);
+
+                float streetGoalHalfWidth = 3f;
+                float streetGoalDepth = 2.5f;
+                AddRectOutline(verts, indices, -_halfLength, -streetGoalHalfWidth,
+                    -_halfLength + streetGoalDepth, streetGoalHalfWidth, LineWidth, lineColor);
+                AddRectOutline(verts, indices, _halfLength - streetGoalDepth, -streetGoalHalfWidth,
+                    _halfLength, streetGoalHalfWidth, LineWidth, lineColor);
+                return;
+            }
             
             // Center circle (FIFA: 9.15m radius) + center spot
             AddRing(verts, indices, Vector2.Zero, 9.15f, LineWidth, 32, lineColor);
@@ -745,8 +900,10 @@ namespace NoPasaranFC.Graphics3D
         #region Bahramis municipal venue (Kalamata)
         
         // Fence ring: 5m outside the pitch lines
-        private float FenceX => _halfLength + 5f;  // 57.5
-        private float FenceZ => _halfWidth + 5f;   // 39
+        private bool IsStreetCourt => _venue == Venue.Street || _venue == Venue.Prosfygika;
+        private float FenceOffset => IsStreetCourt ? 1.2f : 5f;
+        private float FenceX => _halfLength + FenceOffset;
+        private float FenceZ => _halfWidth + FenceOffset;
         // Fence height and goal frame color are venue-aware (Kerasoulia has a
         // taller chain-link fence and blue goal frames; everything else keeps
         // the original 2.1m fence and white frames).
@@ -971,29 +1128,42 @@ namespace NoPasaranFC.Graphics3D
             AddOliveTree(verts, indices, random, x, z);
         }
         
-        /// <summary>Low-poly olive: short gnarled trunk + 2-4 silvery-green blobs.</summary>
-        private static void AddOliveTree(List<VertexPositionColor> verts, List<int> indices, Random random, float x, float z)
+        /// <summary>Low-poly olive: gnarled forked trunk + a silvery-green crown.</summary>
+        private void AddOliveTree(List<VertexPositionColor> verts, List<int> indices, Random random, float x, float z)
         {
             float scale = 0.7f + 0.6f * (float)random.NextDouble();
             Color trunk = new Color(105, 85, 60);
-            AddBox(verts, indices,
-                new Vector3(x - 0.17f, 0f, z - 0.17f), new Vector3(x + 0.17f, 1.1f * scale + 0.3f, z + 0.17f), trunk);
-            
+            Color trunkDark = new Color(82, 64, 45);
+
+            Vector3 fork = new Vector3(x - 0.08f * scale,
+                (0.95f + 0.30f * (float)random.NextDouble()) * scale,
+                z + 0.05f * scale);
+            AddCylinder(verts, indices, new Vector3(x, 0f, z), fork,
+                0.20f * scale, 0.13f * scale, trunk, 6);
+            AddCylinder(verts, indices, fork,
+                fork + new Vector3(0.42f, 0.65f, -0.22f) * scale,
+                0.09f * scale, 0.045f * scale, trunkDark, 5);
+            AddCylinder(verts, indices, fork,
+                fork + new Vector3(-0.38f, 0.72f, 0.28f) * scale,
+                0.085f * scale, 0.04f * scale, trunkDark, 5);
+
             Color foliage = new Color(100, 118, 72); // Silvery olive green
-            int blobs = 2 + random.Next(3);
+            int blobs = 4 + random.Next(3);
             for (int i = 0; i < blobs; i++)
             {
                 float ox = (float)(random.NextDouble() * 2.0 - 1.0) * 1.0f * scale;
                 float oz = (float)(random.NextDouble() * 2.0 - 1.0) * 1.0f * scale;
-                float oy = (1.3f + (float)random.NextDouble() * 0.9f) * scale + 0.3f;
-                float r = (1.0f + 0.7f * (float)random.NextDouble()) * scale;
+                float oy = (1.6f + (float)random.NextDouble() * 0.9f) * scale;
+                float r = (0.80f + 0.55f * (float)random.NextDouble()) * scale;
                 int jitter = random.Next(-12, 13);
                 Color c = new Color(
                     Math.Clamp(foliage.R + jitter, 0, 255),
                     Math.Clamp(foliage.G + jitter, 0, 255),
                     Math.Clamp(foliage.B + jitter, 0, 255));
-                AddSphere(verts, indices, new Vector3(x + ox, oy, z + oz), r, c, 6, 4);
+                AddSphere(verts, indices, new Vector3(x + ox, oy, z + oz), r, c, 7, 4);
             }
+
+            AddTreeShadow(x, z, 1.05f * scale);
         }
         
         /// <summary>
@@ -1097,19 +1267,27 @@ namespace NoPasaranFC.Graphics3D
             float zFar = -FenceZ + 0.12f;  // pitch side of the far fence, in front of sponsor banners
             const float y0 = 0.55f, y1 = 1.75f;
             
-            // Shuffle the 5 atlas segments, take the first 3
-            var segs = new List<int> { 0, 1, 2, 3, 4 };
+            // Shuffle the 6 atlas segments, take the first 3
+            const int segmentCount = 6;
+            var segs = new List<int> { 0, 1, 2, 3, 4, 5 };
             var rng = new Random();
             for (int i = segs.Count - 1; i > 0; i--)
             {
                 int j = rng.Next(i + 1);
                 (segs[i], segs[j]) = (segs[j], segs[i]);
             }
+
+            // Prosfygika: put the neighbourhood motto on the central banner.
+            if (_venue == Venue.Prosfygika)
+            {
+                segs.Remove(5);
+                segs.Insert(1, 5);
+            }
             
             var positions = new[] { (-25f, -11f), (-8f, 6f), (9f, 23f) };
             for (int i = 0; i < positions.Length; i++)
             {
-                float u0 = segs[i] / 5f, u1 = (segs[i] + 1) / 5f;
+                float u0 = segs[i] / (float)segmentCount, u1 = (segs[i] + 1) / (float)segmentCount;
                 float x0 = positions[i].Item1, x1 = positions[i].Item2;
                 AddTexturedQuad(_fanBannerVertList, _fanBannerIndexList,
                     new Vector3(x0, y0, zFar), new Vector2(u0, 1f),
@@ -1119,10 +1297,10 @@ namespace NoPasaranFC.Graphics3D
             }
         }
         
-        /// <summary>Bakes the 5 fan banners (2560x256, 512px each): aged cloth, dark red painted text.</summary>
+        /// <summary>Bakes the 6 fan banners (3072x256, 512px each): aged cloth, dark red painted text.</summary>
         private static Texture2D CreateFanBannerTexture(GraphicsDevice device, ContentManager content)
         {
-            const int width = 2560, height = 256, segW = 512;
+            const int width = 3072, height = 256, segW = 512;
             var target = new RenderTarget2D(device, width, height);
             device.SetRenderTarget(target);
             device.Clear(new Color(232, 224, 205));
@@ -1134,6 +1312,7 @@ namespace NoPasaranFC.Graphics3D
                 "ΤΟ ΕΓΚΛΗΜΑ ΤΗΣ ΠΥΛΟΥ ΔΕ ΘΑ ΞΕΧΑΣΤΕΙ",
                 "ΤΕΜΠΗ - ΠΥΛΟΣ - ΠΑΛΑΙΣΤΙΝΗ",
                 "ΔΙΚΑΙΩΣΗ ΓΙΑ ΤΟ ΘΟΔΩΡΗ",
+                "ΣΩΣΤΕ ΤΑ ΠΡΟΣΦΥΓΙΚΑ",
             };
             
             var spriteBatch = new SpriteBatch(device);
@@ -1248,40 +1427,66 @@ namespace NoPasaranFC.Graphics3D
             AddPalmTree(verts, indices, random, -66f, -18f);
         }
         
-        /// <summary>Low-poly palm: stacked trunk with a slight curve + drooping fronds.</summary>
-        private static void AddPalmTree(List<VertexPositionColor> verts, List<int> indices, Random random, float x, float z)
+        /// <summary>
+        /// Low-poly palm: curved tapered trunk, a crown of broad drooping fronds
+        /// and a few coconuts. Much fuller than the old stick-and-beams version.
+        /// </summary>
+        private void AddPalmTree(List<VertexPositionColor> verts, List<int> indices, Random random, float x, float z)
         {
-            float h = 4.5f + 1.5f * (float)random.NextDouble();
+            float h = 4.8f + 1.8f * (float)random.NextDouble();
             Color trunk = new Color(125, 100, 70);
+            Color trunkDark = new Color(105, 82, 56);
             Color frond = new Color(48, 115, 50);
-            
-            // Trunk in 3 stacked sections with a slight wander
-            float ox = 0f, oz = 0f;
-            for (int i = 0; i < 3; i++)
+
+            float lean = (float)(random.NextDouble() * 2.0 - 1.0) * 0.9f;
+            float leanZ = (float)(random.NextDouble() * 2.0 - 1.0) * 0.7f;
+
+            Vector3 prev = new Vector3(x, 0f, z);
+            const int segments = 5;
+            for (int i = 0; i < segments; i++)
             {
-                AddBox(verts, indices,
-                    new Vector3(x + ox - 0.13f, i * h / 3f, z + oz - 0.13f),
-                    new Vector3(x + ox + 0.13f, (i + 1) * h / 3f + 0.05f, z + oz + 0.13f), trunk);
-                ox += (float)(random.NextDouble() * 2.0 - 1.0) * 0.18f;
-                oz += (float)(random.NextDouble() * 2.0 - 1.0) * 0.18f;
+                float t0 = i / (float)segments;
+                float t1 = (i + 1) / (float)segments;
+                Vector3 p0 = new Vector3(x + lean * t0 * t0, h * t0, z + leanZ * t0 * t0);
+                Vector3 p1 = new Vector3(x + lean * t1 * t1, h * t1, z + leanZ * t1 * t1);
+                float r0 = 0.20f - i * 0.015f;
+                float r1 = r0 - 0.015f;
+                AddCylinder(verts, indices, p0, p1, r0, r1,
+                    (i & 1) == 0 ? trunk : trunkDark, 6);
+                prev = p1;
             }
-            
-            // Fronds: 7 beams radiating from the crown, rising then drooping
-            var top = new Vector3(x + ox, h, z + oz);
-            for (int i = 0; i < 7; i++)
+
+            Vector3 top = prev;
+            AddSphere(verts, indices, top + new Vector3(0f, 0.05f, 0f), 0.26f,
+                new Color(75, 86, 48), 6, 3);
+
+            // 9-11 fronds, each a shallow V-ribbon that rises then droops
+            int fronds = 9 + random.Next(3);
+            for (int i = 0; i < fronds; i++)
             {
-                float angle = MathHelper.TwoPi * i / 7f + (float)random.NextDouble() * 0.4f;
-                var dir = new Vector3((float)Math.Cos(angle), 0f, (float)Math.Sin(angle));
+                float angle = MathHelper.TwoPi * i / fronds + (float)random.NextDouble() * 0.25f;
+                Vector3 dir = new Vector3((float)Math.Cos(angle), 0f, (float)Math.Sin(angle));
+                Vector3 p0 = top + dir * 0.12f;
+                Vector3 p1 = top + dir * 0.95f + new Vector3(0f, 0.35f, 0f);
+                Vector3 p2 = top + dir * 1.90f + new Vector3(0f, 0.12f, 0f);
+                Vector3 p3 = top + dir * 2.80f + new Vector3(0f, -0.55f, 0f);
                 int jitter = random.Next(-8, 9);
                 Color c = new Color(
                     Math.Clamp(frond.R + jitter, 0, 255),
                     Math.Clamp(frond.G + jitter, 0, 255),
                     Math.Clamp(frond.B + jitter, 0, 255));
-                Vector3 mid = top + dir * 1.3f + new Vector3(0f, 0.45f, 0f);
-                Vector3 tip = top + dir * 2.6f + new Vector3(0f, -0.5f, 0f);
-                AddBeam(verts, indices, top, mid, 0.22f, c);
-                AddBeam(verts, indices, mid, tip, 0.16f, c);
+                AddFrond(verts, indices, p0, p1, p2, p3, dir, c);
             }
+
+            // Coconut cluster under the crown
+            for (int i = 0; i < 3; i++)
+            {
+                float a = MathHelper.TwoPi * i / 3f;
+                Vector3 offset = new Vector3((float)Math.Cos(a) * 0.18f, -0.12f, (float)Math.Sin(a) * 0.18f);
+                AddSphere(verts, indices, top + offset, 0.12f, new Color(92, 68, 40), 5, 3);
+            }
+
+            AddTreeShadow(x, z, 1.30f);
         }
         
         /// <summary>The east-side tennis courts: two red-framed green courts with nets.</summary>
@@ -1467,30 +1672,35 @@ namespace NoPasaranFC.Graphics3D
             AddConiferTree(verts, indices, random, x, z);
         }
         
-        /// <summary>Tall conifer for the mountain forest: slim trunk + 4 stacked dark-green tiers.</summary>
-        private static void AddConiferTree(List<VertexPositionColor> verts, List<int> indices, Random random, float x, float z)
+        /// <summary>Tall conifer for the mountain forest: tapered trunk + layered tiers.</summary>
+        private void AddConiferTree(List<VertexPositionColor> verts, List<int> indices, Random random, float x, float z)
         {
             float scale = 0.9f + 0.7f * (float)random.NextDouble();
+            float h = (5.8f + 2.4f * (float)random.NextDouble()) * scale;
             Color trunk = new Color(80, 60, 45);
-            AddBox(verts, indices,
-                new Vector3(x - 0.14f, 0f, z - 0.14f), new Vector3(x + 0.14f, 1.6f * scale, z + 0.14f), trunk);
-            
-            Color foliage = new Color(28, 62, 38);
-            int jitter = random.Next(-10, 11);
-            Color c = new Color(
-                Math.Clamp(foliage.R + jitter, 0, 255),
-                Math.Clamp(foliage.G + jitter, 0, 255),
-                Math.Clamp(foliage.B + jitter, 0, 255));
-            float y = 0.9f * scale;
-            float w = 1.5f * scale;
-            for (int i = 0; i < 4; i++)
+            AddCylinder(verts, indices, new Vector3(x, 0f, z), new Vector3(x, h * 0.26f, z),
+                0.20f * scale, 0.11f * scale, trunk, 6);
+
+            float y = h * 0.16f;
+            float r = 1.85f * scale;
+            for (int i = 0; i < 5; i++)
             {
-                float h = (2.0f - i * 0.25f) * scale;
-                AddBox(verts, indices,
-                    new Vector3(x - w, y, z - w), new Vector3(x + w, y + h, z + w), c);
-                y += h * 0.8f;
-                w *= 0.62f;
+                float tierH = h * (0.34f - i * 0.035f);
+                int jitter = random.Next(-8, 9);
+                Color c = new Color(
+                    Math.Clamp(28 + jitter, 0, 255),
+                    Math.Clamp(62 + jitter + i * 4, 0, 255),
+                    Math.Clamp(38 + jitter, 0, 255));
+                AddCylinder(verts, indices,
+                    new Vector3(x, y, z), new Vector3(x, y + tierH, z),
+                    r, r * 0.45f, c, 8);
+                y += tierH * 0.52f;
+                r *= 0.72f;
             }
+
+            AddCone(verts, indices, new Vector3(x, y, z), r * 0.95f, h * 0.20f,
+                new Color(36, 78, 44), 6);
+            AddTreeShadow(x, z, 1.70f * scale);
         }
         
         /// <summary>
@@ -1575,6 +1785,439 @@ namespace NoPasaranFC.Graphics3D
                 new Vector3(rx1 - rt * 2f, rimHeight - rt, z - rw - rt), new Vector3(rx1, rimHeight + rt, z + rw + rt), rim);
         }
         
+        #endregion
+
+        #region Street venue (Antifa League cage)
+
+        /// <summary>
+        /// ANTIFA LEAGUE street court: asphalt cage surrounded by a graffiti
+        /// wall, city blocks, benches, a container and a lamppost.
+        /// </summary>
+        private void BuildStreetVenue(List<VertexPositionColor> verts, List<int> indices)
+        {
+            BuildFence(verts, indices);
+            BuildFloodlights(verts, indices);
+            BuildFanBanners();
+            BuildStreetSurroundings(verts, indices);
+        }
+
+        private void BuildStreetSurroundings(List<VertexPositionColor> verts, List<int> indices)
+        {
+            // Graffiti wall behind the far cage
+            float wallZ = -FenceZ - 3.5f;
+            float wallH = 4.5f;
+            AddBox(verts, indices,
+                new Vector3(-38f, 0f, wallZ - 0.25f),
+                new Vector3(38f, wallH, wallZ + 0.25f), new Color(70, 70, 76));
+
+            Color[] graffiti =
+            {
+                new Color(210, 35, 45), new Color(30, 90, 190), new Color(240, 190, 30),
+                new Color(40, 150, 80), new Color(150, 60, 170), new Color(230, 110, 35),
+                new Color(25, 25, 30), new Color(220, 220, 215),
+            };
+            int panel = 0;
+            for (float x = -34f; x < 33f; x += 5.6f)
+            {
+                Color c = graffiti[panel++ % graffiti.Length];
+                AddQuad(verts, indices,
+                    new Vector3(x, 0.6f, wallZ + 0.26f),
+                    new Vector3(x + 4.8f, 0.6f, wallZ + 0.26f),
+                    new Vector3(x + 4.8f, 3.4f, wallZ + 0.26f),
+                    new Vector3(x, 3.4f, wallZ + 0.26f), c);
+            }
+            AddBox(verts, indices,
+                new Vector3(-38.3f, wallH, wallZ - 0.35f),
+                new Vector3(38.3f, wallH + 0.25f, wallZ + 0.35f), new Color(50, 50, 56));
+
+            // City blocks beyond the wall and to the sides
+            AddUniversityBlock(verts, indices, 42f, -30f, 20f, 12f, 15f);
+            AddUniversityBlock(verts, indices, -42f, -30f, 18f, 12f, 12f);
+            AddUniversityBlock(verts, indices, 48f, 18f, 14f, 10f, 10f);
+
+            // Container, benches and a lamppost outside the cage
+            AddBox(verts, indices,
+                new Vector3(24f, 0f, -FenceZ - 2.5f),
+                new Vector3(30f, 2.6f, -FenceZ - 0.5f), new Color(35, 110, 60));
+
+            for (int i = 0; i < 3; i++)
+            {
+                float bx = -8f + i * 8f;
+                AddBox(verts, indices,
+                    new Vector3(bx, 0f, FenceZ + 2.0f),
+                    new Vector3(bx + 4f, 0.45f, FenceZ + 2.6f), new Color(90, 70, 50));
+                AddBox(verts, indices,
+                    new Vector3(bx, 0.45f, FenceZ + 2.5f),
+                    new Vector3(bx + 4f, 0.9f, FenceZ + 2.7f), new Color(90, 70, 50));
+            }
+
+            AddBox(verts, indices,
+                new Vector3(-FenceX - 2f, 0f, FenceZ + 3f),
+                new Vector3(-FenceX - 1.8f, 6f, FenceZ + 3.2f), new Color(60, 60, 65));
+            AddBox(verts, indices,
+                new Vector3(-FenceX - 2.2f, 6f, FenceZ + 2.8f),
+                new Vector3(-FenceX - 1.6f, 6.4f, FenceZ + 3.4f), new Color(255, 240, 180));
+
+            // A few trees outside the lot
+            AddTree(verts, indices, new Random(99), FenceX + 10f, FenceZ + 8f);
+            AddTree(verts, indices, new Random(100), -FenceX - 10f, FenceZ + 6f);
+            AddTree(verts, indices, new Random(101), FenceX + 8f, -FenceZ - 8f);
+        }
+
+        #endregion
+
+        #region Prosfygika venue (Athens refugee housing blocks)
+
+        /// <summary>
+        /// ΠΡΟΣΦΥΓΙΚΑ: a neighborhood street court between the old refugee
+        /// apartment blocks on Alexandras Avenue. No real goal frames — two
+        /// flower pots mark each goal — plus parked cars, dense trees and the
+        /// "ΣΩΣΤΕ ΤΑ ΠΡΟΣΦΥΓΙΚΑ" sign.
+        /// </summary>
+        private void BuildProsfygikaVenue(List<VertexPositionColor> verts, List<int> indices)
+        {
+            // Open neighborhood court: no cage/fence, banners hang on the blocks.
+            BuildFloodlights(verts, indices);
+            BuildProsfygikaBanners();
+            BuildProsfygikaSurroundings(verts, indices);
+        }
+
+        /// <summary>Bed-sheet banners pinned to the far refugee block (no fence).</summary>
+        private void BuildProsfygikaBanners()
+        {
+            float z = -17.42f;
+            // Motto segment (5 of 6)
+            AddTexturedQuad(_fanBannerVertList, _fanBannerIndexList,
+                new Vector3(-9f, 1.2f, z), new Vector2(5f / 6f, 1f),
+                new Vector3(9f, 1.2f, z), new Vector2(1f, 1f),
+                new Vector3(9f, 3.2f, z), new Vector2(1f, 0f),
+                new Vector3(-9f, 3.2f, z), new Vector2(5f / 6f, 0f));
+            // A second banner on the side block
+            AddTexturedQuad(_fanBannerVertList, _fanBannerIndexList,
+                new Vector3(-20f, 1.2f, z), new Vector2(0f, 1f),
+                new Vector3(-12f, 1.2f, z), new Vector2(1f / 6f, 1f),
+                new Vector3(-12f, 2.8f, z), new Vector2(1f / 6f, 0f),
+                new Vector3(-20f, 2.8f, z), new Vector2(0f, 0f));
+        }
+
+        private void BuildProsfygikaGoals(List<VertexPositionColor> verts, List<int> indices)
+        {
+            float goalHalfWidth = WorldUnits.PxToM(MatchEngine.GoalWidth) / 2f;
+            foreach (float side in new[] { -1f, 1f })
+            {
+                float x = side * _halfLength;
+                foreach (float zSign in new[] { -1f, 1f })
+                {
+                    AddFlowerPot(verts, indices,
+                        new Vector3(x, 0f, zSign * goalHalfWidth), 0.28f);
+                }
+            }
+        }
+
+        private void BuildProsfygikaSurroundings(List<VertexPositionColor> verts, List<int> indices)
+        {
+            var random = new Random(1972);
+
+            // Old refugee housing blocks: long, low, weathered, balconied.
+            AddProsfygikaBlock(verts, indices, -18f, -22f, 30f, 9f, 9f,
+                new Color(224, 216, 192), 3, 0);
+            AddProsfygikaBlock(verts, indices, 16f, -22f, 26f, 9f, 10f,
+                new Color(205, 196, 172), 3, 1);
+            AddProsfygikaBlock(verts, indices, -34f, 2f, 10f, 26f, 9f,
+                new Color(214, 205, 185), 3, 2);
+            AddProsfygikaBlock(verts, indices, 34f, 2f, 10f, 26f, 8f,
+                new Color(198, 188, 168), 3, 3);
+
+            // Dense street trees between the blocks and the cage.
+            AddTree(verts, indices, new Random(11), -24f, -15.5f);
+            AddTree(verts, indices, new Random(12), -12f, -15.5f);
+            AddTree(verts, indices, new Random(13), 0f, -16.0f);
+            AddTree(verts, indices, new Random(14), 13f, -15.5f);
+            AddTree(verts, indices, new Random(15), 24f, -15.5f);
+            AddTree(verts, indices, new Random(16), -25f, 15.0f);
+            AddTree(verts, indices, new Random(17), 25f, 15.0f);
+
+            // Parked cars along both sides of the street.
+            Color[] carColors =
+            {
+                new Color(38, 48, 72), new Color(170, 174, 178), new Color(92, 96, 102),
+                new Color(210, 210, 205), new Color(30, 30, 34), new Color(70, 95, 140),
+            };
+            float[] farXs = { -27f, -19f, -9f, 2f, 12f, 21f, 28f };
+            for (int i = 0; i < farXs.Length; i++)
+                AddParkedCar(verts, indices, farXs[i], -FenceZ - 2.6f, carColors[i % carColors.Length]);
+            float[] nearXs = { -24f, -14f, -2f, 10f, 22f };
+            for (int i = 0; i < nearXs.Length; i++)
+                AddParkedCar(verts, indices, nearXs[i], FenceZ + 2.6f, carColors[(i + 3) % carColors.Length]);
+
+            // Street lamps
+            foreach (float x in new[] { -FenceX - 2f, FenceX + 2f })
+            {
+                AddBox(verts, indices,
+                    new Vector3(x - 0.1f, 0f, FenceZ + 3f),
+                    new Vector3(x + 0.1f, 6f, FenceZ + 3.2f), new Color(60, 60, 65));
+                AddBox(verts, indices,
+                    new Vector3(x - 0.3f, 6f, FenceZ + 2.8f),
+                    new Vector3(x + 0.3f, 6.4f, FenceZ + 3.4f), new Color(255, 240, 180));
+            }
+
+            // Anti-eviction graffiti on the ground floors.
+            Color[] graffiti =
+            {
+                new Color(210, 35, 45), new Color(30, 90, 190), new Color(240, 190, 30),
+                new Color(40, 150, 80), new Color(150, 60, 170), new Color(230, 110, 35),
+            };
+            int panel = 0;
+            foreach (float zFace in new[] { -17.46f, 15.1f })
+            {
+                for (float x = -28f; x < 28f; x += 8f)
+                {
+                    AddQuad(verts, indices,
+                        new Vector3(x, 0.35f, zFace),
+                        new Vector3(x + 6.5f, 0.35f, zFace),
+                        new Vector3(x + 6.5f, 1.45f, zFace),
+                        new Vector3(x, 1.45f, zFace), graffiti[panel++ % graffiti.Length]);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Three-story refugee block with an aged plaster facade, windows,
+        /// shutters, AC units, balconies with laundry, and rooftop water tanks.
+        /// </summary>
+        private void AddProsfygikaBlock(List<VertexPositionColor> verts, List<int> indices,
+            float x, float z, float w, float d, float h, Color body, int floors, int facadeVariant)
+        {
+            AddBox(verts, indices,
+                new Vector3(x - w / 2f, 0f, z - d / 2f),
+                new Vector3(x + w / 2f, h, z + d / 2f), body);
+
+            // Textured aged plaster front (behind windows/balconies)
+            float wallZ = z + d / 2f + 0.005f;
+            float u0 = facadeVariant / 4f, u1 = (facadeVariant + 1) / 4f;
+            AddTexturedQuad(_facadeVertList, _facadeIndexList,
+                new Vector3(x - w / 2f, 0.02f, wallZ), new Vector2(u0, 1f),
+                new Vector3(x + w / 2f, 0.02f, wallZ), new Vector2(u1, 1f),
+                new Vector3(x + w / 2f, h, wallZ), new Vector2(u1, 0f),
+                new Vector3(x - w / 2f, h, wallZ), new Vector2(u0, 0f));
+
+            // Flat roof with a small parapet
+            Color roof = new Color(125, 120, 112);
+            AddBox(verts, indices,
+                new Vector3(x - w / 2f - 0.2f, h, z - d / 2f - 0.2f),
+                new Vector3(x + w / 2f + 0.2f, h + 0.2f, z + d / 2f + 0.2f), roof);
+            AddBox(verts, indices,
+                new Vector3(x - w / 2f, h + 0.2f, z - d / 2f),
+                new Vector3(x + w / 2f, h + 0.45f, z - d / 2f + 0.25f), roof);
+            AddBox(verts, indices,
+                new Vector3(x - w / 2f, h + 0.2f, z + d / 2f - 0.25f),
+                new Vector3(x + w / 2f, h + 0.45f, z + d / 2f), roof);
+
+            // Rooftop laundry/stair room, water heater, solar panel and antenna
+            Color outbuilding = new Color(195, 188, 172);
+            AddBox(verts, indices,
+                new Vector3(x - w / 2f + 1.2f, h + 0.45f, z - d / 2f + 1.2f),
+                new Vector3(x - w / 2f + 3.4f, h + 2.5f, z - d / 2f + 3.4f), outbuilding);
+            AddQuad(verts, indices,
+                new Vector3(x - w / 2f + 1.8f, h + 0.45f, z - d / 2f + 1.15f),
+                new Vector3(x - w / 2f + 2.8f, h + 0.45f, z - d / 2f + 1.15f),
+                new Vector3(x - w / 2f + 2.8f, h + 2.1f, z - d / 2f + 1.15f),
+                new Vector3(x - w / 2f + 1.8f, h + 2.1f, z - d / 2f + 1.15f), new Color(60, 50, 42));
+
+            AddCylinder(verts, indices,
+                new Vector3(x + w / 2f - 2f, h + 0.45f, z + d / 2f - 2f),
+                new Vector3(x + w / 2f - 2f, h + 1.85f, z + d / 2f - 2f),
+                0.35f, 0.35f, new Color(145, 145, 150), 7);
+            AddBox(verts, indices,
+                new Vector3(x + w / 2f - 4.6f, h + 0.5f, z + d / 2f - 3.2f),
+                new Vector3(x + w / 2f - 2.6f, h + 0.62f, z + d / 2f - 1.4f),
+                new Color(28, 42, 68));
+
+            Color antenna = new Color(55, 55, 60);
+            AddBox(verts, indices,
+                new Vector3(x - w / 2f + 0.8f, h + 0.45f, z + d / 2f - 1.2f),
+                new Vector3(x - w / 2f + 0.9f, h + 4.5f, z + d / 2f - 1.1f), antenna);
+            AddBox(verts, indices,
+                new Vector3(x - w / 2f + 0.3f, h + 3.8f, z + d / 2f - 1.15f),
+                new Vector3(x - w / 2f + 1.4f, h + 3.9f, z + d / 2f - 1.05f), antenna);
+
+            Color window = new Color(45, 55, 68);
+            Color boarded = new Color(72, 58, 44);
+            Color balcony = new Color(150, 145, 135);
+            Color sill = new Color(168, 162, 150);
+            Color acUnit = new Color(175, 175, 172);
+            float faceZ = z + d / 2f + 0.02f;
+            int cols = Math.Max(3, (int)(w / 4.5f));
+            Color[] shutterColors =
+            {
+                new Color(60, 90, 65), new Color(95, 70, 48), new Color(120, 118, 110),
+            };
+            Color[] laundryColors =
+            {
+                new Color(210, 60, 55), new Color(55, 95, 175), new Color(240, 240, 235),
+                new Color(235, 195, 55), new Color(90, 160, 100),
+            };
+
+            for (int f = 0; f < floors; f++)
+            {
+                float y = 1.4f + f * 2.5f;
+                if (y + 1.35f > h - 0.35f) break;
+                for (int c = 0; c < cols; c++)
+                {
+                    float step = cols > 1 ? (w - 3f) / (cols - 1) : 0f;
+                    float wx = x - w / 2f + 1.5f + c * step - 0.65f;
+
+                    Color winColor = (c + f) % 7 == 0 ? boarded : window;
+                    AddQuad(verts, indices,
+                        new Vector3(wx, y, faceZ),
+                        new Vector3(wx + 1.3f, y, faceZ),
+                        new Vector3(wx + 1.3f, y + 1.25f, faceZ),
+                        new Vector3(wx, y + 1.25f, faceZ), winColor);
+
+                    // Window sill
+                    AddBox(verts, indices,
+                        new Vector3(wx - 0.08f, y - 0.08f, faceZ),
+                        new Vector3(wx + 1.38f, y, faceZ + 0.16f), sill);
+
+                    // Some shutters (often weathered green/brown)
+                    if (c % 3 == 1)
+                    {
+                        Color shutter = shutterColors[(c + f) % shutterColors.Length];
+                        AddQuad(verts, indices,
+                            new Vector3(wx - 0.38f, y, faceZ + 0.006f),
+                            new Vector3(wx - 0.04f, y, faceZ + 0.006f),
+                            new Vector3(wx - 0.04f, y + 1.25f, faceZ + 0.006f),
+                            new Vector3(wx - 0.38f, y + 1.25f, faceZ + 0.006f), shutter);
+                    }
+
+                    // Occasional wall-mounted AC unit
+                    if (f > 0 && c % 4 == 2)
+                    {
+                        AddBox(verts, indices,
+                            new Vector3(wx + 1.5f, y + 0.15f, faceZ + 0.02f),
+                            new Vector3(wx + 2.1f, y + 0.55f, faceZ + 0.32f), acUnit);
+                    }
+
+                    if (f > 0 && c % 2 == 0)
+                    {
+                        // Concrete balcony slab + simple railing
+                        AddBox(verts, indices,
+                            new Vector3(wx - 0.35f, y - 0.15f, faceZ),
+                            new Vector3(wx + 1.65f, y, faceZ + 0.7f), balcony);
+                        AddBox(verts, indices,
+                            new Vector3(wx - 0.35f, y + 0.75f, faceZ + 0.65f),
+                            new Vector3(wx + 1.65f, y + 0.85f, faceZ + 0.72f), balcony);
+                        for (int p = 0; p < 4; p++)
+                        {
+                            float px = wx - 0.3f + p * 0.6f;
+                            AddBox(verts, indices,
+                                new Vector3(px - 0.04f, y, faceZ + 0.62f),
+                                new Vector3(px + 0.04f, y + 0.8f, faceZ + 0.7f), balcony);
+                        }
+
+                        // Colourful laundry hanging over the balcony rail
+                        for (int l = 0; l < 2; l++)
+                        {
+                            float lx = wx + 0.15f + l * 0.75f;
+                            Color cloth = laundryColors[(c + f + l) % laundryColors.Length];
+                            AddQuad(verts, indices,
+                                new Vector3(lx, y - 0.55f, faceZ + 0.74f),
+                                new Vector3(lx + 0.5f, y - 0.55f, faceZ + 0.74f),
+                                new Vector3(lx + 0.5f, y - 0.05f, faceZ + 0.74f),
+                                new Vector3(lx, y - 0.05f, faceZ + 0.74f), cloth);
+                        }
+                    }
+                }
+            }
+        }
+
+        /// <summary>Low-poly parked car (visual only, outside the cage).</summary>        /// <summary>Low-poly parked car (visual only, outside the cage).</summary>
+        private static void AddParkedCar(List<VertexPositionColor> verts, List<int> indices,
+            float x, float z, Color body)
+        {
+            const float halfL = 2f, halfW = 0.9f;
+            Color glass = new Color(38, 48, 58);
+            Color tyre = new Color(25, 25, 28);
+            Color light = new Color(235, 225, 190);
+
+            AddBox(verts, indices,
+                new Vector3(x - halfL, 0.18f, z - halfW),
+                new Vector3(x + halfL, 0.78f, z + halfW), body);
+            AddBox(verts, indices,
+                new Vector3(x - 1.15f, 0.78f, z - halfW * 0.86f),
+                new Vector3(x + 0.95f, 1.32f, z + halfW * 0.86f), body);
+
+            // Windows on the cabin sides
+            AddQuad(verts, indices,
+                new Vector3(x - 1.0f, 0.88f, z + halfW * 0.88f),
+                new Vector3(x + 0.8f, 0.88f, z + halfW * 0.88f),
+                new Vector3(x + 0.8f, 1.24f, z + halfW * 0.88f),
+                new Vector3(x - 1.0f, 1.24f, z + halfW * 0.88f), glass);
+            AddQuad(verts, indices,
+                new Vector3(x - 1.0f, 0.88f, z - halfW * 0.88f),
+                new Vector3(x + 0.8f, 0.88f, z - halfW * 0.88f),
+                new Vector3(x + 0.8f, 1.24f, z - halfW * 0.88f),
+                new Vector3(x - 1.0f, 1.24f, z - halfW * 0.88f), glass);
+
+            // Wheels
+            foreach (float wx in new[] { x - 1.25f, x + 1.25f })
+            {
+                foreach (float wz in new[] { z - halfW, z + halfW })
+                {
+                    AddBox(verts, indices,
+                        new Vector3(wx - 0.3f, 0f, wz - 0.12f),
+                        new Vector3(wx + 0.3f, 0.55f, wz + 0.12f), tyre);
+                }
+            }
+
+            // Head/tail lights
+            AddBox(verts, indices,
+                new Vector3(x + halfL - 0.05f, 0.45f, z - halfW + 0.15f),
+                new Vector3(x + halfL + 0.02f, 0.62f, z - halfW + 0.55f), light);
+            AddBox(verts, indices,
+                new Vector3(x + halfL - 0.05f, 0.45f, z + halfW - 0.55f),
+                new Vector3(x + halfL + 0.02f, 0.62f, z + halfW - 0.15f), light);
+        }
+
+        /// <summary>Terracotta flower pot with foliage and flowers (street goalpost).</summary>
+        private void AddFlowerPot(List<VertexPositionColor> verts, List<int> indices,
+            Vector3 basePos, float radius)
+        {
+            Color pot = new Color(178, 88, 55);
+            Color potDark = new Color(145, 70, 44);
+            Color soil = new Color(72, 47, 30);
+            Color leaf = new Color(48, 128, 58);
+            Color[] flowers =
+            {
+                new Color(225, 55, 60), new Color(240, 200, 55), new Color(230, 120, 190),
+            };
+
+            AddCylinder(verts, indices, basePos, basePos + new Vector3(0f, 0.45f, 0f),
+                radius * 0.78f, radius, pot, 7);
+            AddCylinder(verts, indices, basePos + new Vector3(0f, 0.45f, 0f),
+                basePos + new Vector3(0f, 0.48f, 0f), radius * 0.9f, radius * 0.9f, soil, 7);
+
+            AddSphere(verts, indices, basePos + new Vector3(0f, 0.68f, 0f),
+                radius * 1.25f, leaf, 7, 4);
+            AddSphere(verts, indices, basePos + new Vector3(radius * 0.5f, 0.62f, 0f),
+                radius * 0.7f, new Color(58, 145, 66), 6, 3);
+            AddSphere(verts, indices, basePos + new Vector3(-radius * 0.45f, 0.6f, radius * 0.2f),
+                radius * 0.65f, new Color(42, 115, 52), 6, 3);
+
+            for (int i = 0; i < 4; i++)
+            {
+                float a = MathHelper.TwoPi * i / 4f;
+                Vector3 offset = new Vector3((float)Math.Cos(a) * radius * 0.55f,
+                    0.78f + (i % 2) * 0.08f,
+                    (float)Math.Sin(a) * radius * 0.55f);
+                AddSphere(verts, indices, basePos + offset, radius * 0.18f,
+                    flowers[i % flowers.Length], 5, 2);
+            }
+
+            // A little shadow under the pot
+            AddTreeShadow(basePos.X, basePos.Z, radius * 1.1f);
+        }
+
         #endregion
         
         #region Soulinari venue (village ground near Pylos)
@@ -1875,6 +2518,270 @@ namespace NoPasaranFC.Graphics3D
             texture.SetData(data);
             return texture;
         }
+
+        /// <summary>Dark asphalt with subtle grain and worn patches for the street court.</summary>
+        private static Texture2D CreateStreetCourtTexture(GraphicsDevice device)
+        {
+            const int size = 512;
+            var texture = new Texture2D(device, size, size);
+            var data = new Color[size * size];
+            var random = new Random(7331);
+            Color baseColor = new Color(52, 52, 58);
+
+            for (int y = 0; y < size; y++)
+            {
+                for (int x = 0; x < size; x++)
+                {
+                    int grain = random.Next(-7, 8);
+                    float patch = (float)(Math.Sin(x * 0.025f) * Math.Cos(y * 0.031f)) * 5f;
+                    int v = grain + (int)patch;
+                    data[y * size + x] = new Color(
+                        Math.Clamp(baseColor.R + v, 0, 255),
+                        Math.Clamp(baseColor.G + v, 0, 255),
+                        Math.Clamp(baseColor.B + v, 0, 255));
+                }
+            }
+
+            // A few lighter worn patches / repairs
+            for (int i = 0; i < 14; i++)
+            {
+                int cx = random.Next(size), cy = random.Next(size);
+                int rx = random.Next(10, 45), ry = random.Next(6, 26);
+                int tint = random.Next(6, 16);
+                for (int y = Math.Max(0, cy - ry); y < Math.Min(size, cy + ry); y++)
+                {
+                    for (int x = Math.Max(0, cx - rx); x < Math.Min(size, cx + rx); x++)
+                    {
+                        float dx = (x - cx) / (float)rx;
+                        float dy = (y - cy) / (float)ry;
+                        if (dx * dx + dy * dy > 1f) continue;
+                        int idx = y * size + x;
+                        Color p = data[idx];
+                        data[idx] = new Color(
+                            Math.Clamp(p.R + tint, 0, 255),
+                            Math.Clamp(p.G + tint, 0, 255),
+                            Math.Clamp(p.B + tint, 0, 255));
+                    }
+                }
+            }
+
+            texture.SetData(data);
+            return texture;
+        }
+
+        /// <summary>Packed dirt/gravel court with worn patches for Prosfygika.</summary>
+        private static Texture2D CreateDirtCourtTexture(GraphicsDevice device)
+        {
+            const int size = 512;
+            var texture = new Texture2D(device, size, size);
+            var data = new Color[size * size];
+            var random = new Random(1972);
+            Color baseColor = new Color(124, 107, 84);
+
+            for (int y = 0; y < size; y++)
+            {
+                for (int x = 0; x < size; x++)
+                {
+                    int grain = random.Next(-10, 11);
+                    float patch = (float)(Math.Sin(x * 0.021f) * Math.Cos(y * 0.027f)) * 8f;
+                    int v = grain + (int)patch;
+                    data[y * size + x] = new Color(
+                        Math.Clamp(baseColor.R + v, 0, 255),
+                        Math.Clamp(baseColor.G + v, 0, 255),
+                        Math.Clamp(baseColor.B + v, 0, 255));
+                }
+            }
+
+            // Worn patches and damp spots
+            for (int i = 0; i < 18; i++)
+            {
+                int cx = random.Next(size), cy = random.Next(size);
+                int rx = random.Next(8, 50), ry = random.Next(5, 30);
+                int tint = random.Next(-18, 19);
+                for (int y = Math.Max(0, cy - ry); y < Math.Min(size, cy + ry); y++)
+                {
+                    for (int x = Math.Max(0, cx - rx); x < Math.Min(size, cx + rx); x++)
+                    {
+                        float dx = (x - cx) / (float)rx;
+                        float dy = (y - cy) / (float)ry;
+                        if (dx * dx + dy * dy > 1f) continue;
+                        int idx = y * size + x;
+                        Color p = data[idx];
+                        data[idx] = new Color(
+                            Math.Clamp(p.R + tint, 0, 255),
+                            Math.Clamp(p.G + tint, 0, 255),
+                            Math.Clamp(p.B + tint, 0, 255));
+                    }
+                }
+            }
+
+            texture.SetData(data);
+            return texture;
+        }
+
+        /// <summary>
+        /// Four aged plaster panels (512x256 each) for the Prosfygika blocks:
+        /// water stains, grime, peeling plaster, cracks, bullet holes and
+        /// ground-floor graffiti. Windows/balconies are 3D geometry on top.
+        /// </summary>
+        private static Texture2D CreateProsfygikaFacadeAtlas(GraphicsDevice device)
+        {
+            const int panelW = 512, panelH = 256, variants = 4;
+            int width = panelW * variants;
+            var data = new Color[width * panelH];
+            var random = new Random(1944);
+
+            Color[] bases =
+            {
+                new Color(205, 190, 165), // beige
+                new Color(222, 211, 190), // cream
+                new Color(190, 174, 148), // ochre
+                new Color(176, 172, 164), // gray
+            };
+
+            void Blend(int ox, int lx, int ly, Color c, float a)
+            {
+                if (lx < 0 || lx >= panelW || ly < 0 || ly >= panelH) return;
+                int i = ly * width + ox + lx;
+                data[i] = Color.Lerp(data[i], c, a);
+            }
+
+            void Ellipse(int ox, int cx, int cy, int rx, int ry, Color c, float a)
+            {
+                for (int y = cy - ry; y <= cy + ry; y++)
+                {
+                    for (int x = cx - rx; x <= cx + rx; x++)
+                    {
+                        float dx = (x - cx) / (float)Math.Max(1, rx);
+                        float dy = (y - cy) / (float)Math.Max(1, ry);
+                        if (dx * dx + dy * dy > 1f) continue;
+                        Blend(ox, x, y, c, a);
+                    }
+                }
+            }
+
+            for (int v = 0; v < variants; v++)
+            {
+                int ox = v * panelW;
+                Color baseColor = bases[v];
+
+                // Plaster grain + broad discoloration
+                for (int y = 0; y < panelH; y++)
+                {
+                    for (int x = 0; x < panelW; x++)
+                    {
+                        int grain = random.Next(-9, 10);
+                        float broad = (float)(Math.Sin(x * 0.02f + v) * Math.Cos(y * 0.035f)) * 6f;
+                        int g = grain + (int)broad;
+                        data[y * width + ox + x] = new Color(
+                            Math.Clamp(baseColor.R + g, 0, 255),
+                            Math.Clamp(baseColor.G + g, 0, 255),
+                            Math.Clamp(baseColor.B + g, 0, 255));
+                    }
+                }
+
+                // Large damp patches
+                for (int i = 0; i < 8; i++)
+                {
+                    int cx = random.Next(panelW), cy = random.Next(panelH);
+                    int rx = random.Next(20, 90), ry = random.Next(15, 60);
+                    Color tint = random.Next(2) == 0 ? new Color(70, 64, 54) : new Color(235, 230, 215);
+                    Ellipse(ox, cx, cy, rx, ry, tint, 0.10f);
+                }
+
+                // Vertical water streaks from the roof/balconies
+                for (int i = 0; i < 9; i++)
+                {
+                    int sx = random.Next(panelW);
+                    int len = random.Next(panelH / 2, panelH);
+                    int w = random.Next(3, 10);
+                    float a = 0.12f + (float)random.NextDouble() * 0.16f;
+                    for (int y = 0; y < len; y++)
+                    {
+                        float fade = 1f - y / (float)Math.Max(1, len);
+                        for (int x = sx; x < sx + w; x++)
+                            Blend(ox, x, y, new Color(72, 65, 55), a * fade);
+                    }
+                }
+
+                // Grime rising from the street
+                for (int y = (int)(panelH * 0.66f); y < panelH; y++)
+                {
+                    float f = (y - panelH * 0.66f) / (panelH * 0.34f);
+                    for (int x = 0; x < panelW; x++)
+                        Blend(ox, x, y, new Color(62, 56, 47), 0.35f * f);
+                }
+
+                // Peeling plaster / exposed concrete patches
+                for (int i = 0; i < 7; i++)
+                {
+                    int cx = random.Next(panelW), cy = random.Next(panelH);
+                    int rx = random.Next(8, 30), ry = random.Next(5, 18);
+                    Ellipse(ox, cx, cy, rx + 2, ry + 2, new Color(190, 184, 172), 0.30f);
+                    Ellipse(ox, cx, cy, rx, ry,
+                        random.Next(3) == 0 ? new Color(152, 98, 72) : new Color(150, 145, 135), 0.85f);
+                }
+
+                // Cracks
+                for (int i = 0; i < 12; i++)
+                {
+                    int cx = random.Next(panelW);
+                    int cy = random.Next(panelH / 3);
+                    int steps = random.Next(18, 60);
+                    for (int step = 0; step < steps; step++)
+                    {
+                        Blend(ox, cx, cy, new Color(68, 62, 55), 0.55f);
+                        cx += random.Next(-1, 2);
+                        cy += random.Next(0, 2);
+                        if (cx < 0 || cx >= panelW || cy >= panelH) break;
+                    }
+                }
+
+                // Bullet holes from the December 1944 fighting
+                for (int i = 0; i < 26; i++)
+                {
+                    int cx = random.Next(panelW);
+                    int cy = random.Next((int)(panelH * 0.72f));
+                    int r = random.Next(1, 3);
+                    for (int y = cy - r - 1; y <= cy + r + 1; y++)
+                        for (int x = cx - r - 1; x <= cx + r + 1; x++)
+                        {
+                            float dx = x - cx, dy = y - cy;
+                            float d = (float)Math.Sqrt(dx * dx + dy * dy);
+                            if (d <= r + 0.9f) Blend(ox, x, y, new Color(195, 190, 180), 0.35f);
+                            if (d <= r) Blend(ox, x, y, new Color(45, 42, 38), 0.85f);
+                        }
+                }
+
+                // Faded ground-floor graffiti tags
+                Color[] tags =
+                {
+                    new Color(190, 35, 45), new Color(30, 80, 180), new Color(40, 145, 80),
+                    new Color(235, 180, 30), new Color(145, 60, 165),
+                };
+                for (int t = 0; t < 5; t++)
+                {
+                    Color tag = tags[random.Next(tags.Length)];
+                    int ty = random.Next((int)(panelH * 0.78f), panelH - 10);
+                    int tx = random.Next(panelW - 60);
+                    int strokes = random.Next(2, 5);
+                    for (int k = 0; k < strokes; k++)
+                    {
+                        int x0 = tx + random.Next(0, 45);
+                        int y0 = ty + random.Next(-6, 6);
+                        int len = random.Next(10, 35);
+                        int th = random.Next(2, 6);
+                        for (int y = y0; y < y0 + th; y++)
+                            for (int x = x0; x < x0 + len; x++)
+                                Blend(ox, x, y, tag, 0.45f);
+                    }
+                }
+            }
+
+            var texture = new Texture2D(device, width, panelH);
+            texture.SetData(data);
+            return texture;
+        }
         
         #endregion
         
@@ -2088,41 +2995,66 @@ namespace NoPasaranFC.Graphics3D
         private void AddTree(List<VertexPositionColor> verts, List<int> indices, Random random, float x, float z)
         {
             float scale = 0.8f + 0.5f * (float)random.NextDouble();
-            Color trunk = new Color(90, 60, 40);
-            
+            Color trunk = new Color(92, 66, 45);
+            Color trunkDark = new Color(74, 52, 36);
+
             if (random.Next(2) == 0)
             {
-                // Cypress: thin trunk + tall dark-green stacked foliage
-                AddBox(verts, indices,
-                    new Vector3(x - 0.12f, 0f, z - 0.12f), new Vector3(x + 0.12f, 1.2f, z + 0.12f), trunk);
-                Color foliage = new Color(30, 70, 35);
-                float y = 0.8f;
-                float w = 0.8f * scale;
-                for (int i = 0; i < 3; i++)
+                // Cypress: tapered trunk + five organic, slightly offset cone tiers
+                float h = (5.6f + 2.2f * (float)random.NextDouble()) * scale;
+                AddCylinder(verts, indices,
+                    new Vector3(x, 0f, z), new Vector3(x, h * 0.38f, z),
+                    0.18f * scale, 0.10f * scale, trunkDark, 6);
+
+                float y = h * 0.30f;
+                float r = 0.95f * scale;
+                for (int i = 0; i < 5; i++)
                 {
-                    float h = (1.6f - i * 0.3f) * scale;
-                    AddBox(verts, indices,
-                        new Vector3(x - w, y, z - w), new Vector3(x + w, y + h, z + w), foliage);
-                    y += h * 0.85f;
-                    w *= 0.65f;
+                    float tierH = h * (0.40f - i * 0.040f);
+                    float ox = ((i & 1) == 0 ? 0.05f : -0.05f) * scale;
+                    float oz = ((i % 3) == 0 ? 0.04f : -0.04f) * scale;
+                    int jitter = random.Next(-7, 8);
+                    Color c = new Color(
+                        Math.Clamp(30 + jitter + i * 4, 0, 255),
+                        Math.Clamp(70 + jitter + i * 3, 0, 255),
+                        Math.Clamp(36 + jitter, 0, 255));
+                    AddCone(verts, indices, new Vector3(x + ox, y, z + oz), r, tierH, c, 7);
+                    y += tierH * 0.48f;
+                    r *= 0.70f;
                 }
             }
             else
             {
-                // Olive: short trunk + 2-3 mid-green blobby low-poly spheres
-                AddBox(verts, indices,
-                    new Vector3(x - 0.17f, 0f, z - 0.17f), new Vector3(x + 0.17f, 1.1f, z + 0.17f), trunk);
-                Color foliage = new Color(85, 110, 60);
-                int blobs = 2 + random.Next(2);
+                // Olive: gnarled forked trunk + a silvery-green crown of blobs
+                float h = (2.2f + 1.0f * (float)random.NextDouble()) * scale;
+                Vector3 fork = new Vector3(x + 0.10f * scale, h * 0.55f, z - 0.06f * scale);
+                AddCylinder(verts, indices, new Vector3(x, 0f, z), fork,
+                    0.22f * scale, 0.14f * scale, trunk, 6);
+                AddCylinder(verts, indices, fork,
+                    fork + new Vector3(-0.55f, 0.75f, 0.18f) * scale,
+                    0.11f * scale, 0.06f * scale, trunkDark, 5);
+                AddCylinder(verts, indices, fork,
+                    fork + new Vector3(0.42f, 0.82f, -0.30f) * scale,
+                    0.10f * scale, 0.05f * scale, trunkDark, 5);
+
+                Color foliage = new Color(95, 112, 66);
+                int blobs = 4 + random.Next(3);
                 for (int i = 0; i < blobs; i++)
                 {
-                    float ox = (float)(random.NextDouble() * 2.0 - 1.0) * 0.9f * scale;
-                    float oz = (float)(random.NextDouble() * 2.0 - 1.0) * 0.9f * scale;
-                    float oy = 1.4f * scale + (float)random.NextDouble() * 0.8f;
-                    float r = (1.1f + 0.6f * (float)random.NextDouble()) * scale;
-                    AddSphere(verts, indices, new Vector3(x + ox, oy, z + oz), r, foliage, 6, 4);
+                    float ox = (float)(random.NextDouble() * 2.0 - 1.0) * 1.0f * scale;
+                    float oz = (float)(random.NextDouble() * 2.0 - 1.0) * 1.0f * scale;
+                    float oy = (1.7f + (float)random.NextDouble() * 0.9f) * scale;
+                    float r = (0.85f + 0.55f * (float)random.NextDouble()) * scale;
+                    int jitter = random.Next(-12, 13);
+                    Color c = new Color(
+                        Math.Clamp(foliage.R + jitter, 0, 255),
+                        Math.Clamp(foliage.G + jitter, 0, 255),
+                        Math.Clamp(foliage.B + jitter, 0, 255));
+                    AddSphere(verts, indices, new Vector3(x + ox, oy, z + oz), r, c, 7, 4);
                 }
             }
+
+            AddTreeShadow(x, z, 1.15f * scale);
         }
         
         private void BuildHouses(List<VertexPositionColor> verts, List<int> indices, Random random)
@@ -2313,14 +3245,40 @@ namespace NoPasaranFC.Graphics3D
             indices.Add(baseIndex + 3);
         }
         
-        private static void AddQuad(List<VertexPositionColor> verts, List<int> indices,
-            Vector3 a, Vector3 b, Vector3 c, Vector3 d, Color color)
+        /// <summary>
+        /// Bakes a cheap key-light + height ambient occlusion into a vertex color.
+        /// The world uses flat unlit BasicEffect draws, so this is what gives the
+        /// low-poly geometry form and depth without a normal-enabled vertex format.
+        /// Uses |N·L| so it works for both sides of one-sided quads (CullNone).
+        /// </summary>
+        private static Color ShadeColor(Color color, Vector3 normal, float height)
         {
+            if (normal.LengthSquared() > 1e-8f) normal.Normalize();
+            float ndl = Math.Abs(Vector3.Dot(normal, BakeSunDir));
+            float light = 0.72f + 0.33f * ndl;
+            float ao = 0.90f + 0.10f * MathHelper.Clamp(height / 2.5f, 0f, 1f);
+            float f = light * ao;
+            return new Color(
+                Math.Clamp((int)(color.R * f), 0, 255),
+                Math.Clamp((int)(color.G * f), 0, 255),
+                Math.Clamp((int)(color.B * f), 0, 255),
+                color.A);
+        }
+
+        private static void AddQuad(List<VertexPositionColor> verts, List<int> indices,
+            Vector3 a, Vector3 b, Vector3 c, Vector3 d, Color color, bool shade = true)
+        {
+            Vector3 normal = Vector3.Cross(b - a, c - a);
+            Color ca = shade ? ShadeColor(color, normal, a.Y) : color;
+            Color cb = shade ? ShadeColor(color, normal, b.Y) : color;
+            Color cc = shade ? ShadeColor(color, normal, c.Y) : color;
+            Color cd = shade ? ShadeColor(color, normal, d.Y) : color;
+
             int baseIndex = verts.Count;
-            verts.Add(new VertexPositionColor(a, color));
-            verts.Add(new VertexPositionColor(b, color));
-            verts.Add(new VertexPositionColor(c, color));
-            verts.Add(new VertexPositionColor(d, color));
+            verts.Add(new VertexPositionColor(a, ca));
+            verts.Add(new VertexPositionColor(b, cb));
+            verts.Add(new VertexPositionColor(c, cc));
+            verts.Add(new VertexPositionColor(d, cd));
             indices.Add(baseIndex + 0);
             indices.Add(baseIndex + 1);
             indices.Add(baseIndex + 2);
@@ -2336,7 +3294,7 @@ namespace NoPasaranFC.Graphics3D
                 new Vector3(x0, y, z0),
                 new Vector3(x1, y, z0),
                 new Vector3(x1, y, z1),
-                new Vector3(x0, y, z1), color);
+                new Vector3(x0, y, z1), color, shade: false);
         }
         
         /// <summary>Adds a flat line strip (quad) between two XZ points at marking height.</summary>
@@ -2352,7 +3310,8 @@ namespace NoPasaranFC.Graphics3D
                 new Vector3(from.X - perp.X, LineY, from.Y - perp.Y),
                 new Vector3(to.X - perp.X, LineY, to.Y - perp.Y),
                 new Vector3(to.X + perp.X, LineY, to.Y + perp.Y),
-                new Vector3(from.X + perp.X, LineY, from.Y + perp.Y), color);
+                new Vector3(from.X + perp.X, LineY, from.Y + perp.Y), color,
+                shade: false);
         }
         
         private static void AddRectOutline(List<VertexPositionColor> verts, List<int> indices,
@@ -2396,12 +3355,17 @@ namespace NoPasaranFC.Graphics3D
         
         /// <summary>Adds a single triangle (used for pyramid roofs).</summary>
         private static void AddTriangle(List<VertexPositionColor> verts, List<int> indices,
-            Vector3 a, Vector3 b, Vector3 c, Color color)
+            Vector3 a, Vector3 b, Vector3 c, Color color, bool shade = true)
         {
+            Vector3 normal = Vector3.Cross(b - a, c - a);
+            Color ca = shade ? ShadeColor(color, normal, a.Y) : color;
+            Color cb = shade ? ShadeColor(color, normal, b.Y) : color;
+            Color cc = shade ? ShadeColor(color, normal, c.Y) : color;
+
             int baseIndex = verts.Count;
-            verts.Add(new VertexPositionColor(a, color));
-            verts.Add(new VertexPositionColor(b, color));
-            verts.Add(new VertexPositionColor(c, color));
+            verts.Add(new VertexPositionColor(a, ca));
+            verts.Add(new VertexPositionColor(b, cb));
+            verts.Add(new VertexPositionColor(c, cc));
             indices.Add(baseIndex + 0);
             indices.Add(baseIndex + 1);
             indices.Add(baseIndex + 2);
@@ -2423,10 +3387,10 @@ namespace NoPasaranFC.Graphics3D
                 for (int lon = 0; lon <= lonSegments; lon++)
                 {
                     float phi = MathHelper.TwoPi * lon / lonSegments;
-                    verts.Add(new VertexPositionColor(
-                        center + new Vector3(
-                            (float)Math.Cos(phi) * ringRadius, y, (float)Math.Sin(phi) * ringRadius),
-                        color));
+                    Vector3 p = center + new Vector3(
+                        (float)Math.Cos(phi) * ringRadius, y, (float)Math.Sin(phi) * ringRadius);
+                    // Per-vertex normal => rounded, lit foliage instead of flat blobs
+                    verts.Add(new VertexPositionColor(p, ShadeColor(color, p - center, p.Y)));
                 }
             }
             
@@ -2449,6 +3413,107 @@ namespace NoPasaranFC.Graphics3D
             }
         }
         
+        /// <summary>Low-poly cone (used for conifer/cypress foliage tiers).</summary>
+        private static void AddCone(List<VertexPositionColor> verts, List<int> indices,
+            Vector3 baseCenter, float radius, float height, Color color, int segments = 7, bool cap = true)
+        {
+            Vector3 apex = baseCenter + new Vector3(0f, height, 0f);
+            for (int i = 0; i < segments; i++)
+            {
+                float a0 = MathHelper.TwoPi * i / segments;
+                float a1 = MathHelper.TwoPi * (i + 1) / segments;
+                Vector3 p0 = baseCenter + new Vector3((float)Math.Cos(a0) * radius, 0f, (float)Math.Sin(a0) * radius);
+                Vector3 p1 = baseCenter + new Vector3((float)Math.Cos(a1) * radius, 0f, (float)Math.Sin(a1) * radius);
+                AddTriangle(verts, indices, p0, p1, apex, color);
+                if (cap)
+                    AddTriangle(verts, indices, baseCenter, p1, p0, color);
+            }
+        }
+
+        /// <summary>
+        /// Low-poly tapered cylinder between two points (trunks, branches, tiers).
+        /// Radii can differ, so it doubles as a frustum.
+        /// </summary>
+        private static void AddCylinder(List<VertexPositionColor> verts, List<int> indices,
+            Vector3 p0, Vector3 p1, float r0, float r1, Color color, int segments = 6, bool caps = true)
+        {
+            Vector3 axis = p1 - p0;
+            if (axis.LengthSquared() < 1e-6f) return;
+            axis.Normalize();
+            Vector3 upRef = Math.Abs(axis.Y) > 0.9f ? Vector3.UnitX : Vector3.UnitY;
+            Vector3 right = Vector3.Normalize(Vector3.Cross(axis, upRef));
+            Vector3 fwd = Vector3.Normalize(Vector3.Cross(right, axis));
+
+            for (int i = 0; i < segments; i++)
+            {
+                float a0 = MathHelper.TwoPi * i / segments;
+                float a1 = MathHelper.TwoPi * (i + 1) / segments;
+                Vector3 dir0 = right * (float)Math.Cos(a0) + fwd * (float)Math.Sin(a0);
+                Vector3 dir1 = right * (float)Math.Cos(a1) + fwd * (float)Math.Sin(a1);
+                Vector3 b0 = p0 + dir0 * r0;
+                Vector3 b1 = p0 + dir1 * r0;
+                Vector3 t0 = p1 + dir0 * r1;
+                Vector3 t1 = p1 + dir1 * r1;
+                AddQuad(verts, indices, b0, b1, t1, t0, color);
+                if (caps && r1 > 0.002f)
+                    AddTriangle(verts, indices, p1, t0, t1, color);
+                if (caps && r0 > 0.002f)
+                    AddTriangle(verts, indices, p0, b1, b0, color);
+            }
+        }
+
+        /// <summary>
+        /// A drooping palm frond: a shallow V-shaped ribbon along a 4-point curve,
+        /// widest in the middle and tapering to the tip.
+        /// </summary>
+        private static void AddFrond(List<VertexPositionColor> verts, List<int> indices,
+            Vector3 p0, Vector3 p1, Vector3 p2, Vector3 p3, Vector3 dir, Color color)
+        {
+            Vector3 side = Vector3.Normalize(Vector3.Cross(Vector3.Up, dir));
+            Vector3 up = Vector3.Up * 0.06f;
+            Vector3[] pts = { p0, p1, p2, p3 };
+            float[] widths = { 0.09f, 0.30f, 0.23f, 0.02f };
+
+            for (int i = 0; i < 3; i++)
+            {
+                Vector3 l0 = pts[i] - side * widths[i];
+                Vector3 m0 = pts[i] + up;
+                Vector3 r0 = pts[i] + side * widths[i];
+                Vector3 l1 = pts[i + 1] - side * widths[i + 1];
+                Vector3 m1 = pts[i + 1] + up;
+                Vector3 r1 = pts[i + 1] + side * widths[i + 1];
+                AddQuad(verts, indices, l0, m0, m1, l1, color);
+                AddQuad(verts, indices, m0, r0, r1, m1, color);
+            }
+        }
+
+        /// <summary>Two overlapping soft ellipses give a tree a grounded shadow.</summary>
+        private void AddTreeShadow(float x, float z, float radius)
+        {
+            AddShadowEllipse(x - 0.12f, z + 0.10f, radius * 1.15f, radius * 0.95f, 42);
+            AddShadowEllipse(x - 0.07f, z + 0.06f, radius * 0.85f, radius * 0.70f, 70);
+        }
+
+        private void AddShadowEllipse(float x, float z, float rx, float rz, int alpha, int segments = 10)
+        {
+            int baseIndex = _shadowVertList.Count;
+            Color color = new Color(0, 0, 0, alpha);
+            _shadowVertList.Add(new VertexPositionColor(new Vector3(x, ShadowY, z), color));
+            for (int i = 0; i < segments; i++)
+            {
+                float a = MathHelper.TwoPi * i / segments;
+                _shadowVertList.Add(new VertexPositionColor(
+                    new Vector3(x + (float)Math.Cos(a) * rx, ShadowY, z + (float)Math.Sin(a) * rz),
+                    color));
+            }
+            for (int i = 0; i < segments; i++)
+            {
+                _shadowIndexList.Add(baseIndex);
+                _shadowIndexList.Add(baseIndex + 1 + i);
+                _shadowIndexList.Add(baseIndex + 1 + (i + 1) % segments);
+            }
+        }
+
         /// <summary>Adds an axis-aligned box (6 faces) with outward-facing quads.</summary>
         private static void AddBox(List<VertexPositionColor> verts, List<int> indices,
             Vector3 min, Vector3 max, Color color)

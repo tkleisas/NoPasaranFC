@@ -32,6 +32,9 @@ public class Game1 : Game
     private float _fpsAccum;
     private int _fpsFrames;
     private float _fps;
+#if !ANDROID
+    private bool _fullscreenToggleHeld;
+#endif
     
     // Resolution settings
     public static int ScreenWidth { get; private set; } = 1280;
@@ -124,6 +127,9 @@ public class Game1 : Game
         // Update TouchUI
         Gameplay.TouchUI.Instance.UpdateScreenSize(ScreenWidth, ScreenHeight);
 #else
+        // Windowed mode needs a title and decorations; fullscreen is borderless
+        // by nature, so the title/dev frame is only visible in windowed mode.
+        Window.Title = "NO PASARAN! Football Championship";
         // Apply video settings on desktop
         ApplyResolution(settings.ResolutionWidth, settings.ResolutionHeight, settings.IsFullscreen);
         _graphics.SynchronizeWithVerticalRetrace = settings.VSync;
@@ -179,7 +185,7 @@ public class Game1 : Game
         // Preload the skinned GLB models into the process cache so entering the
         // first match doesn't stall (this was the biggest chunk of the old
         // 2-3s match load, and the root cause of the Android ANR dialogs)
-        Graphics3D.Skinning.ModelCache.Preload(GraphicsDevice, "Player.glb", "PlayerF.glb", "Fox.glb");
+        Graphics3D.Skinning.ModelCache.Preload(GraphicsDevice, "Player.glb", "PlayerF.glb", "Fox.glb", "Dog.glb", "Cat.glb");
 
         // Start with menu screen
         var menuScreen = new MenuScreen(_championship, _database, _screenManager, _contentManager, GraphicsDevice);
@@ -195,6 +201,18 @@ public class Game1 : Game
         // Debug input injection frame boundary + queued console commands
         DebugInput.BeginFrame();
         ProcessDebugCommands();
+
+#if !ANDROID
+        // F11 / Alt+Enter toggles windowed/fullscreen and persists the choice.
+        var toggleKeys = DebugInput.GetState();
+        bool fullscreenToggle =
+            toggleKeys.IsKeyDown(Keys.F11) ||
+            ((toggleKeys.IsKeyDown(Keys.LeftAlt) || toggleKeys.IsKeyDown(Keys.RightAlt)) &&
+             toggleKeys.IsKeyDown(Keys.Enter));
+        if (fullscreenToggle && !_fullscreenToggleHeld)
+            ToggleFullscreen();
+        _fullscreenToggleHeld = fullscreenToggle;
+#endif
 
         // FPS tracking for the debug console
         float frameDt = (float)gameTime.ElapsedGameTime.TotalSeconds;
@@ -255,6 +273,20 @@ public class Game1 : Game
     /// compositor to the desktop resolution regardless of the preferred
     /// backbuffer size, so this must run on every client-size change.
     /// </summary>
+#if !ANDROID
+    /// <summary>
+    /// F11 / Alt+Enter: flip between decorated windowed mode and borderless
+    /// fullscreen, applying and persisting the new video setting.
+    /// </summary>
+    private void ToggleFullscreen()
+    {
+        var settings = GameSettings.Instance;
+        settings.IsFullscreen = !settings.IsFullscreen;
+        ApplyResolution(settings.ResolutionWidth, settings.ResolutionHeight, settings.IsFullscreen);
+        try { _database?.SaveSettings(settings); } catch { /* settings still apply */ }
+    }
+#endif
+
     private void SyncScreenSizeToBackbuffer()
     {
         if (GraphicsDevice == null) return;
@@ -553,6 +585,19 @@ public class Game1 : Game
         var nextMatch = _championship.Matches.Find(m => !m.IsPlayed &&
             (m.HomeTeamId == playerTeam.Id || m.AwayTeamId == playerTeam.Id));
         if (nextMatch == null) return "ERR season complete";
+
+        var rules = MatchRules.ForChampionship(_championship);
+        if (rules.Street)
+        {
+            var homeTeam = _championship.Teams.Find(t => t.Id == nextMatch.HomeTeamId);
+            var awayTeam = _championship.Teams.Find(t => t.Id == nextMatch.AwayTeamId);
+            if (homeTeam == null || awayTeam == null) return "ERR teams not found";
+            var streetScreen = new MatchScreen(homeTeam, awayTeam, nextMatch, _championship,
+                _database, _screenManager, _contentManager, rules: rules);
+            streetScreen.SetGraphicsDevice(GraphicsDevice);
+            _screenManager.PushScreen(streetScreen);
+            return "OK match";
+        }
 
         var lineupScreen = new LineupScreen(playerTeam, nextMatch, _championship,
             _database, _screenManager, _contentManager, GraphicsDevice);

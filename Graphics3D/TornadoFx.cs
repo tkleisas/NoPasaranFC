@@ -7,7 +7,7 @@ namespace NoPasaranFC.Graphics3D
     /// <summary>
     /// Easter egg (rain only): a whirlwind funnel wandering the pitch.
     /// Spiral of translucent quads - tight and dark at the ground, wide and
-    //  faint aloft, with a swaying top and a dust ring at the base.
+    /// faint aloft, with a swaying top and a dust ring at the base.
     /// </summary>
     public class TornadoFx
     {

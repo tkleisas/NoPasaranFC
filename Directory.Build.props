@@ -1,0 +1,13 @@
+<Project>
+  <!-- Single source of truth for the game version. Models/Version.cs consumes
+       these via the generated partial in Directory.Build.targets; the Android
+       manifest version code/name are derived from the same values. -->
+  <PropertyGroup>
+    <GameVersionMajor>2</GameVersionMajor>
+    <GameVersionMinor>32</GameVersionMinor>
+    <GameVersionPatch>1</GameVersionPatch>
+    <GameVersion>$(GameVersionMajor).$(GameVersionMinor).$(GameVersionPatch)</GameVersion>
+    <!-- Monotonic Android versionCode: 2.28.0 -> 22800 -->
+    <GameVersionCode>$([MSBuild]::Add($([MSBuild]::Multiply($(GameVersionMajor), 10000)), $([MSBuild]::Add($([MSBuild]::Multiply($(GameVersionMinor), 100)), $(GameVersionPatch)))))</GameVersionCode>
+  </PropertyGroup>
+</Project>

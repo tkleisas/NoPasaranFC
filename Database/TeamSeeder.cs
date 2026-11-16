@@ -166,6 +166,16 @@ namespace NoPasaranFC.Database
         /// </summary>
         public static void SaveCatalog(List<Team> teams, string path)
         {
+            File.WriteAllText(path, SerializeTeams(teams), new System.Text.UTF8Encoding(false));
+        }
+
+        /// <summary>
+        /// Serializes teams to the teams_seed.json schema without writing a file.
+        /// Used for network match setup (the server ships both rosters to clients)
+        /// and by the editor export.
+        /// </summary>
+        public static string SerializeTeams(List<Team> teams, bool indented = true)
+        {
             var data = new TeamSeedData { teams = new List<TeamData>() };
             foreach (var team in teams)
             {
@@ -221,12 +231,11 @@ namespace NoPasaranFC.Database
 
             var options = new JsonSerializerOptions
             {
-                WriteIndented = true,
+                WriteIndented = indented,
                 Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
                 DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
             };
-            File.WriteAllText(path, JsonSerializer.Serialize(data, options),
-                new System.Text.UTF8Encoding(false));
+            return JsonSerializer.Serialize(data, options);
         }
 
         private static PlayerPosition ParsePosition(string position)

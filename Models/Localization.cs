@@ -81,7 +81,21 @@ namespace NoPasaranFC.Models
                 ["menu.settings"] = "SETTINGS",
                 ["menu.exit"] = "EXIT",
                 ["menu.back"] = "BACK",
+                ["menu.multiplayer"] = "MULTIPLAYER",
+                ["menu.streetMatch"] = "STREET MATCH",
                 ["menu.seasonComplete"] = "Season Complete!",
+
+                // Multiplayer
+                ["multiplayer.title"] = "MULTIPLAYER",
+                ["multiplayer.host"] = "HOST MATCH (LAN)",
+                ["multiplayer.join"] = "JOIN MATCH",
+                ["multiplayer.enterIp"] = "Enter server IP (Enter = connect, Esc = back)",
+                ["multiplayer.connect"] = "CONNECT",
+                ["multiplayer.connecting"] = "Connecting...",
+                ["multiplayer.waiting"] = "Waiting for opponent...",
+                ["multiplayer.hostHint"] = "Share this machine's IP with the other player",
+                ["multiplayer.error"] = "Connection error",
+                ["multiplayer.port"] = "Port",
                 
                 // Standings
                 ["standings.title"] = "STANDINGS",
@@ -231,6 +245,10 @@ namespace NoPasaranFC.Models
                 ["settings.venue.kerasoulia"] = "Kerasoulia",
                 ["settings.venue.soulinari"] = "Soulinari",
                 ["settings.venue.random"] = "Random",
+                ["settings.streetVenue"] = "Street venue",
+                ["settings.streetVenue.cage"] = "Cage",
+                ["settings.streetVenue.prosfygika"] = "Prosfygika",
+                ["settings.streetVenue.random"] = "Random",
                 ["settings.ballControl"] = "Ball Control",
                 ["settings.ballControl.easy"] = "Easy",
                 ["settings.ballControl.classic"] = "Classic",
@@ -253,6 +271,7 @@ namespace NoPasaranFC.Models
                 ["championship.selectTitle"] = "SELECT CHAMPIONSHIP",
                 ["championship.none"] = "No championships available",
                 ["championship.teamCount"] = "{0} teams",
+                ["championship.street"] = "5v5 STREET",
                 ["championship.instructions"] = "UP/DOWN: Navigate   ENTER: Confirm",
                 ["championship.instructionsCancel"] = "UP/DOWN: Navigate   ENTER: Confirm   ESC: Back",
 
@@ -316,7 +335,21 @@ namespace NoPasaranFC.Models
                 ["menu.settings"] = "ΕΠΙΛΟΓΕΣ",
                 ["menu.exit"] = "ΕΞΟΔΟΣ",
                 ["menu.back"] = "ΠΙΣΩ",
+                ["menu.multiplayer"] = "ΠΟΛΛΑΠΛΟΙ ΠΑΙΚΤΕΣ",
+                ["menu.streetMatch"] = "ΑΓΩΝΑΣ ΔΡΟΜΟΥ",
                 ["menu.seasonComplete"] = "Τέλος Σεζόν!",
+
+                // Multiplayer
+                ["multiplayer.title"] = "ΠΟΛΛΑΠΛΟΙ ΠΑΙΚΤΕΣ",
+                ["multiplayer.host"] = "ΔΗΜΙΟΥΡΓΙΑ ΑΓΩΝΑ (LAN)",
+                ["multiplayer.join"] = "ΣΥΜΜΕΤΟΧΗ ΣΕ ΑΓΩΝΑ",
+                ["multiplayer.enterIp"] = "IP server (Enter = σύνδεση, Esc = πίσω)",
+                ["multiplayer.connect"] = "ΣΥΝΔΕΣΗ",
+                ["multiplayer.connecting"] = "Σύνδεση...",
+                ["multiplayer.waiting"] = "Αναμονή αντιπάλου...",
+                ["multiplayer.hostHint"] = "Δώσε το IP αυτού του υπολογιστή στον αντίπαλο",
+                ["multiplayer.error"] = "Σφάλμα σύνδεσης",
+                ["multiplayer.port"] = "Θύρα",
                 
                 // Standings
                 ["standings.title"] = "ΒΑΘΜΟΛΟΓΙΑ",
@@ -465,6 +498,10 @@ namespace NoPasaranFC.Models
                 ["settings.venue.kerasoulia"] = "Κερασούλια",
                 ["settings.venue.soulinari"] = "Σουληνάρι",
                 ["settings.venue.random"] = "Τυχαίο",
+                ["settings.streetVenue"] = "Γήπεδο δρόμου",
+                ["settings.streetVenue.cage"] = "Κλουβί",
+                ["settings.streetVenue.prosfygika"] = "Προσφυγικά",
+                ["settings.streetVenue.random"] = "Τυχαίο",
                 ["settings.ballControl"] = "Έλεγχος Μπάλας",
                 ["settings.ballControl.easy"] = "Εύκολος",
                 ["settings.ballControl.classic"] = "Κλασικός",
@@ -487,6 +524,7 @@ namespace NoPasaranFC.Models
                 ["championship.selectTitle"] = "ΕΠΙΛΟΓΗ ΠΡΩΤΑΘΛΗΜΑΤΟΣ",
                 ["championship.none"] = "Δεν υπάρχουν διαθέσιμα πρωταθλήματα",
                 ["championship.teamCount"] = "{0} ομάδες",
+                ["championship.street"] = "5v5 ΔΡΟΜΟΥ",
                 ["championship.instructions"] = "ΑΝΩ/ΚΑΤΩ: Πλοήγηση   ENTER: Επιβεβαίωση",
                 ["championship.instructionsCancel"] = "ΑΝΩ/ΚΑΤΩ: Πλοήγηση   ENTER: Επιβεβαίωση   ESC: Πίσω",
 

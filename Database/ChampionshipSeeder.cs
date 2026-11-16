@@ -16,6 +16,8 @@ namespace NoPasaranFC.Database
         public string Name { get; set; }
         public string PlayerTeam { get; set; }
         public List<ChampionshipTeamEntry> Teams { get; set; }
+        public string Mode { get; set; } = "standard";
+        public int TeamSize { get; set; } = 11;
     }
 
     public class ChampionshipTeamEntry
@@ -38,6 +40,8 @@ namespace NoPasaranFC.Database
             public string name { get; set; }
             public string playerTeam { get; set; }
             public List<TeamEntryData> teams { get; set; }
+            public string mode { get; set; }
+            public int? teamSize { get; set; }
         }
 
         private class TeamEntryData
@@ -65,11 +69,15 @@ namespace NoPasaranFC.Database
 
                 foreach (var def in seedData.championships)
                 {
+                    string mode = string.IsNullOrEmpty(def.mode) ? "standard" : def.mode;
                     var championship = new ChampionshipDefinition
                     {
                         Id = def.id,
                         Name = def.name,
                         PlayerTeam = def.playerTeam,
+                        Mode = mode,
+                        TeamSize = def.teamSize ?? (string.Equals(mode, "street",
+                            System.StringComparison.OrdinalIgnoreCase) ? 5 : 11),
                         Teams = new List<ChampionshipTeamEntry>()
                     };
 

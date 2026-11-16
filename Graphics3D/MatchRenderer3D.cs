@@ -69,6 +69,8 @@ namespace NoPasaranFC.Graphics3D
         private float[] _replayYaws;                      // per-player facing during replay
         private Player[] _replayPlayers;                  // player order matching the recording
         private int _homeTeamId;
+        private readonly bool _networkMode;
+        private bool IsStreetVenue => _venue == Venue.Street || _venue == Venue.Prosfygika;
 
         // KayKit chibi is ~2.3 units tall; scale to ~1.7m
         private const float PlayerModelScale = 0.75f;
@@ -115,19 +117,25 @@ namespace NoPasaranFC.Graphics3D
             public int FrameIndex;
         }
         
-        public MatchRenderer3D(GraphicsDevice device, ContentManager content)
+        public MatchRenderer3D(GraphicsDevice device, ContentManager content, bool networkMode = false,
+            MatchRules rules = null)
         {
             _device = device;
+            _networkMode = networkMode;
             _camera = new Camera3D(Game1.ScreenWidth, Game1.ScreenHeight);
-            _venue = GameSettings.Instance.Venue switch
-            {
-                "Sperchogeia" => Venue.Sperchogeia,
-                "Sfageia" => Venue.Sfageia,
-                "Kerasoulia" => Venue.Kerasoulia,
-                "Soulinari" => Venue.Soulinari,
-                "Random" => (Venue)(1 + new Random().Next(5)), // all real grounds
-                _ => Venue.Bahramis,
-            };
+            _venue = rules?.Street == true
+                ? (string.Equals(rules.StreetVenue, "Cage", StringComparison.OrdinalIgnoreCase)
+                    ? Venue.Street
+                    : Venue.Prosfygika)
+                : GameSettings.Instance.Venue switch
+                {
+                    "Sperchogeia" => Venue.Sperchogeia,
+                    "Sfageia" => Venue.Sfageia,
+                    "Kerasoulia" => Venue.Kerasoulia,
+                    "Soulinari" => Venue.Soulinari,
+                    "Random" => (Venue)(1 + new Random().Next(5)), // all real grounds
+                    _ => Venue.Bahramis,
+                };
             _world = new World3D(device, content, _venue);
             _ball = new Ball3D(device);
             
@@ -159,32 +167,44 @@ namespace NoPasaranFC.Graphics3D
             
             // Dynamic cloth nets replace the old static net quads
             float halfLength = WorldUnits.PitchLengthMeters / 2f;
-            _nets = new[]
-            {
-                new GoalNet3D(device, -halfLength, -1f),
-                new GoalNet3D(device, halfLength, 1f),
-            };
+            // Prosfygika has no real goal frames (flower-pot posts); skip nets.
+            _nets = IsStreetVenue && _venue == Venue.Prosfygika
+                ? System.Array.Empty<GoalNet3D>()
+                : new[]
+                {
+                    new GoalNet3D(device, -halfLength, -1f),
+                    new GoalNet3D(device, halfLength, 1f),
+                };
             foreach (var net in _nets)
                 net.ApplyEnvironment(_environment);
             
             _rain = _environment.IsRaining ? new RainSystem(device) : null;
             
-            // Easter eggs: per-match rolls (fox/dog/crows/seagulls/tornado)
-            try
+            // Easter eggs: per-match rolls (fox/dog/crows/seagulls/tornado).
+            // They mutate engine state (snow friction, shoves, knockdowns), so a
+            // network match must not roll them independently per client.
+            if (!networkMode)
             {
-                _easterEggs = new EasterEggManager(device,
-                    ModelCache.TryGet(device, "Fox.glb"), _venue, _environment.IsRaining, _environment);
+                try
+                {
+                    _easterEggs = new EasterEggManager(device,
+                        ModelCache.TryGet(device, "Fox.glb"), _venue, _environment.IsRaining, _environment);
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"MatchRenderer3D: no easter eggs ({ex.Message}).");
+                    _easterEggs = null;
+                }
             }
-            catch (Exception ex)
+            else
             {
-                Debug.WriteLine($"MatchRenderer3D: no easter eggs ({ex.Message}).");
                 _easterEggs = null;
             }
             
             // Supporters (reuses the player models/atlases): on the Bahramis
             // stand, on raised platforms at Soulinari/Kerasoulia, or along the
-            // fence elsewhere
-            if (_playerModel != null)
+            // fence elsewhere. Street courts are cage-side only (no stands).
+            if (_playerModel != null && _venue != Venue.Street)
             {
                 FanSection.FanPlacement placement;
                 FanSection.PlatformMetrics? platform = null;
@@ -192,6 +212,9 @@ namespace NoPasaranFC.Graphics3D
                 {
                     case Venue.Bahramis:
                         placement = FanSection.FanPlacement.Stand;
+                        break;
+                    case Venue.Prosfygika:
+                        placement = FanSection.FanPlacement.CourtSide;
                         break;
                     case Venue.Soulinari:
                         placement = FanSection.FanPlacement.Bleacher;
@@ -236,8 +259,17 @@ namespace NoPasaranFC.Graphics3D
         {
             _homeTeamId = homeTeamId;
             if (_playerModel == null) return;
-            
+
             Texture2D atlas = _playerModel.Parts[0].Texture;
+
+            // Street courts have no dugouts/stands; keep the officials only.
+            if (IsStreetVenue)
+            {
+                _officials = new MatchOfficials(device, _playerModel, atlas,
+                    StaffNames.FixtureSeed(engine.HomeTeam.Name, engine.AwayTeam.Name));
+                return;
+            }
+
             float benchZ = -WorldUnits.PitchWidthMeters / 2f - 3.5f; // far touchline, in front of the stand
             
             // Benches flank the main stand (stand is x ∈ [-15, +15])
@@ -462,7 +494,7 @@ namespace NoPasaranFC.Graphics3D
             _fans?.Update(dt, engine);
             _homeBench?.Update(dt, engine);
             _awayBench?.Update(dt, engine);
-            _officials?.Update(dt, engine);
+            _officials?.Update(dt, engine, syncEnginePosition: !_networkMode);
             
             if (!replayActive)
             {

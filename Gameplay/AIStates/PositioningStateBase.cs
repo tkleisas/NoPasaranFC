@@ -118,7 +118,6 @@ namespace NoPasaranFC.Gameplay.AIStates
         }
 
         /// <summary>
-        /// <summary>
         /// Calculates gradient boundary repulsion — stronger when closer to edge.
         /// </summary>
         protected Vector2 GetBoundaryRepulsion(Vector2 position)

@@ -126,7 +126,9 @@ namespace NoPasaranFC.Gameplay
             var championship = new Championship
             {
                 Id = definition.Id,
-                Name = definition.Name
+                Name = definition.Name,
+                Mode = definition.Mode ?? "standard",
+                TeamSize = definition.TeamSize > 0 ? definition.TeamSize : 11
             };
 
             var catalog = LoadCatalogTeams() ?? new List<Team>();
