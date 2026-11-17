@@ -9,6 +9,7 @@ using Microsoft.Xna.Framework.Content;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
 using NoPasaranFC.Database;
+using NoPasaranFC.Gameplay;
 using NoPasaranFC.Graphics3D;
 using NoPasaranFC.Graphics3D.Skinning;
 using NoPasaranFC.Models;
@@ -23,6 +24,12 @@ namespace NoPasaranFC.Screens
         protected readonly DatabaseManager _database;
         protected readonly ScreenManager _screenManager;
         private readonly ContentManager _contentManager;
+        private readonly MatchRules _rules;
+        private readonly Team _homeTeam;
+        private readonly Team _awayTeam;
+        private readonly bool _friendly;
+        private readonly bool _saveToDatabase;
+        private readonly int _startingLimit;
 
         protected List<Player> _allPlayers;
         protected int _selectedIndex = 0;
@@ -45,7 +52,9 @@ namespace NoPasaranFC.Screens
         private bool _accentComputed;
 
         public LineupScreen(Team team, Match match, Championship championship, DatabaseManager database,
-            ScreenManager screenManager, ContentManager content, GraphicsDevice graphicsDevice)
+            ScreenManager screenManager, ContentManager content, GraphicsDevice graphicsDevice,
+            MatchRules rules = null, Team homeTeam = null, Team awayTeam = null,
+            bool friendly = false, bool saveToDatabase = true)
             : base(content, graphicsDevice)
         {
             _team = team;
@@ -54,6 +63,20 @@ namespace NoPasaranFC.Screens
             _database = database;
             _screenManager = screenManager;
             _contentManager = content;
+            _rules = rules ?? MatchRules.ForChampionship(championship);
+            _startingLimit = _rules.TeamSize;
+            _homeTeam = homeTeam;
+            _awayTeam = awayTeam;
+            _friendly = friendly;
+            _saveToDatabase = saveToDatabase;
+
+            // Street squads may still carry an 11-a-side selection from the catalog.
+            // Seed a sensible 1-2-1 five before the player starts swapping players.
+            if (_startingLimit < 11 &&
+                _team.Players.Count(p => p.IsStarting) != _startingLimit)
+            {
+                Gameplay.MatchEngine.SelectStreetLineup(_team);
+            }
 
             // Roster grouped by position (GK/DEF/MID/FWD), shirt number within a group
             _allPlayers = _team.Players
@@ -321,8 +344,8 @@ namespace NoPasaranFC.Screens
                 }
                 else
                 {
-                    // Can add to starting lineup only if less than 11 (and the screen allows it)
-                    if (currentStartingCount < 11 && CanAddToStarting(player))
+                    // Can add to the starting lineup only if there is room.
+                    if (currentStartingCount < _startingLimit && CanAddToStarting(player))
                     {
                         player.IsStarting = true;
                         Gameplay.AudioManager.Instance.PlaySoundEffect("menu_select");
@@ -335,12 +358,15 @@ namespace NoPasaranFC.Screens
             {
                 int startingCount = _allPlayers.Count(p => p.IsStarting);
 
-                if (startingCount == 11)
+                if (startingCount == _startingLimit)
                 {
-                    // Save lineup to database
-                    foreach (var player in _allPlayers)
+                    if (_saveToDatabase)
                     {
-                        _database.SavePlayer(player);
+                        // Save lineup to database (street friendlies run on clones).
+                        foreach (var player in _allPlayers)
+                        {
+                            _database.SavePlayer(player);
+                        }
                     }
 
                     Gameplay.AudioManager.Instance.PlaySoundEffect("menu_select");
@@ -362,12 +388,15 @@ namespace NoPasaranFC.Screens
         /// <summary>Pre-match default: save and start a new match.</summary>
         protected virtual void OnConfirm()
         {
-            // Start the match
-            var homeTeam = _championship.Teams.Find(t => t.Id == _match.HomeTeamId);
-            var awayTeam = _championship.Teams.Find(t => t.Id == _match.AwayTeamId);
+            // Start the match (friendly matches pass their cloned teams)
+            var homeTeam = _homeTeam ??
+                _championship.Teams.Find(t => t.Id == _match.HomeTeamId);
+            var awayTeam = _awayTeam ??
+                _championship.Teams.Find(t => t.Id == _match.AwayTeamId);
 
             var matchScreen = new MatchScreen(homeTeam, awayTeam, _match, _championship,
-                _database, _screenManager, _contentManager);
+                _database, _screenManager, _contentManager,
+                rules: _rules, friendly: _friendly);
             matchScreen.SetGraphicsDevice(GraphicsDevice);
             _screenManager.PushScreen(matchScreen);
         }
@@ -584,8 +613,9 @@ namespace NoPasaranFC.Screens
             int fwdCount = lines[0].Count;
             string formationText = $"{defCount}-{midCount}-{fwdCount}";
             int startingCount = startingPlayers.Count;
-            string countText = $"{Localization.Instance.Get("lineup.starting")}: {startingCount}/11";
-            Color countColor = startingCount == 11 ? Color.LightGreen : (startingCount < 11 ? Color.Yellow : Color.Red);
+            string countText = $"{Localization.Instance.Get("lineup.starting")}: {startingCount}/{_startingLimit}";
+            Color countColor = startingCount == _startingLimit ? Color.LightGreen
+                : (startingCount < _startingLimit ? Color.Yellow : Color.Red);
 
             int footerY = pitch.Bottom + 8;
             Vector2 formSize = font.MeasureString(formationText);

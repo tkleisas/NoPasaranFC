@@ -218,6 +218,20 @@ public class StreetModeTests
     }
 
     [Fact]
+    public void StreetLineup_IsOneTwoOne()
+    {
+        var team = TestHelper.MakeTeam("STREET XI", 1);
+        MatchEngine.SelectStreetLineup(team);
+
+        var starters = team.Players.Where(p => p.IsStarting).ToList();
+        Assert.Equal(5, starters.Count);
+        Assert.Single(starters, p => p.Position == PlayerPosition.Goalkeeper);
+        Assert.Single(starters, p => p.Position == PlayerPosition.Defender);
+        Assert.Equal(2, starters.Count(p => p.Position == PlayerPosition.Midfielder));
+        Assert.Single(starters, p => p.Position == PlayerPosition.Forward);
+    }
+
+    [Fact]
     public void StandardMatchAfterStreet_ResetsPitchAndLineup()
     {
         var streetHome = TestHelper.MakeTeam("STREET", 1);

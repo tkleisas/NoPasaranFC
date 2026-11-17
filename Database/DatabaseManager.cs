@@ -29,6 +29,7 @@ namespace NoPasaranFC.Database
             (13, ApplyMigration13_AddMatchRecording),
             (14, ApplyMigration14_AddChampionshipMode),
             (15, ApplyMigration15_AddStreetVenue),
+            (16, ApplyMigration16_RestoreAntifaLeague),
         };
 
         internal static int CurrentSchemaVersion => Migrations[Migrations.Length - 1].Version;
@@ -188,12 +189,50 @@ namespace NoPasaranFC.Database
         {
             foreach (var col in new[] { "Mode TEXT DEFAULT 'standard'", "TeamSize INTEGER DEFAULT 11" })
                 AddColumnIfMissing(connection, "Championship", col);
+        }
 
-            // Existing Antifa League saves predate the mode columns; backfill them.
-            var update = connection.CreateCommand();
-            update.CommandText = "UPDATE Championship SET Mode='street', TeamSize=5 " +
-                                 "WHERE ChampionshipId='antifa_league'";
-            update.ExecuteNonQuery();
+        /// <summary>
+        /// v2.32.1 accidentally switched the 11v11 Antifa League to 5v5. Restore
+        /// the league and reset the affected season (matches, standings and season
+        /// stats), then re-arm the default 11 starters per team.
+        /// </summary>
+        private static void ApplyMigration16_RestoreAntifaLeague(SqliteConnection connection)
+        {
+            var query = connection.CreateCommand();
+            query.CommandText = "SELECT Mode, TeamSize FROM Championship WHERE ChampionshipId='antifa_league'";
+            bool needsReset = false;
+            using (var reader = query.ExecuteReader())
+            {
+                if (reader.Read())
+                {
+                    string mode = reader.IsDBNull(0) ? "standard" : reader.GetString(0);
+                    int teamSize = reader.IsDBNull(1) ? 11 : reader.GetInt32(1);
+                    needsReset = string.Equals(mode, "street", StringComparison.OrdinalIgnoreCase) ||
+                                 teamSize <= 5;
+                }
+            }
+            if (!needsReset) return;
+
+            foreach (string sql in new[]
+            {
+                "DELETE FROM Matches",
+                "UPDATE Teams SET Wins=0, Draws=0, Losses=0, GoalsFor=0, GoalsAgainst=0",
+                "UPDATE Players SET SeasonGoals=0, SeasonAssists=0, " +
+                    "SeasonYellowCards=0, SeasonRedCards=0",
+                "UPDATE Championship SET Mode='standard', TeamSize=11, CurrentMatchweek=0 " +
+                    "WHERE ChampionshipId='antifa_league'",
+                // Restore a normal 11-a-side lineup: first 11 shirts per team.
+                "UPDATE Players SET IsStarting = CASE WHEN (" +
+                    "SELECT COUNT(*) FROM Players AS p2 WHERE p2.TeamId = Players.TeamId AND (" +
+                        "p2.ShirtNumber < Players.ShirtNumber OR " +
+                        "(p2.ShirtNumber = Players.ShirtNumber AND p2.Id < Players.Id))) < 11 " +
+                    "THEN 1 ELSE 0 END",
+            })
+            {
+                var command = connection.CreateCommand();
+                command.CommandText = sql;
+                command.ExecuteNonQuery();
+            }
         }
 
         private static void ApplyMigration13_AddMatchRecording(SqliteConnection connection)
@@ -916,18 +955,14 @@ namespace NoPasaranFC.Database
                 }
             }
 
-            // Defensive backfill for saves created before the mode columns existed.
-            if (string.Equals(championship.Id, "antifa_league", System.StringComparison.OrdinalIgnoreCase) &&
-                !championship.IsStreet)
-            {
-                championship.Mode = "street";
-                championship.TeamSize = 5;
-            }
-            
             // Load teams and matches
             championship.Teams = LoadAllTeams();
             championship.Matches = LoadAllMatches();
-            
+
+            // A reset season (e.g. migration 16) may have no fixtures yet.
+            if (championship.Matches.Count == 0 && championship.Teams.Count >= 2)
+                championship.GenerateFixtures();
+
             return championship;
         }
         

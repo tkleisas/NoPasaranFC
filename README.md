@@ -65,7 +65,7 @@ Broadcast / High / TopDown cameras in 3D, plus the original 2D sprite mode:
 
 ### 🎮 Core Gameplay
 - **Championship Mode**: Full round-robin league season with all 8 teams, standings, round results, seasons
-- **Antifa League Street Football (5v5)**: a separate street league plus a quick **Street Match** menu friendly — 1-2-1 lineups, kick-ins, no offside, 3 m goals, and two street venues: the walled asphalt **Cage** and the open dirt **ΠΡΟΣΦΥΓΙΚΑ** court (Athens refugee housing blocks, aged bullet-scarred facades, parked cars, flower-pot goals, sideline fans, faded chalk lines and ΣΩΣΤΕ ΤΑ ΠΡΟΣΦΥΓΙΚΑ banners)
+- **Antifa Leagues**: the original 11v11 **ANTIFA LEAGUE**, plus the separate 5v5 **ANTIFA STREET LEAGUE** and a quick **Street Match** friendly — 1-2-1 lineups, kick-ins, no offside, 3 m goals, and two street venues: the walled asphalt **Cage** and the open dirt **ΠΡΟΣΦΥΓΙΚΑ** court (Athens refugee housing blocks, aged bullet-scarred facades, parked cars, flower-pot goals, sideline fans, faded chalk lines and ΣΩΣΤΕ ΤΑ ΠΡΟΣΦΥΓΙΚΑ banners)
 - **Match Statistics**: Detailed per-player and per-team stats (goals, assists, shots, on target, passes and accuracy, tackles, fouls, saves, cards, possession, corners, offsides) with a post-match screen; season-long top scorers with assists and cards (TAB in Standings) — simulated matches attribute goals too
 - **Two view modes**: full 3D (default) and classic top-down 2D, selectable in Settings
 - **Ball Physics**: Velocity, friction, bouncing, and aerial trajectories (height simulated separately)
@@ -235,17 +235,19 @@ Key architectural rule: `MatchEngine` is pure 2D simulation (73 px = 1 m). The 3
 - **docs/screenshots/**: README captures; **docs/harness-*/**: AI harness trajectory studies
 - Older design/fix notes live in git history
 
-## 🚀 Current Status (v2.32.4)
+## 🚀 Current Status (v2.32.6)
 
 **Fully playable on desktop and Android**, with the 3D view as the default experience. 140+ automated tests guard the match engine.
 
 Recent highlights:
+- **v2.32.6**: 5v5 lineup selection — street league and Street Match now show the lineup screen with a 1-2-1 five; halftime still auto-resumes for street
+- **v2.32.5**: Restored the 11v11 Antifa League and moved 5v5 into the separate Antifa Street League; migration 16 resets the accidentally converted Antifa season
 - **v2.32.4**: Responsive start menu — all seven options fit on 800×600 through 1920×1080, with a width-capped logo on small screens
 - **v2.32.3**: CI/CD release fix — Android builds pin the .NET 9 SDK so the correct Android workload is used
 - **v2.32.2**: ΠΡΟΣΦΥΓΙΚΑ flower-pot goals have no phantom net/post/crossbar collisions (high balls count), 2D hides the ghost frame, and parked cars got round wheels
 - **v2.32.1**: ΠΡΟΣΦΥΓΙΚΑ refinements — open court with no fence (kick-ins instead of wall bounces), dirt pitch with faded chalk lines, cheering sideline fans, aged textured facades with bullet holes/laundry/AC units, and no goal nets
 - **v2.32.0**: ΠΡΟΣΦΥΓΙΚΑ street venue — Athens refugee blocks, parked cars, flower-pot goals and ΣΩΣΤΕ ΤΑ ΠΡΟΣΦΥΓΙΚΑ banners; selectable Cage/Prosfygika street venue
-- **v2.31.0**: Antifa League 5v5 street football — separate street league + quick Street Match, cage walls/kick-ins, 1-2-1 lineups, asphalt cage venue, street-scaled AI
+- **v2.31.0**: 5v5 street football — quick Street Match, cage walls/kick-ins, 1-2-1 lineups, asphalt cage venue, street-scaled AI
 - **v2.30.0**: Environment art pass — organic trees with baked shading/ground shadows, proper 3D bird models, living crowd/bench animations, purpose-built Dog/Cat models
 - **v2.29.1**: Linux/Wayland invisible-window fix (SDL driver re-exec), windowed mode with title + F11/Alt+Enter toggle; MonoGame pinned to 3.8.6.1
 - **v2.29.0**: LAN/online multiplayer + dedicated headless server (deterministic lockstep, 60 Hz)

@@ -167,8 +167,10 @@ dotnet run --project NoPasaranFC.csproj -- server --port 7778  # same server via
 ## Feature summary
 
 - Championship: round-robin fixtures, match simulation for non-player matches, standings, round results, seasons
-- Street football (Antifa League): a separate 8-team 5v5 league (`Championship.Mode="street"`,
-  `TeamSize=5`, DB migration 14) plus a quick **Street Match** menu friendly. The 5v5 rules
+- Antifa competitions: the original 11v11 **ANTIFA LEAGUE** (`antifa_league`) and the separate
+  8-team 5v5 **ANTIFA STREET LEAGUE** (`antifa_street_league`, `Championship.Mode="street"`,
+  `TeamSize=5`) plus a quick **Street Match** menu friendly. DB migration 16 resets the season
+  that v2.32.1 accidentally converted to 5v5 and restores the 11v11 lineup. The 5v5 rules
   (`MatchRules.Street5v5` / `Prosfygika5v5`, resolved by `ForStreetVenue` / `ForChampionship`)
   shrink the pitch to 44x24 m and goals to 3 m, use a 1-2-1 auto-lineup (GK, CB, 2 CM, ST),
   disable offside, turn high out-of-play into kick-ins, and scale the utility AI's shoot/pass
@@ -180,8 +182,9 @@ dotnet run --project NoPasaranFC.csproj -- server --port 7778  # same server via
   chalk lines, cheering CourtSide fans, and ΣΩΣΤΕ ΤΑ ΠΡΟΣΦΥΓΙΚΑ banners/sign). Its rules
   set `HasGoalFrame=false`, so the engine skips net/post/crossbar collisions and height does
   not disqualify a goal; the 2D renderer also hides the goal frame.
-  Street matches auto-resume at halftime (no 11v11 substitution screen). Friendly matches play
-  on cloned rosters so the live league lineup is not trimmed to five.
+  Both modes use `LineupScreen` (team-size aware: 5 starters / 1-2-1 preview for street),
+  but street matches auto-resume at halftime (no substitution screen). Friendly Street Matches
+  play on cloned rosters and do not persist the friendly lineup.
 - Match statistics (`Gameplay/MatchStats.cs`, engine hooks): per-player goals/assists/shots/on-target/
   passes/completion/tackles/fouls/saves/offsides/cards + per-team possession/corners/throw-ins/free kicks/
   penalties; post-match `MatchStatsScreen` (before round results); season accumulation (migration 12:

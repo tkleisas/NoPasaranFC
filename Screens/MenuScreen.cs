@@ -304,12 +304,11 @@ namespace NoPasaranFC.Screens
 
             var match = new Match(home.Id, away.Id);
             var streetRules = MatchRules.ForStreetVenue(GameSettings.Instance.StreetVenue);
-            var screen = new MatchScreen(home, away, match, _championship,
-                _database, _screenManager, _contentManager,
-                rules: streetRules, friendly: true);
-            if (_graphicsDevice != null)
-                screen.SetGraphicsDevice(_graphicsDevice);
-            _screenManager.PushScreen(screen);
+            var lineup = new LineupScreen(home, match, _championship, _database,
+                _screenManager, _contentManager, _graphicsDevice,
+                rules: streetRules, homeTeam: home, awayTeam: away,
+                friendly: true, saveToDatabase: false);
+            _screenManager.PushScreen(lineup);
         }
 
         private void HandleSelection()
@@ -336,12 +335,12 @@ namespace NoPasaranFC.Screens
                             
                             if (homeTeam != null && awayTeam != null)
                             {
-                                // Show the 11v11 lineup screen; street matches use the
-                                // deterministic 5v5 auto-lineup instead.
-                                if (!rules.Street && (playerTeam.Id == homeTeam.Id || playerTeam.Id == awayTeam.Id))
+                                // Both 11v11 and 5v5 show the lineup screen (5 starters for street).
+                                if (playerTeam.Id == homeTeam.Id || playerTeam.Id == awayTeam.Id)
                                 {
                                     var lineupScreen = new LineupScreen(playerTeam, nextMatch, _championship, 
-                                        _database, _screenManager, _contentManager, _graphicsDevice);
+                                        _database, _screenManager, _contentManager, _graphicsDevice,
+                                        rules: rules);
                                     _screenManager.PushScreen(lineupScreen);
                                 }
                                 else

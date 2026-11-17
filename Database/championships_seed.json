@@ -19,6 +19,21 @@
       "id": "antifa_league",
       "name": "ANTIFA LEAGUE",
       "playerTeam": "NO PASARAN!",
+      "teams": [
+        { "name": "NO PASARAN!" },
+        { "name": "ΑΣΑΛΑΓΗΤΟΣ", "kitName": "asalagitos_kit", "logo": "asalagitos_logo.png" },
+        { "name": "ΑΔΕΣΠΟΤΟΣ" },
+        { "name": "ΤΗΓΑΝΙΤΗΣ", "kitName": "tiganitis_kit", "logo": "tiganitis_logo.png" },
+        { "name": "ΑΣΤΕΡΑΣ ΕΞΑΡΧΕΙΩΝ", "kitName": "asteras_exarcheion_kit", "logo": "asteras_exarcheion_logo.png" },
+        { "name": "Κυψέλη FC" },
+        { "name": "Α.Ο. Αλληλεγγύης" },
+        { "name": "Απόλλων Αγίου Δημητρίου" }
+      ]
+    },
+    {
+      "id": "antifa_street_league",
+      "name": "ANTIFA STREET LEAGUE",
+      "playerTeam": "NO PASARAN!",
       "mode": "street",
       "teamSize": 5,
       "teams": [

@@ -4053,7 +4053,7 @@ namespace NoPasaranFC.Gameplay
         }
 
         /// <summary>Deterministic auto-lineup for 5v5: GK, CB, two CMs, striker.</summary>
-        private static void SelectStreetLineup(Team team)
+        internal static void SelectStreetLineup(Team team)
         {
             foreach (var player in team.Players)
                 player.IsStarting = false;
